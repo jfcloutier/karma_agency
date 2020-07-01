@@ -1,11 +1,13 @@
 # andy_karma
 An apperception engine for Andy's generative models
 
-*Karma* will be a Prolog application exposed as a SWI Prolog pengine.
+*(UNDER CONSTRUCTION)*
+
+*Karma* is be a Prolog application exposed as a [SWI-Prolog](https://www.swi-prolog.org/) [pengine](https://pengines.swi-prolog.org/docs/index.html).
 
 ["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
 
-Karma implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) that, given past beliefs and actions, generates and updates a logic program (a `predictor`) that predicts the efficacy of actions a GM can take to alter or maintain its beliefs across rounds.
+Karma implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which, given past beliefs and actions, generates and updates a logic program (a `predictor`) that infers the actions a GM should take to alter or maintain its beliefs across rounds.
 
 The predictor logic program embodies a cause-effect model. It is fit if, given past and current beliefs and actions, it
 
