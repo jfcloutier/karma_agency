@@ -1,13 +1,17 @@
 # andy_karma
-An apperception engine for Andy's generative models
+A cause-effect model generator for Andy's generative models.
 
 *(UNDER CONSTRUCTION)*
+
+`andy_karma` is an Elixir application that creates, and gives access to, dedicated `karma` pengines, each one capable of inducing a logic program that models action-to-belief cause and effect on behalf of its associated Andy generative model. 
+
+## Karma
 
 *Karma* is be a Prolog application exposed as a [SWI-Prolog](https://www.swi-prolog.org/) [pengine](https://pengines.swi-prolog.org/docs/index.html).
 
 ["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
 
-Karma implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which, given past beliefs and actions, generates and updates a logic program (a `predictor`) that infers the actions a GM should take to alter or maintain its beliefs across rounds.
+`Karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which, given past beliefs and actions, generates and updates a logic program (a `predictor`) that infers the actions a GM should take to alter or maintain its beliefs across rounds.
 
 The predictor logic program embodies a cause-effect model. It is fit if, given past and current beliefs and actions, it
 
@@ -16,7 +20,7 @@ The predictor logic program embodies a cause-effect model. It is fit if, given p
 
 Once the predictor's performance becomes unacceptable, it is re-generated.
 
-# Generation
+### Generation
 
 Karma is a Prolog application that searches for a logic program (a predictor) that can predict and retrodict the effects of actions on beliefs for a given GM. A separate predictor is generated for each GM.
 
@@ -40,7 +44,7 @@ Unity of apperception constraints:
 
 The best candidate predictor logic program is stored in the associated GM's pengine as a Prolog module named `predictor`.
 
-# Legacy rules
+### Legacy rules
 
 A GM keeps only a certain number of past rounds in memory, with older ones eventually forgotten. These forgotten rounds are no longer available to participate in the generation of the predictor logic program, or in its validation. Important "rules" may have been learned in forgotten rounds because of possibly rare but crucial circumstances not encountered since. The logic program will conserve "rules" for as long as possible across versions of itself, even though they may no longer retrodict the retained experiences. 
 
