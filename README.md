@@ -11,7 +11,14 @@ A cause-effect model generator for Andy's generative models.
 
 ["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
 
-`Karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which, given past beliefs and actions, generates and updates a logic program (aka a `predictor`) that infers the actions a GM should take to alter or maintain its beliefs across rounds.
+`Karma` implements the "evolving smarts" of a GM. It infers:
+ * the GM's perceptions from predictions sent and prediction errors received
+ * the GM's beliefs from its current perceptions
+ * the prediction errors the GMs produces from received predictions and current beliefs
+ * the predictions a GM makes from the latest beliefs and actions taken
+ * actions to take to achieve a current goal belief or test a current opinion belief
+
+`Karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which, given past beliefs and actions, generates and updates a logic program (aka a `predictor`) that infers the actions a GM should take to alter or test its beliefs across rounds.
 
 The predictor logic program embodies a cause-effect model. It is fit if, given past and current beliefs and actions, it
 
@@ -27,8 +34,8 @@ Once the predictor's performance becomes unacceptable, it is re-generated.
 Karma is a Prolog application that induces a `predictor` for an associated Generative Model.
 
 The input to Karma from Andy is a sequence of data from remembered rounds of the associated GM:
-1. The beliefs held at the end of the round, as `belief(ConjectureName, AboutWho, Value, RoundIndex)` predicates
-2. The actions taken at the end of the round, as `action(IntentName, Value, Duration, RoundIndex)` predicates
+1. The beliefs held at the end of the round, as `belief(ConjectureName, AboutObject, Value, RoundIndex)` predicates
+2. The actions taken at the end of the round, as `action(IntentName, ByObject, Value, Duration, RoundIndex)` predicates
 3. The rounds remembered, as `round(RoundIndex, WhenStarted, WhenCompleted)`
 
 Round data informs the search for a predictor (as cause-effect model) that satisfies the data.
@@ -38,6 +45,11 @@ The domain of action intent names is pre-defined and fixed (they represent what 
 Karma searches a constrained space of logic programs for one that fits the input data (it can predict and it can retrodict action-belief cause and effect). The search space is contrained by Immanuel Kant's rules of "synthetic unity of apperception", and by time spent and generated code complexity. The fitness function for the predictor is expressed in terms of the predictor's accuracy and complexity (the smaller the program, the better).
 
 Unity of apperception constraints:
+
+* Spatial: All 
+* Conceptual
+* Static
+* Causal
 
 * A predictor can never contain more than one belief predicate with the same conjecture name for a given round that's about the same individual.
 * TBD
