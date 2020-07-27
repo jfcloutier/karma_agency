@@ -40,33 +40,54 @@
 
 # Beliefs, sensings and actions
 
+updated notesWhich GM is this:
+
+    this_gm(GM).
+
 ## Representing beliefs
 
-Generative Models (GMs) have `belief`s whereas Detectors have `sensing`s. A belief is at heart a unary predicate, .e.g. `closer_to_obstacle(self)` but in the context of a round, and identified as a "belief" as opposed to an "action". `sensing`s are predicates about values, not objects, e.g. `distance(25)` or `color(blue)`
+Generative Models (GMs) hold `belief`s. A belief maps to unary predicate, .e.g. `closer_to_obstacle(self)` or to a binary predicate, e.g. `distance _to_obstacle(self, far)`. Detectors also hold beliefs , e.g. `distance(25)` or `color(blue)` or `orientation(channel_1, 45)`,but is represented as `belief/2` and `belief\3`
 
     belief(Conjecture, Object) # "unary" belief round data
     belief(Conjecture, Object, ValueOrObject) # "binary"
 
 Conjecture names the type of belief. It is an atom either defined by the Generative Model (GM), e.g. `closer_to_obstacle`, or created by Karma, e.g. `c1`
 
-Object names who/what the belief is about. It is either defined by the GM, e.g. `self` or `other`, or created by Karma to represent a latent object in the environment, e.g. `o2`
+Object names who/what the belief is about. It is either defined by the GM, e.g. `self` or `other` or `channel_1`, or created by Karma to represent a latent object in the environment, e.g. `o2`. The value can be a number or an object name.
 
-    received_prediction(Belief, GoalOrOpinion)
+Predictions are about beliefs. Prediction errors are bout predictions.
 
-    received_prediction_error(Prediction, ActualBelief, ReceivedOrSent) % with unified Conjecture and Object in the prediction nelief and actual belief
+    prediction(Belief, GoalOrOpinion, ByGM)
 
-    sent_prediction(Belief, GoalOrOpinion)
+    prediction_error(Prediction, CorrectedBelief, ByGM) % with unified Conjecture and Object in the prediction belief and actual belief
 
-    sent_prediction_error(Prediction, ActualBelief, ReceivedOrSent) % with unified Conjecture and Object in the prediction nelief and actual belief
+ They are, from the perspective of a GM, either sent or received.
+
+    sent_prediction(prediction(Belief, GoalOrOpinion, ByGM)) :- this_gm(GM), byGM == GM.
+
+    received_prediction(prediction(Belief, GoalOrOpinion, ByGM)) :- this_gm(GM), byGM \== GM.
+
+    sent_prediction_error(prediction_error(Prediction, CorrectedBelief, ByGM)) :- this_gm(GM), byGM == GM.
+
+    received_prediction_error(prediction_error(Prediction, CorrectedBelief, ByGM)) :- this_gm(GM), byGM \== GM.
 
 Perceptions are inferred from predictions and prediction errors (from the same round):
 
-    perception(Conjecture, Object) :- sent_prediction(belief(Conjecture, Object)), 
-                                      not received_prediction_error(prediction(belief(Conjecture, Object), _), _).
-    perception(Conjecture, Object, Value) :- sent_prediction(belief(Conjecture, Object, Value)), 
-                                             not received_prediction_error(prediction(belief(Conjecture, Object, Value), _), _).
-    perception(Conjecture, Object) :- received_prediction_error(_, belief(Conjecture, Object))
-    perception(Conjecture, Object, Value) :- received_prediction_error(_, belief(Conjecture, Object, Value))
+    subject(prediction(belief(Conjecture, Object), _, _), [Conjecture, Object]).
+    subject(prediction(belief(Conjecture, Object, _), _, _), [Conjecture, Object]).
+    subject(prediction_error(Prediction, _, ), [Conjecture, Object]) :- subject(Prediction, [Conjecture, Object]).
+    
+    believed(prediction(Belief, _, _), Belief).
+    believed(prediction_error(_, CorrectedBelief, _), CorrectedBelief).
+
+    contradicted(Prediction) :- sent_prediction(Prediction), 
+                                received_prediction_error(PredictionError), 
+                                believed(Prediction, PredictedBelief),
+                                believed(PredictionError, CorrectedBelief),
+                                subject(PredictedBelief) == subject(CorrectedBelief), !.
+
+    perception(Belief) :- sent_prediction(Prediction), not contradicted(Prediction), believed(Prediction, Belief).
+    perception(Belief) :- received_prediction_error(PredictionError), believed(PredictionError, Belief).
 
 Actions
 
@@ -79,7 +100,7 @@ Actions
 
     latest_completed_round(RoundIndex) % Communicated by a GM in Andy at the end of a round
                                        % Inferred round_data is asserted and added to the communicated data for the completed round
-    round_data(RoundIndex, Data) % round data as it is being communicated by other GMs (sent_predictions and received_prediction errors)
+    round_data(RoundIndex, Data) % round data as it is being communicated by other GMs (data is a sent_prediction or received_prediction error as string)
 
 Round Index is the index of the round where the belief etc. is held, e.g. `5`
 The data is either a belief, a prediction, prediction error or action
@@ -87,7 +108,7 @@ The data is either a belief, a prediction, prediction error or action
 ## Queries
 
     current_beliefs(Beliefs) % What are the GM's current beliefs based on current perceptions?
-    predictions_to_send(Predictions) % What are the GM's current predictions based on current beliefs?
+    predictions_to_send(Predictions) % What are the GM's current predictions based on beliefs?
     prediction_errors_to_send(PredictionErrors) % What are the GM's current prediction errors based on current beliefs and received predictions?
     actions_to_take(Actions) % What actions does the theory recommend to achieve sent goal beliefs and test current opinion beliefs?
 
