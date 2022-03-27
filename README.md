@@ -4,33 +4,152 @@
 
 ["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
 
-`Karma` implements the learning capabilities of each "grown" GM, i.e. any GM other than Detectors or the Meta Cognition GM which are "built-in".
+`karma` implements the learning capabilities of each "grown" GM, i.e. any GM other than pre-defined Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions)or the MetaCognition GM (responsible for growing and culling all other GMs.)
 
-For each GM, it induces logic programs that infer:
+For each GM, `karma` induces logic programs that infer:
 
 * The GM's beliefs from its current perceptions (`believer`)
 * Predictions based on beliefs held and actions taken (`predictor`)
-* Action policies for achieving or testing beliefs (`policy`)
+* Action policies for achieving or testing beliefs (`enactor`)
 
 ## Grown GM lifecycle
 
-A GM is instantiated by the Meta Cognition GM and given a unique identifier. As part of its initialization, the GM does two moves:
+A GM is instantiated by the MetaCognition GM, given a unique identifier, and possibly the identity of another grown GM to compete with.
 
-* selects beliefs from other GMs that will compose its perception
-* define predicates for its own beliefs (that will be infered from its perception)
+As part of its initialization, the new GM does these moves:
 
-Any GM that defines a belief predicate selected by the new GM is implicitly a child of the new GM. The GM's first move thus positions it
-in the existing heterachy of GMs and Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions.)
+* It defines predicates for its own beliefs (its belief domain); their values will be infered from the GM's perceptions.
+* It selects beliefs predicates from other GMs that will compose its perceptual domain.
+* It builds an initial `believer`
+* It builds an initial `predictor`
+* It builds an initial `enactor`
 
-A belief predicate from a Detector is a "level 1" belief. A belief predicate defined in a GM has a level 1 + the mininum level of its perceived beliefs.
+A grown GM might later be removed by the MetaCognition GM, typically because the GM no longer has children.
 
-Constraints on the selection of "perceived belief predicates" (perceptual set):
+### Defining the belief domain
 
-* No implied GM parent-child cycle is created
-* Only one transitive path from a GM to any of its children
-* The intersection of two GMs perceptual sets contains at most one belief predicate
-* A level N + 2 belief predicate can not be selected if there is a level N belief predicate yet to be selected by a GM
+The second move of a new GM's self-initialization is the selection of its belief domain, the set of belief predicates to be used by the GM to express
+its beliefs infered from its perceptions, which are the predicted beliefs of its child GMs.
+
+If the new GM was created by the MetaCognition GM to compete with an existing grown GM, then the new GM simply copies its belief domain from it, else
+it must define it by creating a number of belief predicates.
+
+Constraints on the creation of belief predicates:
+
+* A belief set contain from 1 to 3 predicates
+* A new belief predicate is unique across the belief domains of all GMs.
+
+### Defining the perceptual domain
+
+Belief predicates are more or less abstract, depending on the position in the heterachy of GMs of the GM that defines them. A belief predicate from a Detector is a "level 1" belief. 
+A belief predicate defined in a GM has a level 1 + the maximum level of any of its perceived beliefs.
+
+Constraints on the selection of "perceived belief predicates":
+
 * A perceptual set contains from 1 to 3 belief predicates
+* No GM parent-child cycle is created
+* Only one transitive path from a GM to any of its children
+* No two GMs have identical perceptual sets
+* A level N + 2 belief predicate can not be selected if there is a level N belief predicate yet to be selected by a GM
+
+Any GM, including Detectors, that defines a belief predicate in the perceptual domain of another GM is implicitly a child of that other GM.
+The new GM's first move thus positions it in the heterachy of GMs and Detectors.
+
+## Implementation
+
+### module gm_<id>
+
+%%% Dynamically created with %%%
+
+:- assert(gm<id>, belief_domain([b10, b11])).
+:- assert(gm<id>, perceptual_domain([b1, b2, b3])).
+:- gm<id>:import(gm_<id>_believer:believed/2).
+:- gm<id>:import(gm_<id>_predictor:predicted/2).
+:- gm<id>:import(gm_<id>_enactor:intended/2).
+:- gm<id>:export(belief_domain/1).
+:- gm<id>:export(perceptual_domain/1).
+:- gm<id>:export(believed/3).
+:- gm<id>:export(predicted/2).
+:- gm<id>:export(intended/2).
+
+%%% Equivalent to static %%%
+
+:- module(gm_<id>, [belief_domain/1, perceptual_domain/2,]).
+
+:- reexport(gm_<id>_believer).
+:- reexport(gm_<id>_predictor).
+:- reexport(gm_<id>_enactor).
+
+belief_domain([b10,b11])
+perceptual_domain([b1, b2, b3])
+
+### Module gm_<id>_believer
+
+A belief and its contradiction (e.g. b10(true) and b10(false)) must be provably mutually exclusive.
+It is acceptable for rules to have incomplete coverage, i.e. that it be possible that neither b10(true) or b10(false) be provable.
+Residual beliefs are beliefs previously held that are not replaced because no value of the belief is currently provable.
+
+%%% gm_<id>_believer %%%
+
+:- module(gm_<id>_believer, [believed/3]).
+
+:- use_module(predictor).
+
+% believed(BeliefName) :- <perceptions>
+
+% truth value beliefs, conditional on perceptions
+believed(b10(true)) :- believed(b2, is(small)), believed(b3, is(big)).
+believed(b10(true)) :- believed(b2, is(small)), believed(b2, trends(decreasing)).
+believed(b10(false)) :- believed(b2, is(big)).
+believed(b11(true)) :- ...
+believed(b11(false)) :- ...
+
+% numerial value beliefs, always facts (held by Detectors only)
+believed(b1, 10).
+believed(b2, red).
+
+### Module gm_<id>_predictor
+
+What a GM anticipates child GMs to believe given its current beliefs (provable, residual) and its past beliefs.
+
+Two mutually contradicting predictions must not be possible, e.g. proving predicted(b10(is(true))) and predicted(b10(is(false))) 
+must not be possible in any context.
+
+All provable predictions are made.
+
+% predicted(BeliefName, ValuePrediction)
+
+%% truth value predictions
+% immediate
+predicted(b10(is(true))) :- believed(b20, trends(false)), believed(b21, is(true)).
+predicted(b10(is(true))) :- ...
+predicted(b10(is(false))) :- ...
+% over time
+predicted(b10(trends(true))) :- ...
+predicted(b10(trends(false))) :- ...
+
+%% number value predictions
+% immediate
+predicted(b2, is(small)) :- ...
+predicted(b2, is(big)) :- ...
+% over time
+predicted(b2, trends(small)) :- ...
+predicted(b2, trends(big)) :- ...
+
+%% number value change predictions
+% immediate
+predicted(b2, is(same)) :- ...
+predicted(b2, is(increasing)) :- ...
+predicted(b2, is(decreasing)) :- ...
+% over time
+predicted(b2, trends(same)) :- ...
+predicted(b2, trends(increasing)) :- ...
+predicted(b2, trends(decreasing)) :- ...
+
+### Module gm_<id>_enactor
+
+
+%%% gm_<id>_enactor %%%
 
 ### Believer
 
@@ -51,7 +170,7 @@ The body of the belief rules are conjunctions of perception(Name, Value) or tren
 
 * Given past perceptions and actions, generates and updates a logic program (a `predictor`) that infers the next perceptions (i.e. makes predictions about the beliefs of child GMs)
 
-### Policy maker
+### Enactor
 
 ...
 
