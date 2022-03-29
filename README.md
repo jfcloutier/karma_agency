@@ -2,6 +2,8 @@
 
 *karma* is a Prolog application exposed as a [SWI-Prolog](https://www.swi-prolog.org/) [pengine](https://pengines.swi-prolog.org/docs/index.html).
 
+About the name:
+
 ["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
 
 `karma` implements the learning capabilities of each "grown" GM, i.e. any GM other than pre-defined Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions)or the MetaCognition GM (responsible for growing and culling all other GMs.)
@@ -113,15 +115,17 @@ Residual beliefs are beliefs previously held that are not replaced because no va
 % believed(BeliefName, Value) :- <perceptions>
 
 % truth value beliefs, conditional on perceptions
-believed(b10, is(true)) :- believed(b2, is(small)), believed(b3, is(big)).
-believed(b10, is(true)) :- believed(b2, is(small)), believed(b2, trends(decreasing)).
-believed(b10, is(false)) :- believed(b2, is(big)).
+believed(b10, is(true)) :- perceived(b2, is(small)), perceived(b3, is(big)).
+believed(b10, is(true)) :- perceived(b2, is(small)), perceived(b2, trends(decreasing)).
+believed(b10, is(false)) :- perceived(b2, is(big)).
 believed(b11, is(true)) :- ...
 believed(b11, is(false)) :- ...
 
 % numerial value beliefs, always facts (held by Detectors only)
 believed(b1, is(10)).
 believed(b2, is(red)).
+
+% perceived(BeliefName, Value) is infered from the GM's history of perceptions.
 
 ### Module gm_<id>_predictor
 
@@ -134,7 +138,7 @@ All provable predictions are made.
 
 :- module(gm_<id>_predictor, [predicted/2]).
 
-% predicted(BeliefName, ValuePrediction)
+% predicted(BeliefName, ValuePrediction) :- <beliefs>
 
 %% truth value predictions
 % immediate
@@ -145,7 +149,6 @@ predicted(b10(is(false))) :- ...
 predicted(b10, trends(true)) :- ...
 predicted(b10, trends(false)) :- ...
 predicted(b10, trends(unknown)) :- ...
-
 %% number value predictions
 % immediate
 predicted(b2, is(small)) :- ...
@@ -185,19 +188,48 @@ intended(go_forward(big)) :- believed(b10, is(true)).
 
 ## Generating the logic programs
 
+`karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which searches for competent logic programs, competent in that, given prior states, they can predict the next state, as well as retrodict prior incompletely described states. A state can be the GM's beliefs, perceptions (uncontradicted predictions made plus prediction errors received) or intentions (to take action).
+
+The `gm<id>` logic program (of the GM with ID == id) is fully determined by the input given at creation by the Metacognition GM and does not rely on the Apperception Engine. 
+
+The `gm<id>_believer`, `gm<id>_predictor` and `gm<id>_enactor`, however, are searched for by `karma`'s Apperception Engine from data accumulated during the recent past of the GM.
+
+This historical data that describe prior states are:
+
+* beliefs once held
+* perceptions once had
+* actions once intended and taken
+
+`karma` searches for competent logic programs. A GM's `believer` is competent to the extent that it correctly models the GM's umwelt. A GM's `predictor` is competent to the extent that it makes predictions that are not contradicted by prediction errors. A GM's `enactor` is competent to the extent that it the actions it intends, when they are taken, realize goal beliefs or validate opinion beliefs.
+
+When revising from new experience the "competency logic programs" of a GM, `karma` searches, in order, for
+
+1. A more reliable `predictor`
+2. An implied `believer`
+3. A more effective `enactor`
+
+A "proto" `predictor` is searched for with the shape:
+
+predicted(ChildGMBeliefName1, Value1) :- perceived(ChildGMBeliefName2, Value2), perceived(ChildGMBeliefName3, Value3),...
+...
+
+A `believer` is then searched for by taking conjunctions in the bodies of the `predictor` rules and using them to define beliefs. For example:
+
+believed(BeliefName1) :- perceived(ChildGMBeliefName2, Value2), perceived(ChildGMBeliefName3, Value3).
+
+The `predictor` is then finalized by replacing all perceived/2 in its bodies by conjunctions of believed/2. For example:
+
+predicted(ChildGMBeliefName1, Value1) :- believed(BeliefName1), ...
+
+The last step is searching for an `enactor` given the (hopefully) improved `believer`.
+
+TBD
 
 
 
-`karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) which generates logic programs from experience.
 
 
-
-
-
-
-
-
-Karma searches a constrained space of logic programs for one that fits the input data (it can predict and it can retrodict action-belief cause and effect). The search space is contrained by Immanuel Kant's rules of "synthetic unity of apperception", and by time spent and generated code complexity. The fitness function for, say, a predictor is expressed in terms of the predictor's accuracy and complexity (the smaller the program, the better).
+ for one that fits the input data (it can predict and it can retrodict action-belief cause and effect). The search space is contrained by Immanuel Kant's rules of "synthetic unity of apperception", and by time spent and generated code complexity. The fitness function for, say, a predictor is expressed in terms of the predictor's accuracy and complexity (the smaller the program, the better).
 
 Unity of apperception constraints:
 
