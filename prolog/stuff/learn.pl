@@ -1,3 +1,4 @@
+:- use_module(library(clpfd)).
 
 list_length([], 0).
 list_length([_ | Ls], Length) :-
@@ -85,3 +86,8 @@ ordered(_, [_]).
 ordered(Order, [A, B | Rest]) :- 
     zcompare(Order, B, A),
     ordered(Order, [B | Rest]).
+
+print_rows([]) :- !.
+print_rows([Row | Rest]) :-
+    writeln(Row),
+    print_rows(Rest).

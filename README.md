@@ -1,276 +1,401 @@
-# karma (under construction)
+The following are design notes toward the implementation of karma . 
 
-*karma* is a Prolog application exposed as a [SWI-Prolog](https://www.swi-prolog.org/) [pengine](https://pengines.swi-prolog.org/docs/index.html).
+The raison d’être of  karma  is to explore how a functional implementation of Active Inference  can be imbued with a significant degree of Structure Learning. 
 
-About the name:
+Learning in karma is achieved by growing and evolving an heterarchy of process-based generative models (GMs) where each GM is a software process that executes evolving logic programs to carry out its functions. The execution of these logic programs produce predictions (as assertions) given beliefs held (as inferred predicates) and Actions taken, interpret consequent prediction errors  into updated beliefs, and infer from revised beliefs action Policy(ies) that maintain the agent’s homeostasis. The logic programs are not predefined but are generated and evolved by each GM from interactions between the agent and its environment.  Learning is successful if the GMs, individually and as a heterarchy, get generally better over time at maintaining Homeostasis.
 
-["Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."](https://en.wikipedia.org/wiki/Causality#Buddhist_philosophy)
+In this exploration of active inference, Generative models are not implemented as probability distributions over hidden states etc.; they are software processes that explicitly and quite literally carry out the functions expected of a predictive processing agent, namely making predictions, raising prediction errors, updating beliefs, and carrying out policies.  It is the outcomes of these functions on the dynamic state of an active inference agent and its environment that the Free Energy Principle models. 
 
-`karma` implements the learning capabilities of each "grown" GM, i.e. any GM other than pre-defined Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions)or the MetaCognition GM (responsible for growing and culling all other GMs.)
+Learning in karma  is thus not achieved by explicitly minimizing Variational Free Energy  but by updating data structures, generating executable (logic) code, and spawning software processes, i.e. by modifying the agent’s predictive processing machinery, and from this emerges the evolving behavior of the agent. 
 
-For each GM, `karma` induces logic programs that infer:
+It is hoped that agents implemented with karma will eventually be amenable to analysis using the tools of the Free Energy Principle and that these agents will be found to conform to the Free Energy Principle in that they actively minimize their Free Energy. 
 
-* The GM's beliefs from its current perceptions (`believer`)
-* Predictions based on beliefs held and actions taken (`predictor`)
-* Action policies for achieving or testing beliefs (`enactor`)
+About karma
+karma  is a Prolog application exposed as a SWI-Prolog pengine accessed by a revised (Elixir) implementation of andy , an ActInf robotics framework targeting Lego EV3 robots.
 
-## Grown GM lifecycle
+Why the name:
 
-A GM is instantiated by the MetaCognition GM, given a unique identifier, and possibly the identity of another grown GM to compete with.
+"Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."  See Wikipedia article.
 
-As part of its initialization, the new GM does these moves:
+karma  implements the learning capabilities of each "grown" GM, i.e. of any GM other than predefined Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions) or the Metacognition GM (responsible for instantiating and culling all grown GMs.)
 
-* It defines predicates for its own beliefs (its belief domain); their values will be inferred from the GM's perceptions.
-* It selects beliefs predicates from other GMs that will compose its perceptual domain.
-* It builds an initial `believer`
-* It builds an initial `predictor`
-* It builds an initial `enactor`
+For each such GM, karma  builds and revises logic programs that infer:
 
-A grown GM might later be removed by the MetaCognition GM, typically because the GM no longer has children.
+* The GM's beliefs from its perceptions (believer )
+* Predictions based on beliefs held and actions taken (predictor )
+* Action policies for achieving desired beliefs (enactor )
 
-### Defining the belief domain
+GM life cycle
+A GM is instantiated by the Metacognition GM and given a unique identifier. If the new GM is instantiated as a competitor to another GM, it copies its initial scope from that GM, otherwise the new GM is responsible for setting its initial scope.
 
-The second move of a new GM's self-initialization is the selection of its belief domain, the set of belief predicates to be used by the GM to express
-its beliefs inferred from its perceptions, which are the predicted beliefs of its child GMs.
+The scope of a GM is
+* a set of typed objects adduced from the “hidden world”the GM holds beliefs and makes predictions about, for example, object(x1, obstacle), object(self, agent)
+* a set of typed belief predicates, of arities 1 or 2, the GM uses to express the beliefs it holds and the predictions it makes, for example, belief_predicate(is_hitting, [agent, obstacle])
+As part of its initialization, the new GM does the following moves:
+* Its defines an initial scope
+* It builds an initial believer 
+* It builds an initial predictor 
+* It builds an initial enactor 
+As it interacts with its environment, an agent’s GMs evolve away from their initial states to capture what the agent has learned so far as it interacts with its environment in an attempt to maintain homeostasis.
 
-If the new GM was created by the MetaCognition GM to compete with an existing grown GM, then the new GM simply copies its belief domain from it, else
-it must define it by creating a number of belief predicates.
+The Metacognition GM might at some point remove a grown GM, typically because the GM no longer has children, or remove a GM competing with another because the other is performing consistently better.
 
-Constraints on the creation of belief predicates:
+The belief domain
+The GM’s belief domain is  the set of typed belief predicates it uses to express the beliefs about objects in its umwelt, beliefs it infers from perceptions, which are themselves predictions about beliefs of other (”child”) GMs.
 
-* A belief set contain from 1 to 3 predicates
-* A new belief predicate is unique across the belief domains of all GMs.
+If the new GM was created by the Metacognition GM to compete with an existing grown GM, then the new GM started with a copy of the other GM’s belief domain, else the new GM is responsible for assigning itself a number of belief predicates as part of its initial scope.
 
-### Defining the perceptual domain
+A typed belief predicate of a GM can either be introduced by the GM (and added to a pool of belief predicates available to all GMs), or it can be taken from that pool. 
 
-Belief predicates are more or less abstract, depending on the position in the heterachy of GMs of the GM that defines them. A belief predicate from a Detector is a "level 1" belief. 
-A belief predicate defined in a GM has a level 1 + the maximum level of any of its perceived beliefs.
+Belief predicates are used to express beliefs which are truth-valued statements about objects.
 
-Constraints on the selection of "perceived belief predicates":
+The perceptual domain
+The perceptual domain of a GM constrains the predictions the GM can make about the beliefs held by other GMs.  A GM defines its perceptual domain by selecting belief predicates and objects from the vocabulary module.
 
-* A perceptual set contains from 1 to 3 belief predicates
-* No GM parent-child cycle is created
-* Only one transitive path from a GM to any of its children
-* No two GMs have identical perceptual sets
-* A level N + 2 belief predicate can not be selected if there is a level N belief predicate yet to be selected by a GM
+Any GM that makes predictions about a belief potentially held by another GM is implicitly a parent of that other GM. GMs are organized by their perceptual domains into an evolving heterarchy.
 
-Any GM, including Detectors, that defines a belief predicate in the perceptual domain of another GM is implicitly a child of that other GM.
-The new GM's first move thus positions it in the heterachy of GMs and Detectors.
+The Umwelt
+The local umwelt of a GM is the set of objects it can hold beliefs and make predictions about. A GM can perceive and hold beliefs about the agent but also about a number of other typed objects from its environment that are abduced from the hidden world the agent interacts with (its Umwelt).
 
-## Generated logic
+If a GM was created by the Metacognition GM to compete with an existing grown GM, then the new GM copies its initial umwelt from it, else it is responsible for assigning itself an initial umwelt as part of its scope.
 
-The competence of a grown GM is implemented by logic programs generated and revised by `karma` from an initial scope.
-This scope, the GM's belief and perceptual domains, are set by the Metacognition GM, subject to the above constraints
-The GM is assigned a unique ID.
+A GM can introduce new typed objects e.g. object(x1, type1), to its local umwelt and thus the umwelt of the agent. 
 
-Four logic programs define the GM. Each is a generated Prolog module incoporating the GM's id in its name to
-avoid namespace conflicts. A GM with id, say 1234, would cause four Prolog modules to be generated:
+Generated logic
+The  competence of a grown GM is contained in logic programs that are dynamically generated and revised from experience. The logic programs are constrained by the GM’s scope.
 
-* gm_1234 - This module defines the GM's scope and imports the other three "competency" modules: the `believer`, the `predictor` and the `enactor`.
-* gm_believer_1234 - This module defines the rules with which the GM infers its beliefs given what it perceives (predictions made combined with prediction errors received).
+A GM implements four logic programs. Each is a generated Prolog module incorporating the GM's id in its module name to avoid namespace conflicts. 
+
+A GM with id, say 1234, would have four Prolog modules.
+
+* gm_1234 - This module defines the GM's scope and imports the other three "competency" modules: the GM‘s believer , predictor  and enactor .
+* gm_believer_1234 - This module defines the rules with which the GM infers what it believes given what it perceives (predictions it made modulated by consequent prediction errors it received).
 * gm_predictor_1234 - This module defines the rules with which the GM infers the predictions it makes given what it believes.
-* gm_enactor_1234 -This module defines the rules with which the GM infers the actions it intends to take after its predictions are processed and its beliefs revised.
+* gm_enactor_1234 -This module defines the rules with which the GM infers the actions it intends to take to modify its beliefs.
 
-The scope-defining module (gm_1234 in this example) is fully determined by the Metacognition GM. The other three modules are generated and revised by `karma`'s
-apperception engine.
+The scope-defining module (gm_1234 in this example) might be initially determined by the Metacognition GM should the GM be created to compete with another.
 
-Follows a description of the code generated for each type of module.
+“Building blocks” that can be shared by GMs, for example, the objects composing an agent’s umwelt and the belief predicates a GM uses to express its beliefs and predictions, are contained (and updated) in the vocabulary module.
 
-### module gm_<id>
+module vocabulary
 
-%%% Dynamically created with %%%
+:- module(vocabulary, [type/1, belief_predicate/2, object/2]).
 
-:- assert(gm<id>, belief_domain([b10, b11])).
-:- assert(gm<id>, perceptual_domain([b1, b2, b3])).
-:- gm<id>:import(gm_<id>_believer:believed/2).
-:- gm<id>:import(gm_<id>_predictor:predicted/2).
-:- gm<id>:import(gm_<id>_enactor:intended/2).
-:- gm<id>:export(belief_domain/1).
-:- gm<id>:export(perceptual_domain/1).
-:- gm<id>:export(believed/3).
-:- gm<id>:export(predicted/2).
-:- gm<id>:export(intended/2).
+% The types defined across all GMs
+type(agent).
+type(obstacle).
+type(floor).
+...
 
-%%% Equivalent to static %%%
+% The typed belief predicates from which a GM defines its belief domain
+belief_predicate(distance_between, [agent, obstacle]).
+belief_predicate(b1, [agent]).
+...
 
-:- module(gm_<id>, [belief_domain/1, perceptual_domain/2,]).
+% The typed objects (the agent's overall umwelt) from which GMs define their umwelts
+object(self, agent).
+object(x1, obstacle).
+...
+
+
+This is what the code generated for each type of module might look like:
+
+ module gm_<id>
+
+
+:- module(gm_<id>, [in_belief_domain/1, in_perceptual_domain/1, in_umwelt/1, believed/2, predicted/2, intended/1]).
 
 :- reexport(gm_<id>_believer).
 :- reexport(gm_<id>_predictor).
 :- reexport(gm_<id>_enactor).
 
-belief_domain([b10,b11])
-perceptual_domain([b1, b2, b3])
+in_belief_domain(b10).
+in_belief_domain(b11).
 
-### Module gm_<id>_believer
+in_perceptual_domain(b1).
+in_perceptual_domain(b2).
+in_perceptual_domain(b3).
 
-A belief and its contradiction, for e.g. believed(b10, is(true)) and believed(b10, is(false)), must be provably mutually exclusive.
-No two belief inference rules can have the exact same body.
-It is acceptable for rules to have incomplete coverage, i.e. that it be possible that neither b10(true) or b10(false) be provable.
-Residual beliefs are beliefs previously held that are not replaced because no value of the belief is currently provable.
+in_umwelt(self).
+in_umwelt(x1).
+in_umwelt(x2).
+
+Module gm_<id>_believer
+
+This module defines the rules from which what a GM believes is inferred.
+
+The generation of a believer is subject to a number of constraints (more on this later), for examples, the belief domain is small, a belief and its contradiction must be provably mutually exclusive, and no two belief inference rules can have the exact same body.
 
 %%% gm_<id>_believer %%%
 
 :- module(gm_<id>_believer, [believed/2]).
 
-% believed(BeliefName, Value) :- <perceptions>
-
 % truth value beliefs, conditional on perceptions
-believed(b10, is(true)) :- perceived(b2, is(small)), perceived(b3, is(big)).
-believed(b10, is(true)) :- perceived(b2, is(small)), perceived(b2, trends(decreasing)).
-believed(b10, is(false)) :- perceived(b2, is(big)).
-believed(b11, is(true)) :- ...
-believed(b11, is(false)) :- ...
+believed(b10(self), is(true)) :- perceived(b2(x1), is(false)), perceived(b3(x1, x2), is(false)).
+believed(b10(self), is(true)) :- perceived(b2(x1), is(true)), perceived(b2(x2), trends(decreasing)).
+believed(b10(x1), is(false)) :- perceived(b2(x2), trends(is(true))).
+believed(b11(self, x1), is(true)) :- ...
+believed(b11(self, x1), is(false)) :- ...
 
 % numerial value beliefs, always facts (held by Detectors only)
-believed(b1, is(10)).
-believed(b2, is(red)).
+believed(b20(x2), is(10)).
+believed(b21(self), is(red)).
 
-% perceived(BeliefName, Value) is inferred from the GM's history of perceptions.
+The Object of a belief or a perception (believed/2, perceived/2) is an object in the GM’s umwelt.
 
-### Module gm_<id>_predictor
+The Value of a belief is the predicate is(Atom)  where Atom is either true or false, or an atom or number representing what a Detector detects (a color, a distance etc.)
 
-What a GM anticipates child GMs to believe given its current beliefs (provable, residual) and recently enacted intents.
+The Value of a perceived/2 describes either an actual value (is/1) or a trend inferred from a history of perceptions (trends/1).  Examples of trends/1 predicates are trends(increasing), trends(decreasing), trends(stable), and trends(unknown). The trends/1 predicate can also be used to express an apparent attractor state, e.g. trends(is(true)) or trends(is(red)).
 
-Mutually contradicting predictions must not be possible, e.g. proving predicted(b10(is(true))) and predicted(b10(is(false)))
-must not be possible in any context.
+Module gm_<id>_predictor
 
-All provable predictions are made.
+This module defines the rules by which a GM infers its predictions, that is, what it anticipates other GMs to believe given its own current beliefs based on its perceptions and recently enacted intents.
+
+A prediction is about a current belief of other GMs.
+
+The rules are subject to constraints, such as, mutually contradicting predictions must be avoidable, e.g. predicted(b10, self, is(true)) and predicted(b10, self, is(false)) must not have the same preconditions.
+
 
 :- module(gm_<id>_predictor, [predicted/2]).
 
-% predicted(BeliefName, ValuePrediction) :- <beliefs>, <enactions>
+% predicted(Belief, ValuePrediction) :- <beliefs>, <enactions>
 
-%% truth value predictions
-% immediate
-predicted(b10, is(true)) :- believed(b20, is(false)), believed(b21, is(true)).
-predicted(b10, is(true)) :- believed(b21, is(true)), enacted(turn_right(small))
-predicted(b10(is(false))) :- ...
-% over time
-predicted(b10, trends(true)) :- ...
-predicted(b10, trends(false)) :- ...
-predicted(b10, trends(unknown)) :- ...
-%% number value predictions
-% immediate
-predicted(b2, is(small)) :- ...
-predicted(b2, is(big)) :- ...
-% over time
-predicted(b2, trends(small)) :- ...
-predicted(b2, trends(big)) :- ...
-predicted(b2, trends(big)) :- ...
-predicted(b2, trends(unknown)) :- ...
+predicted(b1(self), is(true)) :- believed(b10(x1), is(false)), believed(b11(x2), trends(increasing)).
+predicted(b1(self), is(false)) :- believed(b11(self, x11), trends(is(true))), enacted(turn_right(small))
+predicted(b2(self), is(false)) :- ...
 
-%% number value change predictions
-% immediate
-predicted(b2, is(same)) :- ...
-predicted(b2, is(increasing)) :- ...
-predicted(b2, is(decreasing)) :- ...
-% over time
-predicted(b2, trends(same)) :- ...
-predicted(b2, trends(increasing)) :- ...
-predicted(b2, trends(decreasing)) :- ...
-predicted(b2, trends(none))) :- ...
 
-### Module gm_<id>_enactor
+Module gm_<id>_enactor
 
-A GM wants to reverse beliefs it holds that indicate deviation from homeostatis, now or anticipated, or indicate lack of epistemic progress (deficient learning).
+This module defines the rules from which a GM infers the actions it wants to take to reverse undesirable beliefs it holds, that is, beliefs that indicate deviation from homeostasis and allostasis (anticipated homeostasis), or that indicate lack of epistemic progress (deficient learning).
 
-It must not be possible for mutually cancelling actions to be intended.
+The rules are subject to constraints, such as, it must not be possible for mutually cancelling actions to be intended concurrently.
 
-A GM's policy is the set of all currently inferable actions given a GM's beliefs. If the set is short, the ordering should mostly not matter, since no action in it cancels out another.
+A GM's policy is the set of all currently inferred actions given a GM's beliefs. If the set is short, the ordering should mostly not matter, since no action in it cancels out another.
 
-The GM's policy becomes candidate for execution. Concurrent policies from different GMs might compete with one another (one contains an action that undoes another's action). Competing policies get prioritized, based on the urgency of the beliefs that caused them. Only one of competing policies gets executed at any point in time. Prioritization and "gate-keeping" are effected outside of any one `enactor`.
+The GM's policy becomes candidate for execution. Concurrent policies from different GMs compete with one another if one contains an action that undoes another's action. Competing policies get prioritized, based on the urgency of the beliefs that caused them. Only one of a set of competing policies gets executed at any point in time. Prioritization and "gate-keeping" are effected outside of any one enactor .
+
 
 :- module(gm_<id>_enactor, [intended/1]).
 
 % intended(Action) :- Belief, ...
 
-intended(turn_right(small)) :- believed(b10, is(true)).
-intended(go_forward(big)) :- believed(b10, is(true)).
+intended(turn_right(small)) :- believed(b1(self), is(true)).
+intended(go_forward(big)) :- believed(b2(self), is(true)).
+intended(go_backward(big)) :- believed(b2(self), is(false)).
 ...
 
-## Generating a GM's logic programs
+Generating a GM’s logic programs
+karma  implements an adapted Apperception Engine to search for a GM’s latest version of its logic programs. The search is triggered once the GM is no longer deemed sufficiently competent given accumulated experience.
 
-`karma` implements an adapted [Apperception Engine](https://arxiv.org/pdf/1910.02227.pdf) to search for competent logic programs, competent in that, given prior states, they can predict the next state, as well as retrodict prior incompletely described states. A state can be the GM's beliefs, perceptions (uncontradicted predictions made plus prediction errors received) or intentions (to take action).
-
-The `gm<id>` logic program (of the GM with ID == id) is fully determined by the input given at creation by the Metacognition GM and does not rely on the Apperception Engine.
-
-The `gm<id>_believer`, `gm<id>_predictor` and `gm<id>_enactor`, however, are searched for from data accumulated during the recent past of the GM.
-
-This historical data that describe prior states are:
-
+The data used by the Apperception Engine to induce logic programs are:
 * beliefs once held
 * perceptions once had
-* actions once intended and taken
+* actions once taken
 
-A GM's `believer` is competent to the extent that it correctly models the GM's umwelt. A GM's `predictor` is competent to the extent that it makes predictions that are not contradicted by prediction errors. A GM's `enactor` is competent to the extent that the actions it intends, when they are taken, realize or validate beliefs.
+A GM's believer  is competent to the extent that it correctly models the GM's umwelt (indicated by how competent the predictor and enactor  are since they are defined in terms of the inferred beliefs), 
 
-When revising the "competency logic programs" of a GM, `karma` searches, in order, for
+A GM's predictor  is competent to the extent that it makes predictions that are not contradicted by other GMs via prediction errors. 
 
-1. A more reliable `predictor`
-2. A `believer` implied by the `predictor`
-3. A more effective `enactor`
+A GM's enactor  is competent to the extent that the actions it intends, when they are taken, more or less immediately realize desirable beliefs (beliefs with a positive valence).
 
-The Apperception Engine searches for a "proto" `predictor` with the shape:
+When revising the "competency logic programs" of a GM, karma  searches, in order, for
 
-predicted(ChildGMBeliefName1, Value1) :- perceived(ChildGMBeliefName2, Value2), perceived(ChildGMBeliefName3, Value3),...
+1. A more reliable predictor 
+2. A believer  derived from the predictor 
+3. A more effective enactor given the believer 
+
+The Apperception Engine first searches for a "proto" predictor  with the shape:
+
+predicted(ChildGMBeliefName1(Object1), Value1) :- perceived(ChildGMBeliefName2(Object1), Value2), perceived(ChildGMBeliefName3(Object1, Object2), Value3),...
 ...
 
-A `believer` is then searched by taking conjunctions in the bodies of the `predictor` rules and using them to define beliefs. For example:
+A believer  is then induced by taking conjunctions in the bodies of the predictor  rules and using them to define beliefs. 
 
-believed(BeliefName1) :- perceived(ChildGMBeliefName2, Value2), perceived(ChildGMBeliefName3, Value3).
+For example:
 
-The `predictor` is then finalized by replacing all perceived/2 in its bodies by conjunctions of believed/2. For example:
+believed(BeliefName1(Object1), Value1) :- perceived(ChildGMBeliefName2(Object2), Value2), perceived(ChildGMBeliefName3(Object1, Object2), Value3).
 
-predicted(ChildGMBeliefName1, Value1) :- believed(BeliefName1), ...
+The predictor  is then finalized by replacing all perceived/2 in its bodies by conjunctions of believed/2. 
 
-An attempt is made to resolve a new `believer` that is as close as possible to the previous version.
+For example:
 
-The last step is searching for an `enactor` given the possibly modified `believer`.
+predicted(ChildGMBeliefName1(Object1), Value1) :- believed(BeliefName1(Object1), Value2), ...
 
-A GM's overarching objective is to achieve and preserve homeostasis as afforded by its purview. It does so by taking actions that likely bring about beliefs contrary to those inferred from perceptions of "bad feelings".
+An attempt is made to resolve a new believer  that is as close as possible to the previous version.
 
-`karma` constructs an `enactor` by identifying the current beliefs of the GM that are inferred from perceptions of "bad feelings" (caused by deviation from homeostatis),
-and by identifying actions that could cause the inverse belief, based on prior evidence as available. No actions that undo one another must be inferred from any given belief.
+The last step is searching for an enactor  given the possibly modified believer .
 
-### Managing the search
+A GM's overarching objective is to achieve and preserve homeostasis within its purview. It does so by taking actions that successfully bring about desirable beliefs, beliefs contrary to those inferred from perceptions of "bad feelings" (negative valence beliefs).
+
+karma  constructs an enactor  by 
+* identifying the current beliefs of the GM that are inferred from perceptions of "bad feelings" (caused by deviation from homeostasis), 
+* identifying actions that could cause the inverse belief, based on prior evidence, as available. 
+
+No action that undoes one another must be inferable from any given belief.
+
+Managing the searches
 
 There are three levels of search spaces:
-
-* the search space for generating one logic program, e.g. a GM's `believer` (let's call it Level 1),
-* the search space for generating the system of logic programs for a given GM, namely the GM's `believer`, `predictor` and `enactor` (Level 2), from which emerges the behavior of a GM,
-* the search space for generating the system of all systems of GM logic programs (Level 3), from which emerges the behavior of the agent.
-
-If a search space is too large, finding an acceptable solution will, on average, require too much computing resources. It is thus critical to reduce the size of a search space through heuristics such as inductive biases. However overly constraining a search space prunes away many good solutions. A balance needs to be achieved.
+* the search space for generating a logic program, e.g. a GM's believer  (let's call it Level 1),
+* the search space for generating the system of logic programs for a given GM, namely that GM's co-dependent believer , predictor  and enactor  (Level 2), from which emerges the GM’s competence,
+* the search space for generating the heterarchy of GMs (Level 3), from which emerges the behavior of the agent.
+If any search space is too large, finding an acceptable solution will, on average, require too much time and/or computing resources. It is critical to reduce the size of a search space. This is accomplished using heuristics such as imposing strong inductive biases. However overly constraining a search space prunes away many good solutions. A balance needs to be achieved.
 
 The difficulty is compounded since we are arguably looking at a search space of search spaces of search spaces (Level 3 X Level 2 X Level 1)!
 
-A search space can be constrained internally, for examples, by limiting the number of belief predicates a `believer` can use, or by imposing that two contrary beliefs must be inferrable but never from the same preconditions, etc.
+A search space can be constrained internally, for examples, by limiting the number of belief predicates a believer  can use, or by imposing that two contrary beliefs can be inferable but never from the same preconditions, etc.
 
-A search space can also be constrained externally (one search space constraining another), for examples, a GM's `believer`, `predictor` and `enactor` must use the same (small) set of belief predicates, or two competing GMs must use the same set of belief predicates, etc.
+A search space can also be constrained externally (search spaces constraining one another). For examples, the a GM's believer , predictor  and enactor  must use the same (small) set of belief predicates, and that two competing GMs must synchronize their belief domains, etc.
 
-### Defining search space constraints
+Defining search space constraints
 
-<WORK IN PROGRESS>
+The primary constraint might be restricting the number of GMs. The Metacognition GM should cautiously add new GMs and ruthlessly cull non-performing GMs. 
 
+Another important type of constraint is one that determines the structure of the heterarchy of GMs. A GM has a position in the heterarchy of existing GMs. That position is determined by the GM’s perceptual domain. A GM’s perceptual domain is a set of belief predicates defined by other GMs and a GM’s beliefs are expressed in terms of its perceptual domain.  
 
+The process of defining a perceptual domain is subject to constraints. For example, no two GMs can have identical perceptual domains, unless they are explicitly competing (no unintended duplication constraint.) 
 
+The relative abstraction level of GMs in a heterarchy is defined in terms of a GM’s belief levels.
 
-A
- for one that fits the input data (it can predict and it can retrodict action-belief cause and effect). The search space is contrained by Immanuel Kant's rules of "synthetic unity of apperception", and by time spent and generated code complexity. The fitness function for, say, a predictor is expressed in terms of the predictor's accuracy and complexity (the smaller the program, the better).
+Let’s assert that a belief predicate from a Detector is a "level 1" belief, and that a belief defined in a GM solely in terms of “detected beliefs” a GM is a level 2 belief.  Let’s generalize and say that GM-defined belief has level 1 + the maximum level of its perceived beliefs. 
 
-Unity of apperception constraints:
+We can express constraints on a GM’s perceptual domain in terms of levels of its (predicted) beliefs such that:
+* No belief is transitively defined in terms of itself, i.e. belief1 → prediction → belief2 → prediction → belief 1 is not allowed (no-cycle constraint) 
+* The maximum difference between belief levels is 1 (abstraction-level constraint)
+* A GM can not have a level N + 2 belief in its perceptual domain if no GM has a level N belief in its own perceptual domain (build-from-the-ground-up constraint)
 
-1. Spatial unity: objects are united in space by being connected via chains of relations
-2. Conceptual unity: predicates are united by constraints (.e.g. p(N) => ~q(N))
-3. Static unity: atoms are united in a state by jointly satisfying constraints and static rules
-4. Temporal unity: states are united in a sequence by causal rules
+The larger the scope of a GM, the larger will the search space be -exponentially so- for its logic programs. Keeping the scope of GM small is thus critical (focus constraint).
 
-### Legacy rules
+The scope of a GM consists of:
+* its umwelt - the abduced objects it expresses beliefs or makes predictions about
+* a set of predicate names to express beliefs about them
+* a subset of other GMs beliefs to compose the GM's (predicted) perceptions
+* a subset of actions the agent can intend to take as a consequence of its beliefs (can be empty)
 
-A GM keeps only a certain number of past rounds in memory, with older ones eventually forgotten. These forgotten rounds are no longer available to participate in the generation of the predictor logic program, or in its validation. Important "rules" may have been learned in forgotten rounds because of possibly rare but crucial circumstances not encountered since. The logic program will conserve "rules" for as long as possible across versions of itself, even though they may no longer retrodict the retained experiences.
+Restricting the scope of a GM is accomplished by internally constraining it to:
+* a small number of abduced objects beliefs/predictions can be about
+* a small number of belief predicates it can use to express beliefs and predictions
 
-A new version of a logic program will only shed "legacy rules" from prior versions if
+Another mean is to constrain the internal complexity of the logic programs by:
+* keeping each program to a small number of clauses (Occam’s razor constraint)
+* keeping each clause body small (maximal generality constraint)
 
-1. they make it fail to predict/retrodict experiences from the retained rounds
-2. they make the program exceed complexity limits
+Further pruning of the search space can be achieved by imposing "unity of apperception" constraints:
+* Spatial unity: objects are united in “space” by being transitively related via beliefs and predictions
+* Conceptual unity: beliefs are united by constraints forbidding contradictions
+* Static unity: static unity is achieved when perceptions supports beliefs instead of contradicting them
+* Temporal unity: beliefs are united in time by tracking changes in perception
+
+Let's examine what this means for a GM's believer , predictor  and enactor .
+
+Unity of apperception constraints within a GM
+
+Spatial unity
+
+If the GM-introduced umwelt contains more than the implied self object, beliefs must be defined in the believer that associate all objects directly or indirectly. 
+
+For example, the objects x1, x2 and self are spatially united by
+ 
+...
+believed(b1(self, x1), is(true)) :- ...
+believed(b2(x1, x2), is(false)) :- ...
+believed(b3(x1, is(true)) :- predicted(b4, x2, trends(is(increasing))), ...
+...
+
+Conceptual unity
+
+Built-in constraints (not explicitly encoded in the believer ‘s clauses but encoded in the code generation logic) ensure conceptual unity.
+
+For example,  two contradictory beliefs must not be provable, i.e.  believed(BeliefPredicate, Object, is_true(N)) => ~believed(BeliefPredicate, Object, is_false(N)).
+
+The clauses in the predictor are also constrained so that inferring two mutually exclusive predictions must not be possible given any current beliefs.
+
+Similarly, the clauses of the enactor must also not allow inferring mutually undoing actions given any current beliefs.
+
+Static unity
+
+Static unity is achieved by a GM at a given time if its current beliefs cause one or more predictions to be inferred and if those are not contradicted by prediction errors emitted by other GMs. 
+
+Static unity is akin to model evidence. A GM strives to improve its model evidence by evolving its logic programs so as to minimize the ratio of prediction errors to predictions it makes.
+
+Temporal unity
+
+Temporal unity is automatically achieved because current beliefs cause predictions to be made, actions to be taken, prediction errors to be received, leading to revised beliefs, and so on.
+
+Unity of apperception constraints across GMs
+
+GMs form a heterarchy with Detectors at the “bottom”.  Just as there are unity of apperception constraints applicable to individual GMs, unity of apperception constraints also apply to the heterarchy of GMs as a whole.
+
+Spatial unity
+
+More abstract GMs impose spatial unity constraints on less abstract GMs. A GM’s perceptual domain must always map to the belief domains and umwelts of other (lower-level) GMs. It is meaningless for a GM, other than a Detector, to make predictions that can not be refuted by other GMs.
+
+A GM whose belief domain and umwelt is referenced in another GM’s perceptual domain must not create “dangling references” when it modifies its scope.
+
+Conceptual unity
+
+Conceptual unity across GMs is achieved by multi-GM constraints, such as forbidding circular references in belief → prediction → belief ... chains in the heterarchy.
+
+Static unity
+
+A heterarchy of GMs achieves static unity to the extent that prediction errors are minimized over all GMs.
+
+The static unity of the heterarchy of GMs corresponds to the model evidence of the agent as a whole, i.e. self-evidencing.
+
+Temporal unity
+
+Temporal unity of an agent is achieved by the joint evolution of its heterarchy of GMs toward self-evidencing, as supervised by the Metacognition GM.
+
+The Metacognition GM
+The Metacognition GM sits permanently “above” all other GMs. Before an agent starts learning, its “aggregate generative model” consists of the Metacognition GM and of the Detectors forming the initial, flat, heterarchy of GMs.
+
+The Metacognition GM is responsible for “grooming” the heterarchy of GMs by:
+* maximizing the heterarchy’s conceptual unity; the umwelt and belief domain of any given GM ought to be referenced in the perceptual domains of other GMs
+* maximizing the heterarchy’s static unity, i.e. minimizing the ratio of prediction errors to predictions across GMs
+* introducing competition among (initially identically scoped) GMs so that alternate evolutionary paths can be explored
+
+This maximization leads to “model expansion” either by growing the scope of individual GMs or by causing new GMs to be added to the heterarchy.
+
+This process of model expansion is constrained by:
+* limits on the size of a GM’s scope imposed by karma 
+* limits on the complexity of each logic program in a GM, also imposed by karma 
+* associating a “metabolic cost” to the complexity of the heterarchy, thereby putting homeostatic (and allostatic) pressure on the agent to refrain from growing an “all-consuming brain”.
+
+GMs added to the heterarchy behave as sensors to the Metacognition GM, reporting various metrics, such as:
+* a measure of static unity (the GM’s model evidence)
+* a measure of homeostasis (the overall valence of beliefs held - how little of what the GM believes is derived from negative feelings)
+* a measure of stability (how the GM’s logic programs change over time)
+
+Based on these sensory streams, the Metacognition GM derives beliefs about the fitness of the heterarchy of GMs and of individual GMs, makes predictions, receives prediction errors, updates its beliefs, and take actions (it is after all a GM).
+
+The actions the Metacognition GM can take include:
+* Adding a competing GM, giving it as initial scope the same scope as another GM
+* Adding a GM de novo, letting it set its initial scope and finding its place in the heterarchy
+* Removing an under-performing, redundant GM (redundant because removing it does not introduce “dangling predictions”)
+* Removing an “orphaned” GM which scope is not referenced by other GMs
+
+An under-performing GM is one reporting a combination of:
+* consistently low static unity (low model evidence - high prediction errors to predictions ratio)
+* consistently low homeostasis value (it is consistently failing to remove beliefs with negative valence)
+* consistently high instability (evidence of “thrashing around in the search space” instead of steady learning)
+
+The Metacognition GM is thus responsible for the expansion and contraction of an agent’s heterarchy of GMs, expanding it to increase unity and utility, and to explore alternate evolutionary paths, and shrinking the heterarchy by pruning under-performing GMs, thus reducing non-productive “metabolic costs”.
+
+Explore/Exploit, Play and Dream
+
+The agent is, at any time, in one of three modes 
+* Explore/Exploit 
+* Play 
+* Dream
+
+In Explore/Exploit mode, the agent is “all business” and is focused on maintaining homeostasis in an environment it perceives and acts in.
+
+In Play mode, the survival imperative is relaxed and the focus is on acquiring more information about the efficacy of policies by selecting actions whose outcomes are currently opaque.
+
+In Dream mode, the agent’s sensors are muted, the actuators disabled and an impoverished/unmoored sensory stream is simulated. The hypothesis is that “dreaming” will give an opportunity to the heterarchy of GMs to escape local minima in its aggregate search space.
+
+The Metacognition GM determines when to put the agent in any of these modes.
+
+Successfully implementing the Explore/Exploit mode is the first step after which the implementation of the other two modes will be attempted. 
+
