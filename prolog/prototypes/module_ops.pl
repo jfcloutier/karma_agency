@@ -25,3 +25,8 @@ save_module(Module) :-
     tell(File),
     listing(Module:_),
     told, !.
+
+% See /usr/lib/swi-prolog/library/listing.pl
+% current_predicate(_, prior_types:Pred), strip_module(Pred, _Module, Head), functor(Head, Name, Arity), nth_clause(Pred, ClauseIndex, Reference), clause(Head, Body, Reference).
+% Module = vocabulary, current_predicate(_, Module:Pred), \+ predicate_property(Module:Pred, imported_from(_)), strip_module(Pred, _Module, Head), functor(Head, Name, Arity), setof(Body, clause(Head, Body), Bodies).
+% Module = vocabulary, current_predicate(_, Module:Pred), \+ predicate_property(Module:Pred, imported_from(_)), strip_module(Pred, _Module, Head), functor(Head, Name, Arity), clause(Head, Body).

@@ -1,4 +1,4 @@
-:- module(vocabulary, [object_type/1, value_type/2, property_type/3]).
+:- module(vocabulary, [object_type/1, value_type/2, property_type/3, added_property_type/3]).
 
 :- use_module(gms_db).
 
@@ -16,9 +16,12 @@ property_type(Predicate, ObjectType, ValueTypeName) :-
 value_type(ValueTypeName, ValueDomain) :-
     prior_types:prior_value_type(ValueTypeName, ValueDomain).
 
+value_type(ValueTypeName, ValueDomain) :-
+    property_value_type(nonsense, ValueTypeName, ValueDomain).
+
 added_property_type(Predicate, ObjectType, ValueTypeName) :-
     gm(GM),
-    GM:in_umwelt(_, ObjectType),
+    GM:in_object_domain(_, ObjectType),
     GM:in_belief_domain(Predicate, ObjectType, ValueTypeName).
 
 property_value_type(PropertyName, ObjectType, ValueType) :-

@@ -23,10 +23,4 @@ prior_value_type(centimeters, range(0, 100)).
 prior_value_type(degrees, range(-180, 180)).
 prior_value_type(truth, [true, false]).
 prior_value_type(luminance, range(0, 10)).
-
-
-
-
-
-
-
+ 
