@@ -1,5 +1,6 @@
-:- module(sequence, [enacted_sensory_sequence/2]).
+:- module(sequence, [enacted_sensory_sequence/2, sub_sequence/2]).
 
+:- use_module(library(lists)).
 :- use_module(remembered_db).
 
 enacted_sensory_sequence(GM, Sequence) :-
@@ -58,3 +59,19 @@ memory_sequence_([[Round, Whats] | Rest], PriorRound, Acc, Sequence) :-
 memory_sequence_([[Round, Whats] | Rest], PriorRound, Acc, Sequence) :-
     Round is PriorRound - 1,
     memory_sequence_(Rest, Round, [Whats | Acc], Sequence).
+
+% Non-empty sub sequences of decreasing lengths for each ending state,
+% starting with the last state as ending state.
+sub_sequence(SubSequence, Sequence) :-
+    reverse(Sequence, ReversedSequence),
+    phrase(subseq(ReversedSubSequence), ReversedSequence),
+    reverse(ReversedSubSequence, SubSequence).
+
+subseq(S) --> ..., non_empty_seq(S), ... .
+
+... --> [] | [_], ... .
+
+non_empty_seq([X |T]) --> [X], non_empty_seq(T).
+non_empty_seq([X]) --> [X].
+
+

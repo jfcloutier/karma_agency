@@ -46,12 +46,12 @@ Predictor structure
     % Rules that infer elements of a next state given elements of the prior state
     causal_rule(if_all([sensed(PredicateName, Variable, ValueRange), ...]),  then(sensed(PredicateName, Variable, ValueRange))).
 
-    % Rule that constrain elements of any state to exist or not exist given other 
-    % elements of that state
-    integrity_rule(xor(sensed(PredicateName1, Variable1, ValueRange1), sensed(PredicateName2, Variable2, ValueRange2)). % PredicateName1 \= PredicateName2 | Variable1 \= Variable2
-
-    integrity_rule(exists(sensed(PredicateName1, ObjectType1, ObjectType2))). 
+    % Constraints on a state
+    constraint(exactly_one(sensed, [PredicateName1, PredicateName2,...])). % Given PredicateName1 \= PredicateName2, for each object that can match the first predicate argument, there must be exactly one predicate that applies (the first arg is always typed for objects). 
 
 Note: a ValueRange can be an enumeration of atoms (e.g. colors), a numerical range, or an object type.
 
-Implied Integrity Rule as CHR constraint: sensed(PredicateName, Variable, ValueRange1), sensed(PredicateName, Variable, ValueRange2) ==> ValueRange1 = ValueRange2
+Integrity checks as CHR constraint:
+    A rule or constraint must not subsume or contradict another
+
+    sensed(PredicateName, Variable, ValueRange1), sensed(PredicateName, Variable, ValueRange2) ==> ValueRange1 = ValueRange2

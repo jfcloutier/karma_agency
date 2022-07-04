@@ -3,5 +3,3 @@
 %% An agent's GMs
 
 gm(gm_1).
-
-

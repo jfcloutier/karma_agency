@@ -16,8 +16,8 @@ in_belief_domain(b_obstacle_1, obstacle, truth).
 
 % Action domain
 
-in_action_domain(action_1, effect_on(run_positive, left_motor)).
-in_action_domain(action_2, effect_on(run_positive, right_motor)).
+in_action_domain(action_1, effect_on(left_motor, run_positive)).
+in_action_domain(action_2, effect_on(right_motor, run_positive)).
 
 % has_predictor(predictor{coverage:0, variables:[], static_rules:[], causal_rules:[], integrity_rules:[]}).
 

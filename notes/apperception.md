@@ -62,3 +62,6 @@ Enumerating over N Template(T)s:
     N* = {0,1,2...}
 
     Enumerate over the cardinal product of Os x Ps x Vs x Ns x Nc X Nr
+
+Any system that does invoke latent information beneath the surface of the sensory stimulations must also
+define the initial values of the latent information.

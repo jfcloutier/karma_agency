@@ -1,4 +1,4 @@
-:- module(vocabulary, [object_type/1, value_type/2, property_type/3, added_property_type/3]).
+:- module(vocabulary, [object/1, object_type/1, value_type/2, property_type/3, added_property_type/3]).
 
 :- use_module(gms_db).
 
@@ -26,3 +26,6 @@ added_property_type(Predicate, ObjectType, ValueTypeName) :-
 
 property_value_type(PropertyName, ObjectType, ValueType) :-
     property_type(PropertyName, ObjectType, ValueType).
+
+% TODO
+object(Object) :- true.
