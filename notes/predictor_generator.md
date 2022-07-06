@@ -55,3 +55,14 @@ Integrity checks as CHR constraint:
     A rule or constraint must not subsume or contradict another
 
     sensed(PredicateName, Variable, ValueRange1), sensed(PredicateName, Variable, ValueRange2) ==> ValueRange1 = ValueRange2
+
+## CHR + Prolog
+
+A CHR store is local to one thread.
+
+A Pengine will have its own thread.
+
+If Prolog in the body of any rule fails, all changes to the store since the original attempt to add a constraint (by calling it from Prolog) are rolled back. The Prolog itself then fails to that point.
+
+How to manage a CHR store in a thread accessed by other threads: 
+https://github.com/fnogatz/CHR-Constraint-Server/blob/master/server.pl
