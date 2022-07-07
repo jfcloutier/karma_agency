@@ -1,16 +1,27 @@
-%% Alice  is an actor
+%% Start/stop shortcuts and callbacks for an actor thread named alice.
 
 :- module(alice, [start_alice/0, stop_alice/0]).
 
 :- use_module(actor).
-:- use_module(supervisor, [supervise/3, stop_supervised/3]).
+:- use_module(supervisor, [supervise/3, stop_supervised/2]).
 :- use_module(pubsub, [publish/2]).
 
+%% Public
+
 start_alice() :-
-   supervise(actor, alice, [topics([party, police]), init(alice:init), handler(alice:handle)]).
+   supervise(
+      actor, 
+      alice, 
+      [topics([party, police]), 
+      init(alice:init), 
+      terminate(alice:terminate), 
+      handler(alice:handle)]
+      ).
 
 stop_alice() :-
-   stop_supervised(actor, alice, [termination(alice:terminate)]).
+   actor:stop(alice).
+
+%% Callbacks
 
 init() :-
     writeln("[alice] Initializing").
@@ -32,6 +43,8 @@ handle(event(police, Payload, _)) :-
 handle(message(Message, Source)) :-
     format("[alice] Received ~w from ~w~n", [Message, Source]).
  
+%% Private
+
 contact([]).
 contact([alice | Others]) :-
    contact(Others).

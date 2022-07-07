@@ -1,17 +1,28 @@
-%% Bob is an actor
+%% Start/stop shortcuts and callbacks for an actor thread named bob.
 
 :- module(bob, [start_bob/0, stop_bob/0]).
 
 :- use_module(actor).
-:- use_module(supervisor, [supervise/3, stop_supervised/3]).
+:- use_module(supervisor, [supervise/3, stop_supervised/2]).
 :- use_module(pubsub, [publish/2]).
 
+%% Public
+
 start_bob() :-
-   supervise(actor, bob, [topics([party, police]), init(bob:init), handler(bob:handle), restart(permanent)]).
+   supervise(
+      actor, 
+      bob, 
+      [topics([party, police]), 
+      init(bob:init), 
+      handler(bob:handle), 
+      terminate(bob:terminate), 
+      restart(permanent)]
+      ).
 
 stop_bob() :-
-   % stop_supervised(actor, bob, [termination(bob:terminate)]).
-   actor:stop(bob, [termination(bob:terminate)]).
+   actor:stop(bob).
+
+%% Callbacks
 
 init() :-
     writeln("[bob] Initializing").
@@ -35,6 +46,8 @@ handle(event(police, Payload, _)) :-
 handle(message(Message, Source)) :-
    format("[bob] Received ~w from ~w~n", [Message, Source]).
 
+%% Private
+
 contact([]).
 contact([bob | Others]) :-
    contact(Others).
@@ -44,14 +57,14 @@ contact([Name | Others]) :-
 
 %%% cd('prolog/stuff/threads').
 %%% [supervisor, pubsub, actor, bob, alice].
-%%% supervisor:start().
-%%% pubsub:start().
-%%% start_bob().
-%%% start_alice().
+%%% supervisor:start.
+%%% supervise(pubsub, [restart(transient)]).
+%%% start_bob.
+%%% start_alice.
 %%% pubsub:publish(party, [alice, bob]).
 %%% stop_bob.
-%%% stop_supervised(actor, bob, [termination(bob:terminate)]).
+%%% stop_supervised(actor, bob).
 %%% stop_alice.
-%%% pubsub:stop(). 
-%%% supervisor:stop().
+%%% stop_supervised(pubsub). 
+%%% supervisor:stop.
 

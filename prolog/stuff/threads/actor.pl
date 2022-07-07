@@ -1,5 +1,8 @@
 %%%
-% An actor subscribes, handles broadcast events, direct messages and control directives.
+% Simple actor framework.
+%
+% An actor thread subscribes to and handles broadcast events, 
+% sends/receives direct messages and responds to control directives.
 %%%
 :- module(actor, [send/2]).
 
@@ -12,15 +15,15 @@ start(Name, Options) :-
     option(handler(Handler), Options),
     option(topics(Topics), Options, []),
     option(init(Init), Options, actor:noop()),
+    option(terminate(Terminate), Options, actor:noop()),
     % Topics, Init, Handler
     format("[actor] Creating actor ~w~n", [Name]),
-    thread_create(start_actor(Name, Topics, Init, Handler), _, [alias(Name)]).
+    thread_create(start_actor(Name, Topics, Init, Handler), _, [alias(Name), at_exit(Terminate)]).
 
-stop(Name, Options) :-
+stop(Name) :-
     format("[actor] Stopping actor ~w~n", [Name]),
-    option(termination(Termination), Options, actor:noop()),
     % Cause a normal exit
-    thread_send_message(Name, control(stop, Termination)).
+    thread_send_message(Name, control(stop)).
 
 %%% Public
 
@@ -37,7 +40,6 @@ process_exit(Name, Exit) :-
     format("[actor] Exit ~p of ~w~n", [Exit, Name]),
     unsubscribe_all(Name),
     thread_detach(Name), 
-    % race condition?
     notify_supervisor(Name, Exit),
     thread_exit(true).
 
@@ -52,8 +54,7 @@ run(Handler) :-
     process_message(Message, Handler),
     run(Handler).
 
-process_message(control(stop, Termination), _) :-
-    call(Termination),
+process_message(control(stop), _) :-
     throw(exit(normal)).
 
 process_message(Message, Handler) :-

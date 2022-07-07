@@ -3,13 +3,23 @@
 :- use_module(library(aggregate)).
 :- use_module(bb).
 
+% Singleton thread so no need to use thread_local
 :- dynamic subscription/2.
 
-start() :-
-    thread_create(init(), _, [alias(pubsub)]).
+%% Supervised
 
-stop() :-
-    publish(control, stop(pubsub)).
+start(Name, _) :-
+    writeln("[pubsub] Starting"),
+    thread_create(start_pubsub(), _, [alias(Name)]).
+
+stop(Name) :-
+    writeln("[pubsub] Stopping"),
+    thread_send_message(Name, control(stop(Name))).
+
+% Singleton thread's name
+name(pubsub).
+
+%% Public
 
 subscribe_all(_, []).
 subscribe_all(Queue, [Topic | Others]) :-
@@ -27,10 +37,22 @@ publish(Topic, Payload) :-
     thread_self(Source),
     thread_send_message(pubsub, event(Topic, Payload, Source)).
 
-init() :-
-    writeln("[pubsub] Starting"),
-    % Do some initiazations here
+%% Private
+
+start_pubsub() :-
+    catch(start_run(), Exit, process_exit(Exit)).
+
+start_run() :-
+    % Do some initializations here
     run().
+
+process_exit(Exit) :-
+    format("[pubsub] Exit ~p~n", [Exit]),
+    thread_detach(pubsub), 
+    % race condition?
+    notify_supervisor(Exit),
+    thread_exit(true).
+
 
 run() :-
     writeln("[pubsub] Waiting..."),
@@ -41,7 +63,7 @@ run() :-
 
 handle_event(event(control, stop(pubsub), _)) :-
     writeln("[pubsub] Stopping"),
-    thread_detach(pubsub),
+    retractall(subscription/2),
     throw(exit(normal)).
 
 handle_event(event(Topic,Payload, Source)) :-
@@ -53,3 +75,7 @@ broadcast(event(Topic, Payload, Source)) :-
 send_event(Event, Queue) :-
     format("[pubsub] Sending event ~p to ~w~n", [Event, Queue]),
     thread_send_message(Queue, Event).
+
+% Inform supervisor of the exit
+notify_supervisor(Exit) :-
+    thread_send_message(supervisor, exited(pubsub, pubsub, Exit)).
