@@ -1,57 +1,55 @@
-:- module(pubsub, [start_pubsub/0, stop_pubsub/0, listens_to/2, remove_listener/1]).
+:- module(pubsub, [subscribe/2, subscribe_all/2, publish/2, unsubscribe_all/1]).
 
 :- use_module(library(aggregate)).
 :- use_module(bb).
 
-:- dynamic listener/2.
+:- dynamic subscription/2.
 
-start_pubsub() :-
+start() :-
     thread_create(init(), _, [alias(pubsub)]).
 
-stop_pubsub() :-
-    add_event(event(control, stop(pubsub))).
+stop() :-
+    publish(control, stop(pubsub)).
 
-listens_to(Queue, Topic) :-
-    assertz(listener(Queue, Topic)).
+subscribe_all(_, []).
+subscribe_all(Queue, [Topic | Others]) :-
+    subscribe(Queue, Topic),
+    subscribe_all(Queue, Others).
+    
 
-remove_listener(Queue) :-
-    foreach(listener(Queue,Topic), retract(listener(Queue, Topic))).
+subscribe(Queue, Topic) :-
+    assertz(subscription(Queue, Topic)).
+
+unsubscribe_all(Queue) :-
+    foreach(subscription(Queue, Topic), retract(subscription(Queue, Topic))).
+
+publish(Topic, Payload) :-
+    thread_self(Source),
+    thread_send_message(pubsub, event(Topic, Payload, Source)).
 
 init() :-
+    writeln("[pubsub] Starting"),
     % Do some initiazations here
     run().
 
 run() :-
-    writeln("WAITING FOR EVENTS"),
-    thread_wait(
-        handle_events(Events), 
-        [retry_every(30), module(bb),  wait_preds([+(event/2)]), modified(Events)]),
+    writeln("[pubsub] Waiting..."),
+    thread_get_message(Event),
+    format("Handling ~p~n", [Event]),
+    handle_event(Event),
     run().
 
-handle_events([]) :-
-    writeln("NO EVENT"), !, fail.
-
-handle_events(Events) :- 
-    format("HANDLING EVENTS ~w~n", [Events]),
-    foreach(bb:event(Topic, Payload), handle_event(Topic,Payload)).
-
-handle_event(Topic, Payload) :-
-    Event =.. [event, Topic, Payload],
-    remove_events(Event),
-    process_event(Event).
-
-process_event(event(control, stop(pubsub))) :-
-    writeln("STOPPING"),
+handle_event(event(control, stop(pubsub), _)) :-
+    writeln("[pubsub] Stopping"),
     thread_detach(pubsub),
-    throw(exit).
+    throw(exit(normal)).
 
-process_event(event(Topic,Payload)) :-
-    broadcast(event(Topic, Payload)).
+handle_event(event(Topic,Payload, Source)) :-
+    broadcast(event(Topic, Payload, Source)).
 
-broadcast(event(Topic, Payload)) :-
-    Event =.. [event, Topic, Payload],
-    foreach(listener(Queue, Topic), send_message(Event, Queue)).
+broadcast(event(Topic, Payload, Source)) :-
+    foreach(subscription(Queue, Topic), send_event(event(Topic, Payload, Source), Queue)).
 
-send_message(Event, Queue) :-
-    format("Sending event ~w to ~w~n", [Event, Queue]).
-    % thread_send_message(Queue, Event).
+send_event(Event, Queue) :-
+    format("[pubsub] Sending event ~p to ~w~n", [Event, Queue]),
+    thread_send_message(Queue, Event).
