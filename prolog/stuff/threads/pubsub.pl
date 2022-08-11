@@ -2,19 +2,23 @@
 
 :- use_module(library(aggregate)).
 :- use_module(bb).
+:- use_module(thread_utils).
 
-% Singleton thread so no need to use thread_local
-:- dynamic subscription/2.
+:- thread_local subscription/2.
 
 %% Supervised
 
-start(Name, _) :-
+start(pubsub, _, Supervisor) :-
     writeln("[pubsub] Starting"),
-    thread_create(start_pubsub(), _, [alias(Name)]).
+    thread_create(start_pubsub(Supervisor), _, [alias(pubsub)]).
 
-stop(Name) :-
+stop(pubsub) :-
     writeln("[pubsub] Stopping"),
-    thread_send_message(Name, control(stop(Name))).
+    send_message(pubsub, stop()).
+
+kill(pubsub) :-
+    writeln("[pubsub] Dying"),
+    send_message(pubsub, die()).
 
 % Singleton thread's name
 name(pubsub).
@@ -22,60 +26,71 @@ name(pubsub).
 %% Public
 
 subscribe_all(_, []).
-subscribe_all(Queue, [Topic | Others]) :-
-    subscribe(Queue, Topic),
-    subscribe_all(Queue, Others).
+subscribe_all(Name, [Topic | Others]) :-
+    subscribe(Name, Topic),
+    subscribe_all(Name, Others).
     
 
-subscribe(Queue, Topic) :-
-    assertz(subscription(Queue, Topic)).
+subscribe(Name, Topic) :-
+   send_message(pubsub, subscribe(Name, Topic)).
 
-unsubscribe_all(Queue) :-
-    foreach(subscription(Queue, Topic), retract(subscription(Queue, Topic))).
+unsubscribe_all(Name) :-
+    send_message(pubsub, unsubscribe(Name)).
 
 publish(Topic, Payload) :-
     thread_self(Source),
-    thread_send_message(pubsub, event(Topic, Payload, Source)).
+    send_message(pubsub, event(Topic, Payload, Source)).
 
 %% Private
 
-start_pubsub() :-
-    catch(start_run(), Exit, process_exit(Exit)).
+start_pubsub(Supervisor) :-
+    catch(start_run(), Exit, process_exit(Exit, Supervisor)).
 
 start_run() :-
     % Do some initializations here
     run().
 
-process_exit(Exit) :-
+process_exit(Exit, Supervisor) :-
     format("[pubsub] Exit ~p~n", [Exit]),
     thread_detach(pubsub), 
     % race condition?
-    notify_supervisor(Exit),
+    notify_supervisor(Supervisor, Exit),
     thread_exit(true).
 
 
 run() :-
     writeln("[pubsub] Waiting..."),
-    thread_get_message(Event),
-    format("Handling ~p~n", [Event]),
-    handle_event(Event),
+    thread_get_message(Message),
+    process_message(Message),
     run().
 
-handle_event(event(control, stop(pubsub), _)) :-
+process_message(subscribe(Name, Topic)) :-
+    assertz(subscription(Name, Topic)).
+
+process_message(unsubscribe(Name)) :-
+    retractall(subscription(Name, _)).
+
+process_message(stop()) :-
     writeln("[pubsub] Stopping"),
     retractall(subscription/2),
     throw(exit(normal)).
 
-handle_event(event(Topic,Payload, Source)) :-
+process_message(die()) :-
+    writeln("[pubsub] Dying"),
+    retractall(subscription/2),
+    thread_detach(pubsub), 
+    thread_exit(true).
+
+process_message(event(Topic,Payload, Source)) :-
     broadcast(event(Topic, Payload, Source)).
 
 broadcast(event(Topic, Payload, Source)) :-
-    foreach(subscription(Queue, Topic), send_event(event(Topic, Payload, Source), Queue)).
+    foreach(subscription(Name, Topic), send_event(event(Topic, Payload, Source), Name)).
 
-send_event(Event, Queue) :-
-    format("[pubsub] Sending event ~p to ~w~n", [Event, Queue]),
-    thread_send_message(Queue, Event).
+send_event(Event, Name) :-
+    format("[pubsub] Sending event ~p to ~w~n", [Event, Name]),
+    send_message(Name, Event).
 
 % Inform supervisor of the exit
-notify_supervisor(Exit) :-
-    thread_send_message(supervisor, exited(pubsub, pubsub, Exit)).
+notify_supervisor(Supervisor, Exit) :-
+    send_message(Supervisor, exited(pubsub, pubsub, Exit)).

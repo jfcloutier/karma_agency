@@ -1,15 +1,15 @@
 %% Start/stop shortcuts and callbacks for an actor thread named bob.
 
-:- module(bob, [start_bob/0, stop_bob/0]).
+:- module(bob, [start_bob/1, stop_bob/0]).
 
 :- use_module(actor).
-:- use_module(supervisor, [supervise/3, stop_supervised/2]).
 :- use_module(pubsub, [publish/2]).
 
 %% Public
 
-start_bob() :-
-   supervise(
+start_bob(Supervisor) :-
+   supervisor:start_child(
+      Supervisor,
       actor, 
       bob, 
       [topics([party, police]), 
@@ -55,16 +55,22 @@ contact([Name | Others]) :-
    actor:send(Name, "Bob says howdy!"),
    contact(Others).
 
-%%% cd('prolog/stuff/threads').
-%%% [supervisor, pubsub, actor, bob, alice].
-%%% supervisor:start.
-%%% supervise(pubsub, [restart(transient)]).
-%%% start_bob.
-%%% start_alice.
-%%% pubsub:publish(party, [alice, bob]).
-%%% stop_bob.
-%%% stop_supervised(actor, bob).
-%%% stop_alice.
-%%% stop_supervised(pubsub). 
-%%% supervisor:stop.
+%% cd('prolog/stuff/threads').
+%% [thread_utils, supervisor, pubsub, actor, bob, alice].
+
+test :-
+   supervisor:start(top),
+   supervisor:start_child(top, pubsub, [restart(transient)]),
+   sleep(0),
+   start_bob(top),
+   start_alice(top),
+   sleep(0),
+   pubsub:publish(party, [alice, bob]),
+   sleep(1),
+   stop_bob,
+   supervisor:kill_child(top, actor, bob),
+   stop_alice,
+   supervisor:kill_child(top, pubsub), 
+   supervisor:stop(top).
+
 

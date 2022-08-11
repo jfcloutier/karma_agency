@@ -1,15 +1,15 @@
 %% Start/stop shortcuts and callbacks for an actor thread named alice.
 
-:- module(alice, [start_alice/0, stop_alice/0]).
+:- module(alice, [start_alice/1, stop_alice/0]).
 
 :- use_module(actor).
-:- use_module(supervisor, [supervise/3, stop_supervised/2]).
 :- use_module(pubsub, [publish/2]).
 
 %% Public
 
-start_alice() :-
-   supervise(
+start_alice(Supervisor) :-
+   supervisor:start_child(
+      Supervisor,
       actor, 
       alice, 
       [topics([party, police]), 

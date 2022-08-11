@@ -71,7 +71,7 @@ partial_coverage(Predictor, Sequence, PC) :-
     length(Sequence, Length),
     (Length = 0, PC = 0 ; PC is Coverage / Length).
     
-% Verify coverage
+% A predictor for a GM given a sequence of per-round perceptions (sensory sequence)
 predictor_for_sequence(GM, Sequence, Predictor) :-
     % Choose a sub-sequence, prioritizing on recency then on length
     sub_sequence(SubSequence, Sequence),
@@ -79,10 +79,10 @@ predictor_for_sequence(GM, Sequence, Predictor) :-
     prediction_scope(GM, SubSequence, Scope),
     % List typed variables given the GM's scope
     variables(Scope, Variables),
-    % Guess constraints
-    constraints(Scope, Variables, Constraints),
-    % Conceptual unity requirement met? (Each predicate in scope mentioned in a constraint)
-    conceptual_unity(Scope, Constraints),
+    % Guess unity rules
+    unity_rules(Scope, Variables, UnityRules),
+    % Conceptual unity requirement met? (Each predicate in scope mentioned in a unity rule)
+    conceptually_unified(Scope, UnityRules),
     % Guess static rules
     static_rules(Scope, Variables, StaticRules),
     % Guess causal rules
@@ -90,11 +90,11 @@ predictor_for_sequence(GM, Sequence, Predictor) :-
     % Guess initial conditions from the sub-sequence
     initial_conditions(SubSequence, InitialConditions),
     % Compute the trace (if computed, it implicitly meets static and temporal unity requirements)
-    trace(InitialConditions, Constraints, StaticRules, CausalRules, Trace),
+    sensory_trace(InitialConditions, UnityRules, StaticRules, CausalRules, Trace),
     % Verify spatial unity requirement met (for each pair or objects in scope, there's a direct or indirect relation connecting them.)
-    spatial_unity(Scope, Trace),
+    spatially_unified(Scope, Trace),
     % Verify that the Trace subsumes the sub-sequence
-    trace_covers(Trace, SubSequence),
+    sensory_trace_covers(Trace, SubSequence),
     % Assemble a new candidate predictor!
     length(SubSequence, Coverage),
     Predictor = predictor{
@@ -102,7 +102,7 @@ predictor_for_sequence(GM, Sequence, Predictor) :-
         scope:Scope,
         initial_conditions: InitialConditions, 
         variables:Variables, 
-        constraints:Constraints, 
+        unity_rules:UnityRules, 
         static_rules:StaticRules, 
         causal_rules:CausalRules}.
 
@@ -135,5 +135,32 @@ extract_prediction_scope(SensoryScope) :-
     sensory_domain(Predicates, SensoryDomain),
     PredictionScope = scope{object_domain:ObjectDomain, sensory_domain:SensoryDomain, belief_domain:[], action_domain:[]}.
 
+% TODO
+variables(Scope, Variables).
 
+% TODO
+unity_rules(Scope, Variables, UnityRules).
 
+% TODO
+conceptually_unified(Scope, UnityRules).
+
+%TODO
+static_rules(Scope, Variables, StaticRules).
+
+% TODO
+causal_rules(Scope, Variables, CausalRules).
+
+% TODO
+extract_prediction_scope(SensoryScope).
+
+% TODO
+initial_conditions(SubSequence, InitialConditions).
+
+% TODO
+sensory_trace(InitialConditions, UnityRules, StaticRules, CausalRules, Trace).
+
+% TODO
+spatially_unified(Scope, Trace).
+
+% TODO
+sensory_trace_covers(Trace, SubSequence).

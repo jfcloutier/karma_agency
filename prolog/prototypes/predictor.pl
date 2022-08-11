@@ -3,7 +3,7 @@
           ]).
 
 % predictor:empty_predictor(Predictor), C = Predictor.coverage().
-empty_predictor(predictor{coverage:0, scope: [], causal_rules:[], constraints:[], initial_conditions:[], static_rules:[], variables:[]}).
+empty_predictor(predictor{coverage:0, scope: [], causal_rules:[], unity_rules:[], initial_conditions:[], static_rules:[], variables:[]}).
 
 P.scope():=Scope :-
     Scope=P.scope.
@@ -18,5 +18,5 @@ P.static_rules():=StaticRules :-
     StaticRules=P.static_rules.
 P.causal_rules():=CausalRules :-
     CausalRules=P.causal_rules.
-P.constraints():=Constraints :-
-    Constraints=P.constraints.
+P.unity_rules():=UnityRules :-
+    UnityRules=P.unity_rules.
