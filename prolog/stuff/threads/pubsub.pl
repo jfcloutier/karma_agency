@@ -4,6 +4,7 @@
 :- use_module(bb).
 :- use_module(thread_utils).
 
+% TODO - Subscriptions are lost if pubsub is restarted
 :- thread_local subscription/2.
 
 %% Supervised

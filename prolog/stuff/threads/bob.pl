@@ -61,16 +61,26 @@ contact([Name | Others]) :-
 test :-
    supervisor:start(top),
    supervisor:start_child(top, pubsub, [restart(transient)]),
-   sleep(0),
    start_bob(top),
    start_alice(top),
-   sleep(0),
    pubsub:publish(party, [alice, bob]),
    sleep(1),
    stop_bob,
    supervisor:kill_child(top, actor, bob),
    stop_alice,
    supervisor:kill_child(top, pubsub), 
-   supervisor:stop(top).
+   supervisor:stop(top),
+   sleep(1),
+   threads.
 
-
+test1 :-
+   supervisor:start(top),
+   supervisor:start_child(top, pubsub, [restart(transient)]),
+   supervisor:start_child(top, supervisor, bottom, [restart(transient)]),
+   start_bob(bottom),
+   start_alice(bottom),
+   pubsub:publish(party, [alice, bob]),
+   sleep(1),
+   supervisor:stop(top),
+   sleep(1),
+   threads.

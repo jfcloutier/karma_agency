@@ -1,20 +1,27 @@
 %% Supervisor.
 %
-%% Starts and kills threads in modules that comply with supervised behavior:
-%%  implements start(Name, Options), stop(Name) and kill(Name)
-%%  if the module runs a singleton thread, it must implement name(Name)
-%%  sends exited(Module, Name, Exit) messages where Exit = exit(normal) means normal exit.
+%% Starts and kills threads in modules that comply with supervised behavior. 
+
+%% A supervised thread's module must implement start(Name, Options, Supervisor), stop(Name) and kill(Name).
+%% If the module runs a singleton thread, it must implement name(Name).
+%% A supervised thread must send exited(Module, Name, Exit) messages where Exit = exit(normal) means normal exit.
 %
-%% Restarts terminated threads according to option restart(Restart) 
+%% A supervisor restarts terminated child threads according to option restart(Restart) with which they were started,
 %% where Restart is one of permanent (always restart), temporary (never restart) or transient (restart on abnormal exit - the default).
+%% The restarted goal options are set to include `restarting(true)`
 %%
-%% A supervisor can itself be supervised.
+%% A supervisor can itself be supervised. If a supervisor is started with option `restarting(true)`, 
+%% it's *permanent* children (and only them) are restarted.
+%%
+%% Explicitly stopping a supervisor effectively kills it and all its children.
+%%
 :- module(supervisor, []).
 
 :- use_module(library(option)).
 :- use_module(thread_utils).
 
-:- thread_local child/4.
+% Dynamic so that children survive the exit of supervisor threads and can be restarted if the supervisor thread is restarted.
+:- dynamic child/5.
 
 % Start a top supervisor thread
 start(Supervisor) :-
@@ -34,6 +41,8 @@ stop(Supervisor) :-
     send_message(Supervisor, control(stop)).
 
 kill(Supervisor) :-
+    kill_all_children(Supervisor),
+    forget_all_children(Supervisor),
     stop(Supervisor).
 
 %%% Public
@@ -43,8 +52,14 @@ start_child(Supervisor, Module, Options) :-
     singleton_thread_name(Module, Name),
     start_child(Supervisor, Module, Name, Options).
 
-% Start and supervise a named module thread
+start_child(Supervisor, supervisor, Name, Options) :-
+    starting_child(Supervisor, supervisor, Name, Options).
+
 start_child(Supervisor, Module, Name, Options) :-
+    starting_child(Supervisor, Module, Name, Options).
+
+% Starting a supervised named module thread
+starting_child(Supervisor, Module, Name, Options) :-
     format("[supervisor] Starting supervised child ~w ~w with ~p under ~w~n", [Module, Name, Options, Supervisor]),
     option(restart(Restart), Options, transient),
     Goal =.. [start, Name, Options, Supervisor],
@@ -66,19 +81,21 @@ singleton_thread_name(Module, Name) :-
     ModuleGoal =.. [:, Module, name(Name)],
     catch(call(ModuleGoal), Exception, (format("[supervisor] Failed to get the singleton thread name of ~w: ~p~n", [Module, Exception]), fail)).
 
+% Supervisor is running supervised, so it might be restarted on exit.
+% If it is, then its supervised children might also be restarted.
 run_supervised(Options, ParentSupervisor) :-
-    catch(run(Options), Exit, process_exit(Exit, ParentSupervisor)).
+    option(restarting(Restarting), Options, false),
+    Restarting -> maybe_restart_children(); true,
+    delete(Options, restarting(_), RestOptions),
+    catch(run(RestOptions), Exit, process_exit(Exit, ParentSupervisor)).
 
 process_exit(Exit, ParentSupervisor) :-
     thread_self(Supervisor),
     format("[supervisor] Exit ~p of ~w~n", [Exit, Supervisor]),
-    kill_all_children(),
+    kill_all_children(Supervisor),
     thread_detach(Supervisor), 
     notify_supervisor(ParentSupervisor, Supervisor, Exit),
     thread_exit(true).
-
-kill_all_children() :-
-    foreach(child(Module, Name, _, _), do_kill_child(Module, Name)).
 
 % Inform supervisor of the exit
 notify_supervisor(ParentSupervisor, Supervisor, Exit) :-
@@ -101,7 +118,8 @@ process_message(stop_child(Module, Name)) :-
     do_kill_child(Module, Name).
 
 process_message(exited(Module, Name, Exit)) :-
-    child(Module, Name, Goal, Restart),
+    thread_self(Supervisor),
+    child(Supervisor, Module, Name, Goal, Restart),
     thread_self(Supervisor),
     format("[supervise] Child ~w ~w exited with ~p. Restart is ~w~n", [Module,Name,Exit,Restart]),
     !,
@@ -114,32 +132,61 @@ process_message(exited(Module, Name, Exit)) :-
 
 process_message(control(stop)) :-
     thread_self(Supervisor),
-    kill_all_children(),
+    kill_all_children(Supervisor),
     thread_detach(Supervisor), 
     thread_exit(true).
+
+kill_all_children(Supervisor) :-
+    format("Killing all children of ~w~n", [Supervisor]),
+    foreach(child(Supervisor, Module, Name, _, _), do_kill_child(Module, Name)).
 
 do_start_child(Module, Name, Goal, Restart) :-
     call(Goal),
     remember_child(Module, Name, Goal, Restart).
 
 do_kill_child(Module, Name) :-
+    format("Killing child ~w ~w~n", [Module, Name]),
     forget_child(Module, Name),
     Goal =.. [kill, Name],
     ModuleGoal =.. [:, Module, Goal],
     !,
     catch(call(ModuleGoal), Exception, format("Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])).
 
+maybe_restart_children() :-
+    thread_self(Supervisor),
+    foreach(
+        child(Supervisor, Module, Name, Goal, Restart), 
+        maybe_restart(Supervisor, Module, Name, Goal, exit(normal), Restart)).
+
 maybe_restart(_, Module, Name, _, _, temporary) :-
     forget_child(Module, Name).
 maybe_restart(_, Module, Name, _, exit(normal), transient) :-
     forget_child(Module, Name).
 maybe_restart(Supervisor, Module, Name, Goal, _, transient) :-
-    send_message(Supervisor, start_child(Module, Name, Goal, transient)).
+    restarting_goal(Goal, RestartingGoal),
+    send_message(Supervisor, start_child(Module, Name, RestartingGoal, transient)).
 maybe_restart(Supervisor, Module, Name, Goal, _, permanent) :-
-    send_message(Supervisor, start_child(Module, Name, Goal, permanent)).
+    restarting_goal(Goal, RestartingGoal),
+    send_message(Supervisor, start_child(Module, Name, RestartingGoal, permanent)).
+
+restarting_goal(ModuleGoal, RestartingModuleGoal) :-
+    ModuleGoal =.. [:, Module, Goal],
+    Goal =.. [start, Name, Options, Supervisor],
+    merge_options([restarting(true)], Options, RestartingOptions),
+    RestartingGoal =.. [start, Name, RestartingOptions, Supervisor],
+    RestartingModuleGoal =.. [:, Module, RestartingGoal].
+
+forget_all_children(Supervisor) :-
+    format("Forgetting all children of ~w~n", [Supervisor]),
+    retractall(child(Supervisor, _,_,_,_)).
 
 forget_child(Module, Name) :-
-    retractall(child(Module, Name, _, _)).
+    thread_self(Supervisor),
+    format("Forgetting ~w ~w child of ~w~n", [Module, Name, Supervisor]),
+    retractall(child(Supervisor, Module, Name, _, _)).
 
 remember_child(Module, Name, Goal, Restart) :-
-    assert(child(Module, Name, Goal, Restart)).
+    thread_self(Supervisor),
+    Child = child(Supervisor, Module, Name, Goal, Restart),
+    format("Remembering ~p~n", [Child]),
+    assert(Child).
