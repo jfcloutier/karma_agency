@@ -2,8 +2,8 @@
 
 :- module(bob, [start_bob/1, stop_bob/0]).
 
-:- use_module(actor).
-:- use_module(pubsub, [publish/2]).
+:- use_module(actor_model(actor)).
+:- use_module(actor_model(pubsub), [publish/2]).
 
 %% Public
 
@@ -54,33 +54,3 @@ contact([bob | Others]) :-
 contact([Name | Others]) :-
    actor:send(Name, "Bob says howdy!"),
    contact(Others).
-
-%% cd('prolog/stuff/threads').
-%% [thread_utils, supervisor, pubsub, actor, bob, alice].
-
-test :-
-   supervisor:start(top),
-   supervisor:start_child(top, pubsub, [restart(transient)]),
-   start_bob(top),
-   start_alice(top),
-   pubsub:publish(party, [alice, bob]),
-   sleep(1),
-   stop_bob,
-   supervisor:kill_child(top, actor, bob),
-   stop_alice,
-   supervisor:kill_child(top, pubsub), 
-   supervisor:stop(top),
-   sleep(1),
-   threads.
-
-test1 :-
-   supervisor:start(top),
-   supervisor:start_child(top, pubsub, [restart(transient)]),
-   supervisor:start_child(top, supervisor, bottom, [restart(transient)]),
-   start_bob(bottom),
-   start_alice(bottom),
-   pubsub:publish(party, [alice, bob]),
-   sleep(1),
-   supervisor:stop(top),
-   sleep(1),
-   threads.

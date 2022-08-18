@@ -1,5 +1,16 @@
 # Notes
 
+```prolog
+?- [load].
+```
+
+```prolog
+?- [load_tests].
+?- run_tests.
+```
+
+THIS IS OUT OF DATE
+
 ## Requirements
 
 Use the development version of SWI-PROLOG (https://www.swi-prolog.org/build/PPA.html)

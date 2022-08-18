@@ -2,8 +2,8 @@
 
 :- module(alice, [start_alice/1, stop_alice/0]).
 
-:- use_module(actor).
-:- use_module(pubsub, [publish/2]).
+:- use_module(actor_model(actor)).
+:- use_module(actor_model(pubsub), [publish/2]).
 
 %% Public
 
