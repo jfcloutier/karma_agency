@@ -1,19 +1,19 @@
 %%%
-% Simple actor framework.
+% Worker actor logic.
 %
-% An actor thread subscribes to and handles broadcast events, 
+% A worker thread subscribes to and handles broadcast events, 
 % sends/receives direct messages and responds to control directives.
 % 
-% An actor is supervised and thus implements start/3 and stop/1.
+% A worker is supervised and thus implements start/3, stop/1 and kill/1.
 %
-% An actor is started by giving it a unique name and options.
+% A worker is started by giving it a unique name and options.
 % Options:
-%   topics - the list of topics forthe events the actor wantsto receive (defaults to [])
+%   topics - the list of topics for the events the worker wants to receive (defaults to [])
 %   handler - the fully qualified name of the clause header handling events (required)
-%   init - the fully qualified name of the clause called when initiating the agent (defaults to actor:noop/0)
-%   terminate - the fully qualified name of the clause called when terminating the agent (defaults to actor:noop/0)
+%   init - the fully qualified name of the clause called when initiating the agent (defaults to worker:noop/0)
+%   terminate - the fully qualified name of the clause called when terminating the agent (defaults to worker:noop/0)
 %%%
-:- module(actor, [send/2]).
+:- module(worker, [send/2]).
 
 :- use_module(library(option)).
 :- use_module(thread_utils).
@@ -24,19 +24,19 @@
 start(Name, Options, Supervisor) :-
     option(handler(Handler), Options),
     option(topics(Topics), Options, []),
-    option(init(Init), Options, actor:noop()),
-    option(terminate(Terminate), Options, actor:noop()),
+    option(init(Init), Options, worker:noop()),
+    option(terminate(Terminate), Options, worker:noop()),
     % Topics, Init, Handler
-    format("[actor] Creating actor ~w~n", [Name]),
-    start_thread(Name, actor:start_actor(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
+    format("[worker] Creating worker ~w~n", [Name]),
+    start_thread(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
 
 stop(Name) :-
-    format("[actor] Stopping actor ~w~n", [Name]),
+    format("[worker] Stopping worker ~w~n", [Name]),
     % Cause a normal exit
     send_message(Name, control(stop)).
 
 kill(Name) :-
-    format("[actor] Killing actor ~w~n", [Name]),
+    format("[worker] Killing worker ~w~n", [Name]),
     % Force exit
     send_message(Name, control(die)).
 
@@ -48,20 +48,20 @@ send(Name, Message) :-
 
 %%% Private - in thread
 
-start_actor(Name, Topics, Init, Handler, Supervisor) :-
-    catch(start_run(Name, Topics, Init, Handler), Exit, process_exit(Name, Exit, Supervisor)).
+start_worker(Name, Topics, Init, Handler, Supervisor) :-
+    catch(start_run(Topics, Init, Handler), Exit, process_exit(Name, Exit, Supervisor)).
 
 process_exit(Name, Exit, Supervisor) :-
-    format("[actor] Exit ~p of ~w~n", [Exit, Name]),
-    unsubscribe_all(Name),
+    format("[worker] Exit ~p of ~w~n", [Exit, Name]),
+    unsubscribe_all(),
     thread_detach(Name), 
     notify_supervisor(Supervisor, Name, Exit),
     thread_exit(true).
 
 
-start_run(Name, Topics, Init, Handler) :-
+start_run(Topics, Init, Handler) :-
     call(Init),
-    subscribe_all(Name, Topics),
+    subscribe_all(Topics),
     run(Handler).
 
 run(Handler) :-
@@ -83,12 +83,12 @@ process_message(Message, Handler) :-
     Goal =.. [Head, Message],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    format("[actor] ~w got ~p; calling ~p~n", [Name, Message, Goal]),
+    format("[worker] ~w got ~p; calling ~p~n", [Name, Message, Goal]),
     call(ModuleGoal).
 
 % Inform supervisor of the exit
 notify_supervisor(Supervisor, Name, Exit) :-
-    send_message(Supervisor, exited(actor, Name, Exit)).
+    send_message(Supervisor, exited(worker, Name, Exit)).
 
 % Just succeed
 noop().

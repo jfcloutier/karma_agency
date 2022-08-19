@@ -1,8 +1,8 @@
-%% Start/stop shortcuts and callbacks for an actor thread named alice.
+%% Start/stop shortcuts and callbacks for an worker thread named alice.
 
 :- module(alice, [start_alice/1, stop_alice/0]).
 
-:- use_module(actor_model(actor)).
+:- use_module(actor_model(worker)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
 %% Public
@@ -10,7 +10,7 @@
 start_alice(Supervisor) :-
    supervisor:start_child(
       Supervisor,
-      actor, 
+      worker, 
       alice, 
       [topics([party, police]), 
       init(alice:init), 
@@ -19,7 +19,7 @@ start_alice(Supervisor) :-
       ).
 
 stop_alice() :-
-   actor:stop(alice).
+   worker:stop(alice).
 
 %% Callbacks
 
@@ -34,7 +34,7 @@ handle(event(_,_, alice)).
 
 handle(event(party, PartyGoers, _)) :-
    format("[alice] Ready to party with ~w~n", [PartyGoers]),
-   contact(PartyGoers),
+   contact_others(PartyGoers),
    publish(police, "Anything wrong, officer?").
 
 handle(event(police, Payload, _)) :-
@@ -45,10 +45,10 @@ handle(message(Message, Source)) :-
  
 %% Private
 
-contact([]).
-contact([alice | Others]) :-
-   contact(Others).
-contact([Name | Others]) :-
-   actor:send(Name, "Alice says howdy!"),
-   contact(Others).
+contact_others([]).
+contact_others([alice | Others]) :-
+   contact_others(Others).
+contact_others([Name | Others]) :-
+   worker:send(Name, "Alice says howdy!"),
+   contact_others(Others).
 

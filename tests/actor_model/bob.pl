@@ -1,8 +1,8 @@
-%% Start/stop shortcuts and callbacks for an actor thread named bob.
+%% Start/stop shortcuts and callbacks for an worker thread named bob.
 
 :- module(bob, [start_bob/1, stop_bob/0]).
 
-:- use_module(actor_model(actor)).
+:- use_module(actor_model(worker)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
 %% Public
@@ -10,7 +10,7 @@
 start_bob(Supervisor) :-
    supervisor:start_child(
       Supervisor,
-      actor, 
+      worker, 
       bob, 
       [topics([party, police]), 
       init(bob:init), 
@@ -20,7 +20,7 @@ start_bob(Supervisor) :-
       ).
 
 stop_bob() :-
-   actor:stop(bob).
+   worker:stop(bob).
 
 %% Callbacks
 
@@ -35,7 +35,7 @@ handle(event(_,_, bob)).
 
 handle(event(party, PartyGoers, _)) :-
    format("[bob] Ready to party with ~w~n", [PartyGoers]),
-   contact(PartyGoers),
+   contact_others(PartyGoers),
    publish(police, "Wassup?").
 
 handle(event(police, Payload, _)) :-
@@ -48,9 +48,9 @@ handle(message(Message, Source)) :-
 
 %% Private
 
-contact([]).
-contact([bob | Others]) :-
-   contact(Others).
-contact([Name | Others]) :-
-   actor:send(Name, "Bob says howdy!"),
-   contact(Others).
+contact_others([]).
+contact_others([bob | Others]) :-
+   contact_others(Others).
+contact_others([Name | Others]) :-
+   worker:send(Name, "Bob says howdy!"),
+   contact_others(Others).

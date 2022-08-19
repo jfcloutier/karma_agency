@@ -1,12 +1,8 @@
-%% Supervisor.
+%% Supervisor actor logic.
 %
-%% Starts and kills threads in modules that comply with supervised behavior. 
+%% Starts, restarts and kills actor threads. 
 
-%% A supervised thread's module must implement start(Name, Options, Supervisor), stop(Name) and kill(Name).
-%% If the module runs a singleton thread, it must implement name(Name).
-%% A supervised thread must send exited(Module, Name, Exit) messages where Exit = exit(normal) means normal exit.
-%
-%% A supervisor restarts terminated child threads according to option restart(Restart) with which they were started,
+%% A supervisor actor restarts terminated child threads according to option restart(Restart) with which they were started,
 %% where Restart is one of permanent (always restart), temporary (never restart) or transient (restart on abnormal exit - the default).
 %% The restarted goal options are set to include `restarting(true)`
 %%
@@ -47,14 +43,12 @@ kill(Supervisor) :-
 
 %%% Public
 
-% Start and supervise a module's singleton thread
+% Start and supervise an actor's singleton thread
 start_child(Supervisor, Module, Options) :-
     singleton_thread_name(Module, Name),
     start_child(Supervisor, Module, Name, Options).
 
-start_child(Supervisor, supervisor, Name, Options) :-
-    starting_child(Supervisor, supervisor, Name, Options).
-
+% Start and supervise an actor's named thread
 start_child(Supervisor, Module, Name, Options) :-
     starting_child(Supervisor, Module, Name, Options).
 

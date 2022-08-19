@@ -1,4 +1,4 @@
-:- module(pubsub, [subscribe/2, subscribe_all/2, publish/2, unsubscribe_all/1]).
+:- module(pubsub, [subscribe/1, subscribe_all/1, publish/2, unsubscribe_all/0]).
 
 :- use_module(library(aggregate)).
 :- use_module(bb).
@@ -26,16 +26,18 @@ name(pubsub).
 
 %% Public
 
-subscribe_all(_, []).
-subscribe_all(Name, [Topic | Others]) :-
-    subscribe(Name, Topic),
-    subscribe_all(Name, Others).
+subscribe_all([]).
+subscribe_all([Topic | Others]) :-
+    subscribe(Topic),
+    subscribe_all(Others).
     
 
-subscribe(Name, Topic) :-
+subscribe(Topic) :-
+   thread_self(Name),
    send_message(pubsub, subscribe(Name, Topic)).
 
-unsubscribe_all(Name) :-
+unsubscribe_all() :-
+    thread_self(Name),
     send_message(pubsub, unsubscribe(Name)).
 
 publish(Topic, Payload) :-
@@ -66,6 +68,7 @@ run() :-
     run().
 
 process_message(subscribe(Name, Topic)) :-
+    format("[pubsub] Subcribing ~w to topic ~w~n", [Name, Topic]),
     assertz(subscription(Name, Topic)).
 
 process_message(unsubscribe(Name)) :-

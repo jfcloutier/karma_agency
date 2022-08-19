@@ -1,4 +1,4 @@
-:- module(thread_utils, [start_thread/2, start_thread/3, send_message/2, wait_for_thread/1]).
+:- module(thread_utils, [start_thread/2, start_thread/3, send_message/2, wait_for_thread/1, wait_for_thread_stopped/1]).
 
 start_thread(Name, Goal) :-
     start_thread(Name, Goal, []).
@@ -25,3 +25,19 @@ wait_for_thread(Name, CountDown) :-
          sleep(1), 
          AttemptsLeft is CountDown - 1,
          wait_for_thread(Name, AttemptsLeft)).
+
+wait_for_thread_stopped(Name) :-
+    wait_for_thread_stopped(Name, 5).
+
+wait_for_thread_stopped(Name, 0) :-
+    format("Failed waiting for thread stopped ~w~n", [Name]),!,
+    fail.
+
+wait_for_thread_stopped(Name, CountDown) :-
+    is_thread(Name) -> 
+        true
+    ; 
+        (format("Waiting for thread stopped ~w (~w)~n", [Name, CountDown]),
+            sleep(1), 
+            AttemptsLeft is CountDown - 1,
+            wait_for_thread_stopped(Name, AttemptsLeft)).

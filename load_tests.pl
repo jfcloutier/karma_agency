@@ -1,1 +1,1 @@
-['tests/actor_model/tests.plt'].
+:- ['tests/actor_model/tests.plt'].
