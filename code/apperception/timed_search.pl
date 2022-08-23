@@ -12,6 +12,8 @@ candidate(_Candidate1, Rating1) \ candidate(_Candidate2, Rating2) <=> Rating1 #>
 % Candidate extraction from the store
 best_candidate(P2), candidate(P1, _)#passive <=> P1 = P2.
 
+% The first argument of the candidate-generating goal is a candidate solution
+% The first arg of the rated is the value being rated, the second arg is the rating
 search(Module:Goal, Module:Rater, Seconds, Answer) :-
    timebox(Seconds),
    Goal =.. [_, Result | _],

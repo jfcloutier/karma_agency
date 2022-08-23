@@ -6,6 +6,7 @@
 :- use_module(actor_model(worker)).
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
+:- use_module(actor_model(actor_utils)).
 
 :- use_module(tests('actor_model/bob')).
 :- use_module(tests('actor_model/alice')).
@@ -21,14 +22,16 @@ test(supervisor) :-
     start_alice(top),
         assertion(is_thread(alice)),
     pubsub:publish(party, [alice, bob]),
+        % Give time for workers to respond to published messages
         sleep(1),
     stop_bob,
+    % Wait for restart of permanent bob
+    wait_for_actor(bob),
+        assertion(is_thread(bob)),
     supervisor:kill_child(top, worker, bob),
     stop_alice,
     supervisor:kill_child(top, pubsub), 
     supervisor:stop(top),
-        % TODO - needs a solution to needing to sleep after supervisor:stop 
-        sleep(1),
         assertion(\+ is_thread(top)),
         assertion(\+ is_thread(pubsub)),
         assertion(\+ is_thread(bob)),
@@ -41,10 +44,9 @@ test(supervisor) :-
     start_bob(bottom),
     start_alice(bottom),
     pubsub:publish(party, [alice, bob]),
+        % Give time for workers to respond to published messages
         sleep(1),
     supervisor:stop(top),
-        % TODO - needs a solution
-        sleep(1),
         assertion(\+ is_thread(pubsub)),
         assertion(\+ is_thread(bob)),
         assertion(\+ is_thread(alice)),

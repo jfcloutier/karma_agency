@@ -14,7 +14,7 @@
 :- module(supervisor, []).
 
 :- use_module(library(option)).
-:- use_module(thread_utils).
+:- use_module(actor_utils).
 
 % Dynamic so that children survive the exit of supervisor threads and can be restarted if the supervisor thread is restarted.
 :- dynamic child/5.
@@ -25,16 +25,17 @@ start(Supervisor) :-
 
 start(Supervisor, Options) :-
     format("[supervisor] Starting supervisor ~w~n", [Supervisor]),
-    start_thread(Supervisor, supervisor:run(Options)).
+    start_actor(Supervisor, supervisor:run(Options)).
 
 % Start a supervised supervisor thread
 start(Supervisor, Options, ParentSupervisor) :-
     format("[supervisor] Starting supervisor ~w under ~w~n", [Supervisor, ParentSupervisor]),
-    start_thread(Supervisor, supervisor:run_supervised(Options, ParentSupervisor)).
+    start_actor(Supervisor, supervisor:run_supervised(Options, ParentSupervisor)).
 
 stop(Supervisor) :- 
     format("[supervisor] Stopping supervisor ~w~n", [Supervisor]),
-    send_message(Supervisor, control(stop)).
+    send_message(Supervisor, control(stop)),
+    wait_for_actor_stopped(Supervisor).
 
 kill(Supervisor) :-
     kill_all_children(Supervisor),
@@ -59,7 +60,7 @@ starting_child(Supervisor, Module, Name, Options) :-
     Goal =.. [start, Name, Options, Supervisor],
     ModuleGoal =.. [:, Module, Goal],
     send_message(Supervisor, start_child(Module, Name, ModuleGoal, Restart)),
-    wait_for_thread(Name).
+    wait_for_actor(Name).
 
 kill_child(Supervisor, Module) :-
     singleton_thread_name(Module, Name),
@@ -140,11 +141,10 @@ do_start_child(Module, Name, Goal, Restart) :-
 
 do_kill_child(Module, Name) :-
     format("Killing child ~w ~w~n", [Module, Name]),
-    forget_child(Module, Name),
     Goal =.. [kill, Name],
     ModuleGoal =.. [:, Module, Goal],
-    !,
-    catch(call(ModuleGoal), Exception, format("Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])).
+    catch(call(ModuleGoal), Exception, format("Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])),
+    forget_child(Module, Name).
 
 maybe_restart_children() :-
     thread_self(Supervisor),

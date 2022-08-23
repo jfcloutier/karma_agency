@@ -2,7 +2,7 @@
 
 :- use_module(library(aggregate)).
 :- use_module(bb).
-:- use_module(thread_utils).
+:- use_module(actor_utils).
 
 % TODO - Subscriptions are lost if pubsub is restarted
 :- thread_local subscription/2.

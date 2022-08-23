@@ -16,7 +16,7 @@
 :- module(worker, [send/2]).
 
 :- use_module(library(option)).
-:- use_module(thread_utils).
+:- use_module(actor_utils).
 :- use_module(pubsub).
 
 %%% Supervised behavior
@@ -28,17 +28,19 @@ start(Name, Options, Supervisor) :-
     option(terminate(Terminate), Options, worker:noop()),
     % Topics, Init, Handler
     format("[worker] Creating worker ~w~n", [Name]),
-    start_thread(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
+    start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
 
 stop(Name) :-
     format("[worker] Stopping worker ~w~n", [Name]),
     % Cause a normal exit
-    send_message(Name, control(stop)).
+    send_message(Name, control(stop)),
+   wait_for_actor_stopped(Name).
 
 kill(Name) :-
     format("[worker] Killing worker ~w~n", [Name]),
     % Force exit
-    send_message(Name, control(die)).
+    send_message(Name, control(die)),
+   wait_for_actor_stopped(Name).
 
 %%% Public
 
