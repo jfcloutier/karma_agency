@@ -1,22 +1,24 @@
-:- module(sequence, [enacted_sensory_sequence/2, sub_sequence/2]).
+:- module(sequence, [enacted_sensory_sequence/3, sub_sequence/2]).
 
 :- use_module(library(lists)).
-:- use_module(remembered_db).
 
-enacted_sensory_sequence(GM, Sequence) :-
-    memorized_sequence( GM, [sensed, enacted], Sequence).
+enacted_sensory_sequence(MemoryModule, GM, Sequence) :-
+    memorized_sequence(MemoryModule, GM, [sensed, enacted], Sequence),
+    % TODO - find unnecessary choice point
+    !.
 
-memorized_sequence(GM, Predicates, Sequence) :-
-    setof(memory(Round, What), memorized(GM, Predicates, Round, What), UnsortedMemories),
+memorized_sequence(MemoryModule, GM, Predicates, Sequence) :-
+    setof(memory(Round, What), memorized(MemoryModule, GM, Predicates, Round, What), UnsortedMemories),
     !,
     % Sort memories on group
-    sort(1, @=<, UnsortedMemories, SortedMemories),   
+    sort(2, @=<, UnsortedMemories, SortedMemories),   
     sequence(SortedMemories, Sequence).
 
-memorized_sequence(_,_,[]).
+memorized_sequence(_, _, _, []).
 
-memorized(GM, Predicates, Round, What) :-
-    remembered(Round, GM, What),
+memorized(MemoryModule, GM, Predicates, Round, What) :-
+    RememberedGoal =.. [remembered, GM, Round, What],
+    call(MemoryModule:RememberedGoal),
     What =.. [Predicate | _] ,
     member(Predicate, Predicates).
 
@@ -53,6 +55,7 @@ memory_sequence_([[Round, Whats] | Rest], nil, Acc, Sequence) :-
 
 memory_sequence_([[Round, Whats] | Rest], PriorRound, Acc, Sequence) :-
     PriorRound - Round > 1,
+    !,
     NextRound is PriorRound -1,
     memory_sequence_([[Round, Whats] | Rest], NextRound, [[] | Acc], Sequence).
 

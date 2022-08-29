@@ -5,6 +5,7 @@
 
 
 % Searching for the largest even number in a large sequence within time limit.
+% If no even number is found in time, any odd number found will do.
 find_big_even(Low, High, Secs, Best) :-
     randseq(Low, High, S),
     search(timed_gen:gen(_, S), timed_gen:rate_value(_, _, 2), Secs, Best).
@@ -12,7 +13,7 @@ find_big_even(Low, High, Secs, Best) :-
 gen(Value, S) :-
     member(Value, S), % choice point for solutions
     format('Candidate ~d~n', [Value]),
-    sleep(1).
+    sleep(0.5).
 
 % First arg is the value being rated, second arg is the rating
 rate_value(Value, Value, Factor) :-
