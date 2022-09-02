@@ -1,3 +1,5 @@
+% Predictor dict
+
 :- module(predictor,
           [ empty_predictor/1
           ]).

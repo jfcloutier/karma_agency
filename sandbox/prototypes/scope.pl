@@ -15,7 +15,6 @@ empty_scope(scope{action_domain:[], belief_domain:[], object_domain:[], sensory_
 gm_scope(GM, Scope) :-
     gm(GM),
     object_domain(GM, ObjectDomain),
-    object_domain(GM, ObjectDomain),
     sensory_domain(GM, SensoryDomain),
     belief_domain(GM, BeliefDomain),
     action_domain(GM, ActionDomain),

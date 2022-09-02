@@ -3,15 +3,13 @@
 :- use_module(library(lists)).
 
 enacted_sensory_sequence(MemoryModule, GM, Sequence) :-
-    memorized_sequence(MemoryModule, GM, [sensed, enacted], Sequence),
-    % TODO - find unnecessary choice point
-    !.
+    memorized_sequence(MemoryModule, GM, [sensed, enacted, felt], Sequence).
 
 memorized_sequence(MemoryModule, GM, Predicates, Sequence) :-
     setof(memory(Round, What), memorized(MemoryModule, GM, Predicates, Round, What), UnsortedMemories),
     !,
     % Sort memories on group
-    sort(2, @=<, UnsortedMemories, SortedMemories),   
+    sort(1, @=<, UnsortedMemories, SortedMemories),
     sequence(SortedMemories, Sequence).
 
 memorized_sequence(_, _, _, []).
@@ -30,6 +28,7 @@ sequence_([], Sequence, Sequence).
 
 sequence_([memory(Round, What) | OtherMemories], Acc, Sequence) :-
     grouped_by_round(What, Round, Acc, Acc1),
+    !,
     sequence_(OtherMemories, Acc1, Sequence).
 
 %% Reverse insert grouped on rounds
@@ -63,12 +62,24 @@ memory_sequence_([[Round, Whats] | Rest], PriorRound, Acc, Sequence) :-
     Round is PriorRound - 1,
     memory_sequence_(Rest, Round, [Whats | Acc], Sequence).
 
+% Find first the longer, more recent sub-sequences that do not begin or end with empty rounds.
+sub_sequence(SubSequence, Sequence) :-
+    bagof(measured(L, SS), (sub_sequence1(SS, Sequence), length(SS, L)), MeasuredSubSequences),
+    sort(1, @>=, MeasuredSubSequences, Sorted),
+    member(measured(_, SubSequence), Sorted).
+
 % Non-empty sub sequences of decreasing lengths for each ending state,
 % starting with the last state as ending state.
-sub_sequence(SubSequence, Sequence) :-
+sub_sequence1(SubSequence, Sequence) :-
     reverse(Sequence, ReversedSequence),
     phrase(subseq(ReversedSubSequence), ReversedSequence),
-    reverse(ReversedSubSequence, SubSequence).
+    reverse(ReversedSubSequence, SubSequence),
+    acceptable(SubSequence).
+
+% A sub-sequence is acceptable if does not start nor end with an empty round.
+acceptable([[] | _]) :- !, false.
+acceptable(SubSequence) :- last(SubSequence, []), !, false.
+acceptable(_).
 
 subseq(S) --> ..., non_empty_seq(S), ... .
 
