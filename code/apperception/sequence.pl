@@ -1,4 +1,4 @@
-:- module(sequence, [enacted_sensory_sequence/3, sub_sequence/2]).
+:- module(sequence, [enacted_sensory_sequence/3, episode/2]).
 
 :- use_module(library(lists)).
 
@@ -63,22 +63,22 @@ memory_sequence_([[Round, Whats] | Rest], PriorRound, Acc, Sequence) :-
     memory_sequence_(Rest, Round, [Whats | Acc], Sequence).
 
 % Find first the longer, more recent sub-sequences that do not begin or end with empty rounds.
-sub_sequence(SubSequence, Sequence) :-
-    bagof(measured(L, SS), (sub_sequence1(SS, Sequence), length(SS, L)), MeasuredSubSequences),
-    sort(1, @>=, MeasuredSubSequences, Sorted),
-    member(measured(_, SubSequence), Sorted).
+episode(Episode, Sequence) :-
+    bagof(measured(L, SS), (episode1(SS, Sequence), length(SS, L)), MeasuredEpisodes),
+    sort(1, @>=, MeasuredEpisodes, Sorted),
+    member(measured(_, Episode), Sorted).
 
 % Non-empty sub sequences of decreasing lengths for each ending state,
 % starting with the last state as ending state.
-sub_sequence1(SubSequence, Sequence) :-
+episode1(Episode, Sequence) :-
     reverse(Sequence, ReversedSequence),
-    phrase(subseq(ReversedSubSequence), ReversedSequence),
-    reverse(ReversedSubSequence, SubSequence),
-    acceptable(SubSequence).
+    phrase(subseq(ReversedEpisode), ReversedSequence),
+    reverse(ReversedEpisode, Episode),
+    acceptable(Episode).
 
 % A sub-sequence is acceptable if does not start nor end with an empty round.
 acceptable([[] | _]) :- !, false.
-acceptable(SubSequence) :- last(SubSequence, []), !, false.
+acceptable(Episode) :- last(Episode, []), !, false.
 acceptable(_).
 
 subseq(S) --> ..., non_empty_seq(S), ... .

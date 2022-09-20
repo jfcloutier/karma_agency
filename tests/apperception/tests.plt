@@ -21,17 +21,17 @@ test(sequencing) :-
     enacted_sensory_sequence(remembered_db, gm_1, Sequence),
     format("Looking for sub-sequences of ~p~n~n", [Sequence]),
     forall(
-        sub_sequence(SubSequence, Sequence),
-        (assertion(check_sub_sequence(SubSequence, Sequence)),
-         format("Found sub-sequence ~p~n", [SubSequence])
+        episode(Episode, Sequence),
+        (assertion(check_episode(Episode, Sequence)),
+         format("Found sub-sequence ~p~n", [Episode])
         )
     ).
 
-check_sub_sequence([], _).
+check_episode([], _).
 
-check_sub_sequence([Item | Rest], Sequence) :-
+check_episode([Item | Rest], Sequence) :-
     member(Item, Sequence),
-    check_sub_sequence(Rest, Sequence).
+    check_episode(Rest, Sequence).
     
 
 :- end_tests(apperception).

@@ -88,25 +88,27 @@ An Enactor accumulates rules found and drops one only if,
 
     a new rule for losing a belief replaces it.
 
-Babbling: If a GM has no policy that addresses a belief that ought to be eliminated or challenged, it may choose (randomly, at a minimum) an action to enact. This will giev the GM "experience" from which it may later derive an Enactor.
-
 ## Temporal thickness and temporal depth
 
-Temporal depth refers to how much of the past and the future is encompassed by a GM actor.
+Temporal depth refers to how much of the past and the future is within the purview of a GM actor.
 
-Temporal thickness refers to how long "now" lasts for a GM actor, that is, the amount of time during which perceptions are considered to be simultaneous by aGM actor.
+As a GM actor's temporal depth increases as it acquires experience. The maximum temporal depth of a GM actor increases with its level of abstraction. A Detector has no thickness; it lives entirely in the moment.
+
+Temporal thickness refers to how long "now" lasts for a GM actor, that is, the amount of time during which perceptions are considered to be simultaneous by a GM actor.
+
+The more abstract (semantically distant from the perceptions of Detectors) a GM actor is, the temporally thicker it is. A Detector's temporal thickness is its minimal sampling interval.
 
 ### Temporal depth
 
 The past's contribution to temporal depth depends on how many rounds a GM actor remembers. There is a sliding maximum number of rounds that can be remembered. A Detector remembers only the last round. A low-level GM actor (semantically close to Detector) remmembers fewer rounds than a high-level GM actor (semantically far from Detectors).
 
-A Predictor, by itself, extends temporal depths into the future by predicting sensing theoretically to any number of future rounds, under the assumption that no action is executed during these anticipated future rounds. Practically, a Predictor, on its own, extends the fure by one round.
+A Predictor, by itself, extends temporal depths into the future by predicting sensing theoretically to any number of future rounds, under the assumption that no action is executed during these anticipated future rounds. Practically, a Predictor, on its own, extends the future by one round.
 
-By applying the Predictor, Believer and Enactor to the current round and each consecutive anticipated round, a GM actor can iteratively create a trace of predicted perceptions with alternate planned actions, expected feeling trends, derived beliefs and consequenct action policies. A GM actor can imagine possible futures to any depth, limited only by its computing resources.
+By applying the Predictor, Believer and Enactor to the current round and each consecutive anticipated round, a GM actor can iteratively create a trace of predicted perceptions with alternate planned actions, expected feeling trends, derived beliefs and consequenct action policies. A GM actor can imagine possible futures to any depth, limited only by its computing resources (and diminishing ROI).
 
 What would compel a GM actor to peer deeply vs shallowly into the future? 
 
-When a GM actor has a choice of policies to execute, it needs to decide which one looks better by imagining the outcomes (like a chess player would). If the agent is at risk, risk aversion kicks in and so is future-gazing. Also, the more complex the policy, the deeper the projection needed to predict outcomes.
+When a GM actor has a choice of policies to execute, it needs to decide which one looks better by imagining the outcomes (like a chess player would). If the agent is at risk, risk aversion kicks in and so is future-gazing. Also, the more complex the policy, the deeper the projection needed to predict its outcomes.
 
 ### Temporal thickness
 
@@ -120,7 +122,7 @@ The temporal thickness of a GM actor is a function of its distance from Detector
 
 ## Precision
 
-The precision of a perception is the confidence a GM actor has in the uncontested prediction it made, or the average confidence other GM actors have in prediction errors they raised to contest the prediction.
+The precision of a perception is the confidence a GM actor has in the uncontested prediction it made, eroded by prediction errors based on their average precision. If a prediction is overwhelmed by prediction errors, it is replaced by the prediction error with the highest precision.
 
 The confidence in a prediction error is the confidence a GM actor has in the belief that contradicts the prediction.
 
@@ -129,41 +131,43 @@ The confidence a GM actor has in a prediction it makes is the same as the confid
     * the relative length of the sub-sequence from which the Predictor was derived (how much of its experience does the model encompass)
     * the success rate of the Predictor (uncontested predictions / all predictions)
 
+The confidence in a perception is the combination of the confidence in the prediction more or less eroded by prediction errors given their precisions.
+
 The confidence a GM actor has in a belief in the current round is the multiplicative summation of the confidences in the perceptions that compose the belief, tempered with the confidence in the belief in prior rounds, the more recent rounds having greater influence (see Kalman filters.)
 
 The valence of a belief (from associated feelings) is tempered by the confidence in the belief when computing the motivation behind an intended action caused by that belief. When conflicting actions are intended by GM actors, only the action with the highest motivation is executed.
 
 ## Attention
 
-Attention is the general mechanism that determines the subset of GM actors that are active at any given pointin time.
+Attention is the general mechanism that determines the subset of GM actors that are active at any given point in time (the attention state).
 
 A GM actor becomes dormant if
 
     * it is not babbling (a GM actor babbles until it acquires a Predictor, Believer and Enactor)
     * AND the valence of held beliefs is not altered by a change in agent feelings
-    * AND no prediction is being made about beliefs in its scope for N consecutive rounds
+    * AND no prediction was recently made about its beliefs (in the last few rounds)
 
-Agent feelings shift whether or not GM actors are dormant.
+Agent feelings shift whether or not GM actors are dormant (e.g. hunger and ennui). A shift in feelings may activate certain GM actors but not others.
 
-A shift in feelings will activate certain GM actors but not others. The activation of a GM actor would lead to predictions being made, thus activating other GM actors that might hold the predcited beliefs.
+A GM actor holding beliefs which valence is derived from shifted feelings will attempt to update these beliefs. This would lead to it making predictions, thus activating other GM actors that might hold or contradict the predicted beliefs.
 
-The metacognition GM actor sees to it that the set of active GM actors does not stay or become empty for any significant length of time by
+The metacognition GM actor sees to it that the attention set is not empty for any significant length of time. It does so by
 
-    * creating new GM actors with initial scopes chosen to fill "gaps" in the sensory domains
-    * other?
+    * creating new GM actors with initial scopes chosen to fill "gaps" in the possible sensory domains,
+    * inducing babbling in long dormant GM actors
 
 ## Babbling
 
 A GM actor babbles, i.e. makes unprompted predictions and intends unprompted actions, while
 
-    * it does not have a Predictor, Believer and Enactor
-    * it is put temporarily in babbling mode via metacognition covert action
+    * it does not have a Predictor, Believer and Enactor (self-triggered)
+    * it is put in babbling mode (triggered via metacognitiven covert action)
 
-Babbling is a forces a GM actor to acquire experiences (past perceptions and actions) from which to induce a Predictor, Believer and Enactor, or to trigger their updates.
+Babbling allows a GM actor to bootstrap itself into acquiring experiences (past perceptions and actions) from which it is then able to induce a Predictor, Believer and Enactor, or to cause their updates.
 
-Once a GM actor is stimulated by other GM actors making predictions made about its beliefs, or is driven to action by its own beliefs, babbling may no longer be required.
+A GM actor will not trigger its own babbling when is stimulated by other GM actors making predictions about its beliefs, or when it is driven to action by its own beliefs, unless metacognition .
 
-If a GM actor's capabilities (Predictor, Believer, Enactor) are stuck in a rut (they do not evolve), a period of babbling might help generate experiences that will prompt revisions to its capabilities.
+If a GM actor's capabilities (Predictor, Believer, Enactor) are stuck in a rut (they do not evolve), metacognition might decide that a period of babbling could help generate experiences that will prompt revisions to its capabilities.
 
 =======================
 
