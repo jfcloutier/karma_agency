@@ -4,7 +4,7 @@
 :- use_module(library(clpfd)).
 :- use_module(library(aggregate)).
 
-:- chr_constraint candidate/2, best_candidate/1,  max_time/1, get_max_time/1.
+:- chr_constraint candidate/2, best_candidate/1, max_time/1, get_max_time/1.
 
 % Only keep the best rated candidate predictor
 candidate(_Candidate1, Rating1) \ candidate(_Candidate2, Rating2) <=> Rating1 #>= Rating2 | true.

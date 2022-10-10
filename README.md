@@ -78,7 +78,7 @@ karma  is a Prolog application exposed as a SWI-Prolog pengine accessed by a rev
 
 Why the name:
 
-"Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."  See Wikipedia article.
+"Karma is the causality principle focusing on 1)causes, 2)actions, 3)effects, where it is the mind's phenomena that guide the actions that the actor performs. Buddhism trains the actor's actions for continued and uncontrived virtuous outcomes aimed at reducing suffering."  See [Wikipedia article](https://en.wikipedia.org/wiki/Karma_in_Tibetan_Buddhism).
 
 karma  implements the learning capabilities of each "grown" GM, i.e. of any GM other than predefined Detectors (a Detector is a built-in GM that only believes its sensors and makes no predictions) or the Metacognition GM (responsible for instantiating and culling all grown GMs.)
 

@@ -1,10 +1,10 @@
 # How to discover a better predictor
 
-Given a Partial sensory sequence/action memory sequence (instantiated by dropping states from a full Sequence),
+Given an episode (instantiated by dropping states from a full experience),
 
 Find, if applicable and within a set time limit, a valid Predictor with greater Performance than any previously found.
 
-Partial Sequence: Ordered subset of the states in a memory sequence.
+Episode: Ordered subset of the states in an experience.
 
 Applicable: If the Partial Sequence is not empty.
 

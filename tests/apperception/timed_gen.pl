@@ -4,7 +4,7 @@
 :- use_module(apperception(timed_search)).
 
 
-% Searching for the largest even number in a large sequence within time limit.
+% Searching for the largest even number in a series within time limit.
 % If no even number is found in time, any odd number found will do.
 find_big_even(Low, High, Secs, Best) :-
     randseq(Low, High, S),

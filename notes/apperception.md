@@ -1,217 +1,127 @@
 # Karma's Apperception Engine
 
-## Predictor generator
+## Algorithm
 
-Search for a predictor of what the GM is expected to sense next, given what it has sensed and done before.
+Construct the sensory/action sequence of states (from the cognition actor's experience)
+    Given a set time limit
+        Construct the apperception task
+            Generate a template
+                Find a working theory
+                Retain the highest rated theory found
 
-A Predictor is a (generative) model of the GM's umwelt.
+## Constructing an apperception task
 
-On its own, its has a temporal depth encompassing the remembered round, the current round and the next round.
+An apperception task consists of
 
-Given a GM's sensory/enaction sequence(the GM's past and current perceptions by round + actions being executed by the agent during each round), search for a Predictor that produces a trace that covers preferably the sequence, else a sub-sequence (as long s possible), optimizing for simplicity of the Predictor (small scope, a few simple rules).
+* the sequence of sensory/action states
+* a minimal type signature
 
-    Start with the current scope of the GM (object, sensory, belief and action domains)
-    Possibly expand or contract the scope
-    Express predictor rules within the scope
-    Search for the simplest working predictor within a time limit
+### Minimal type signature
 
-A working Predictor produces a trace that is a superset of the (sub)sequence it was derived from (a round may now contain inferred perceptions in addition to the remembered ones.)
+The smallest type signature TS satisfying the sequence.
 
-It is possible for no Predictor to be found given a GM's remembered rounds, in which case the current Predictorm if any, is retained.
+It consists of
 
-## Believer generator
+    * types T
+        * value types
+        * object types
+    * typed objects O
+    * typed predicates of unary and binary object properties P 
+    * typed variables where each has an object or value type V
 
-Search for a Believer to synthesize beliefs from what a GM sensed/did according to its Predictor, and as it relates to what the agent feels.
+## Templates
 
-    In other words, a GM's beliefs is a function of (is grounded in) the model of its relationship to its umwelt (its Predictor) and how the feelings of the agent change over time.
+A template is a tuple that informs and limits the search space for theories.
 
-    The GM bases its actions on what it believes, and its beliefs provide synthetic perceptions for more abstract GMs.
+It consists of the augmented task plus restrictions on the size of a theory.
 
-A Believer's temporal depth extends from the present to the remembered past of a GM encompassed by the current Predictor.
+Trying successive templates leads to an iterative deepening search for theories.
 
-Given the sensing/enacting trace (sub-sequence augmented with implied sensings) produced by the current Predictor, if any.
+### Template-generation algorithm
 
-    Overlay the trace with the recorded agent feelings in each covered round.
+Define a series of (T*, n) pairs ordered ascending on size(T*) * n by iterating over
 
-    Overlay the trace with detected sensing trends (upward, downward, static, alternating).
+* An infinite series of T* (lists of types, the first one empty) each extending the task's types
+* And an infinite series of bounds n == (100, 200, 300...)
 
-    Overlay the trace with detected feeling trends (upward, downward, static, alternating).
+For a given (T*, n)
 
-    Determine the scope of beliefs, constrained by the sensory scopes of higher GMs
-        
-        Don't remove belief predicates in the sensory domain of other GMs
+* define an infinite series for each of
 
-        Possibly add (abduce) new belief predicates
+  * O - list of lists of typed objects (given T*) - sorted ascending on size >= 0
+  * P - list of lists of typed predicates (given T*) - sorted ascending on size >= 0
+  * V - list of lists of typed variables (given T*) - sorted ascending on size >= 0
+  * Ns - Max numbers of static rules {0, 1, 2, ...}
+  * Nc - Max numbers of causal rules {0, 1, 2, ...}
+  * Na - Max numbers of atoms per rule
+  * Define a series containing n tuples {O, P, V, Ns, Nc, Na}
 
-    Find, in the overlayed trace, correlations between sets of sensings/enactings (points and trends) and feeling trends.
+* iterate over the tuples
+* and augment the task with the tuple to produce a template
 
-        Beliefs are associations between the dynamics of feelings (i.e. trends) and correlated sensings/enactings.
+## Searching for theories
 
-    Express these correlations as rules that each infer a belief from a set of sensings/enactings. 
-    
-    The rule associates the correlated feeling trend with the belief. This gives each belief a valence:
-    
-        Risks to homeostasis are 
-            increasing (negative valence)
-            decreasing (positive valence)
-            staying the same (negative, positive or neutral valence).
+Given a template, jointly
 
-It is possible for no Believer to be found given the current Predictor-produced trace. This is certainly the case if the GM has no Predictor yet.
+* Generate all grounded and ungrounded terms implied by the type signature {T, O, P, V} in the template and use them to:
+  * abduce initial conditions
+  * induce static rules, causal rules, and conceptual constraints (the spatial constraint is predefined)
 
-## Enactor generator
+such that
 
-Search for rules that infer policies likely to remove beliefs with negative valence and challenge beliefs with positive valence.
+* a trace is computed
+* that satisfies the unity constraints, namely
+  * spatial (pre-defined constraint)
+  * conceptual (induced constraints)
+  * (static and temporal unity are achieved by generating a trace)
 
-A policy is a sequence of intended actions, each to be taken in the context of beliefs held. 
+then
 
-An intended action may not be executed if it is overridden by another (intended by another GM) that conflicts with it and has higher priority.
+* evaluate the cost of the theory
+  * size(theory) + weighted mis-coverage(trace, sequence)
+* replace the lowest cost one found if cheaper
 
-Given the sensing/enacting trace produced by the Predictor (if any), overlayed with beliefs inferred by the Believer (if any):
+### Abducing initial conditions
 
-    For each belief held in the sequence, 
+The initial conditions define state t=1 of the trace.
 
-        Find the segments, if any, bookended with the belief being held then lost.
+They are the first state of the task's sequence plus a non-redundant list of grounded atoms
 
-        From the segments, find, if any, a common policy (each action was taken while common beliefs are held and it is found in all segments).
+### Inducing causal rules
 
-        Create a rule that associates a policy with losing a belief.
+Generate a list of Ns valid static rules from the unground terms.
+Generate a list of Nc valid causal rules from the unground terms.
+Subject to the max rule size constraint Na
 
-Enactor rules are used by the GM to determine if
+### Inducing conceptual constraints
 
-    It is in the midst of executing a policy and, if so, what the next policy action to take is, given the beliefs held by the GM.
+For every predicate p appearing the initial state or in a rule
 
-    A policy can start executing given a belief to be lost (it is held and has has negative valence) or challenged (it is held and has positive valence).
+* define a mutual exclusion constraint with one or more other predicates of the same type
+* or, if binary on objects, define an existential rule
 
-An Enactor accumulates rules found and drops one only if,
+### Computing the trace
 
-    it references a belief or action that has become out of scope of the GM,    
+The spatial constraint is predefined as:
 
-    a new rule for losing a belief replaces it.
+* Success if fail to find two objects o1 and o2 in any state of the trace that o1 and o2 are not related directly or indirectly
 
-## Temporal thickness and temporal depth
+Starting with initial state as St,
 
-Temporal depth refers to how much of the past and the future is within the purview of a GM actor.
+* While length(trace) < length(sequence) and no state is repeated
+  * apply static rules to S t to validate and augment the state to St*
+  * verify spatial and conceptual contraints
+  * apply causal rules to St* to generate St+1
+  * carry over what's composible from St*
 
-As a GM actor's temporal depth increases as it acquires experience. The maximum temporal depth of a GM actor increases with its level of abstraction. A Detector has no thickness; it lives entirely in the moment.
+## Costing a theory
 
-Temporal thickness refers to how long "now" lasts for a GM actor, that is, the amount of time during which perceptions are considered to be simultaneous by a GM actor.
+A low-cost theory has low complexity and its trace covers well he sequence.
 
-The more abstract (semantically distant from the perceptions of Detectors) a GM actor is, the temporally thicker it is. A Detector's temporal thickness is its minimal sampling interval.
+If the len(trace) < length(sequence) then the trace repeats itsef.
 
-### Temporal depth
+To compute mis-coverage, for each SSi = state(sequence, i) and STi = state(trace, i), count the number of properties in SSi and not in STi.
 
-The past's contribution to temporal depth depends on how many rounds a GM actor remembers. There is a sliding maximum number of rounds that can be remembered. A Detector remembers only the last round. A low-level GM actor (semantically close to Detector) remmembers fewer rounds than a high-level GM actor (semantically far from Detectors).
+To compute complexity, count the number of atoms in all its rules.
 
-A Predictor, by itself, extends temporal depths into the future by predicting sensing theoretically to any number of future rounds, under the assumption that no action is executed during these anticipated future rounds. Practically, a Predictor, on its own, extends the future by one round.
-
-By applying the Predictor, Believer and Enactor to the current round and each consecutive anticipated round, a GM actor can iteratively create a trace of predicted perceptions with alternate planned actions, expected feeling trends, derived beliefs and consequenct action policies. A GM actor can imagine possible futures to any depth, limited only by its computing resources (and diminishing ROI).
-
-What would compel a GM actor to peer deeply vs shallowly into the future? 
-
-When a GM actor has a choice of policies to execute, it needs to decide which one looks better by imagining the outcomes (like a chess player would). If the agent is at risk, risk aversion kicks in and so is future-gazing. Also, the more complex the policy, the deeper the projection needed to predict its outcomes.
-
-### Temporal thickness
-
-The more abstract a GM actor (the furthest its sensory domain is from detected perceptions), the longer the duration of its rounds, i.e. the greater the temporal thickness of the GM actor.
-
-A more abstract GM actor gathers model more integrated model evidence, and thus requires more time to pull perceptions together into a "scene".
-
-An abstract GM actor thus proceeds more slowly from round to round than a more concrete one.
-
-The temporal thickness of a GM actor is a function of its distance from Detectors, which is the longest sense->belief path to a Detector.
-
-## Precision
-
-The precision of a perception is the confidence a GM actor has in the uncontested prediction it made, eroded by prediction errors based on their average precision. If a prediction is overwhelmed by prediction errors, it is replaced by the prediction error with the highest precision.
-
-The confidence in a prediction error is the confidence a GM actor has in the belief that contradicts the prediction.
-
-The confidence a GM actor has in a prediction it makes is the same as the confidence the GM actor has in its Predictor (which instantiates its internal model of its umwelt). Its confidence is a function of:
-
-    * the relative length of the sub-sequence from which the Predictor was derived (how much of its experience does the model encompass)
-    * the success rate of the Predictor (uncontested predictions / all predictions)
-
-The confidence in a perception is the combination of the confidence in the prediction more or less eroded by prediction errors given their precisions.
-
-The confidence a GM actor has in a belief in the current round is the multiplicative summation of the confidences in the perceptions that compose the belief, tempered with the confidence in the belief in prior rounds, the more recent rounds having greater influence (see Kalman filters.)
-
-The valence of a belief (from associated feelings) is tempered by the confidence in the belief when computing the motivation behind an intended action caused by that belief. When conflicting actions are intended by GM actors, only the action with the highest motivation is executed.
-
-## Attention
-
-Attention is the general mechanism that determines the subset of GM actors that are active at any given point in time (the attention state).
-
-A GM actor becomes dormant if
-
-    * it is not babbling (a GM actor babbles until it acquires a Predictor, Believer and Enactor)
-    * AND the valence of held beliefs is not altered by a change in agent feelings
-    * AND no prediction was recently made about its beliefs (in the last few rounds)
-
-Agent feelings shift whether or not GM actors are dormant (e.g. hunger and ennui). A shift in feelings may activate certain GM actors but not others.
-
-A GM actor holding beliefs which valence is derived from shifted feelings will attempt to update these beliefs. This would lead to it making predictions, thus activating other GM actors that might hold or contradict the predicted beliefs.
-
-The metacognition GM actor sees to it that the attention set is not empty for any significant length of time. It does so by
-
-    * creating new GM actors with initial scopes chosen to fill "gaps" in the possible sensory domains,
-    * inducing babbling in long dormant GM actors
-
-## Babbling
-
-A GM actor babbles, i.e. makes unprompted predictions and intends unprompted actions, while
-
-    * it does not have a Predictor, Believer and Enactor (self-triggered)
-    * it is put in babbling mode (triggered via metacognitiven covert action)
-
-Babbling allows a GM actor to bootstrap itself into acquiring experiences (past perceptions and actions) from which it is then able to induce a Predictor, Believer and Enactor, or to cause their updates.
-
-A GM actor will not trigger its own babbling when is stimulated by other GM actors making predictions about its beliefs, or when it is driven to action by its own beliefs, unless metacognition .
-
-If a GM actor's capabilities (Predictor, Believer, Enactor) are stuck in a rut (they do not evolve), metacognition might decide that a period of babbling could help generate experiences that will prompt revisions to its capabilities.
-
-=======================
-
-A predictor is a set of static and dynamic rules, obeying constraints.
-
-The static rules affirm and complete each state in a trace of incomplete states given what's known about the state => static unity.
-
-The causal rules describe how a completed state determines the next state with frame axiom (properties in state N-1 not incompossible with state N are retained) => temporal unity
-
-Constraints on static rules impose that each object in the object domain be related via binary predicates, directly or indirectly, to each other object => spatial unity
-
-Constraints on static rules impose that each n-ary predicate be subject to exclusive disjunction - p1(X) (x) p2(X) - or (for binary predicates) unique existence - for all X there is always a Y such that p3(X, Y) - => conceptual unity
-
-    Exclusive disjunction p1(X) (x) p2(X) means one of p1(X) or p2(X) MUST be true and never both
-
-Input:
-    Sensory-enaction sequence
-    Type signature
-    Initial conditions
-    At least one constraint per property
-
-Template:
-    Type signature (set of types plus typed objects, properties and variables) that satisfies the sequence (captured trace)
-    Ns: Max number of static rules
-    Nc: Max number of causal rules
-    Nr: Max size of any rule (number of conjunctions)
-
-Computation:
-    Iterating over generated templates of increasing complexity, until time limit is exhausted do
-        Find a valid theory (if any) for the template
-            If found, calculate its cost
-    Keep the theory with lowest cost
-
-Template generation:
-    First enumerate sets T of types X N (for upper limit of Template(T)  - (O, P, V, Ns, Nc, Nr) given T
-    For each (T, N), enumerate N Template(T)
-
-Enumerating over N Template(T)s:
-    Os = list of possible, satisfiable O given T, in increasing order of cardinality
-    Ps = list of possible, satisfiable P given T, in increasing order of cardinality
-    Vs = list of possible, satisfiable V given T, in increasing order of cardinality
-    N* = {0,1,2...}
-
-    Enumerate over the cardinal product of Os x Ps x Vs x Ns x Nc X Nr
-
-Any system that does invoke latent information beneath the surface of the sensory stimulations must also
-define the initial values of the latent information.
+Cost = complexity + K * mis-coverage

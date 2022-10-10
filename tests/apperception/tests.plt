@@ -4,7 +4,7 @@
 :- use_module(tests('apperception/timed_gen')).
 :- use_module(tests('apperception/remembered_db')).
 
-:- use_module(apperception(sequence)).
+:- use_module(apperception(experience)).
 
 test(timed_search) :-
     TimeLimit is 5,
@@ -18,12 +18,12 @@ test(timed_search) :-
     assertion(TimeSpent =< TimeLimit + 1).
 
 test(sequencing) :-
-    enacted_sensory_sequence(remembered_db, gm_1, Sequence),
-    format("Looking for sub-sequences of ~p~n~n", [Sequence]),
+    enacted_sensory_experience(remembered_db, gm_1, Sequence),
+    format("Looking for episodes of ~p~n~n", [Sequence]),
     forall(
         episode(Episode, Sequence),
         (assertion(check_episode(Episode, Sequence)),
-         format("Found sub-sequence ~p~n", [Episode])
+         format("Found episode ~p~n", [Episode])
         )
     ).
 
