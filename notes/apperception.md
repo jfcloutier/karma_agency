@@ -5,8 +5,8 @@
 Construct the sensory/action sequence of states (from the cognition actor's experience)
     Given a set time limit
         Construct the apperception task
-            Generate a template
-                Find a working theory
+            Choose next template
+                Search for a working theory
                 Retain the highest rated theory found
 
 ## Constructing an apperception task
@@ -48,38 +48,37 @@ For a given (T*, n)
 
 * define an infinite series for each of
 
-  * O - list of lists of typed objects (given T*) - sorted ascending on size >= 0
-  * P - list of lists of typed predicates (given T*) - sorted ascending on size >= 0
-  * V - list of lists of typed variables (given T*) - sorted ascending on size >= 0
+  * Os - list of lists of typed objects (given T + T*) - [Oi, Oi+1, ...], sorted ascending on size >= 0
+  * Ps - list of lists of typed predicates (given T + T*) - [Pi, Pi+1, ...] sorted ascending on size >= 0
+  * Vs - list of lists of typed variables (given T + T*) - [Vi, Vi+1, ...] sorted ascending on size >= 0
   * Ns - Max numbers of static rules {0, 1, 2, ...}
   * Nc - Max numbers of causal rules {0, 1, 2, ...}
   * Na - Max numbers of atoms per rule
-  * Define a series containing n tuples {O, P, V, Ns, Nc, Na}
+  * Emit n tuples {O, P, V, Ns, Nc, Na}, simplest first and fairly
+  * Augment each tuple with T* to make a template
 
-* iterate over the tuples
-* and augment the task with the tuple to produce a template
 
 ## Searching for theories
 
-Given a template, jointly
+For each template,
 
-* Generate all grounded and ungrounded terms implied by the type signature {T, O, P, V} in the template and use them to:
+* Generate all grounded and ungrounded terms implied by the type signature T + T*, O, P, V
+* Use grounded and ungrounded terms to create a candidate theory:
   * abduce initial conditions
   * induce static rules, causal rules, and conceptual constraints (the spatial constraint is predefined)
 
-such that
 
-* a trace is computed
-* that satisfies the unity constraints, namely
+* Compute a trace from the theory
+* Verify that it satisfies the unity constraints, namely
   * spatial (pre-defined constraint)
   * conceptual (induced constraints)
   * (static and temporal unity are achieved by generating a trace)
 
-then
+* If verified,
 
-* evaluate the cost of the theory
-  * size(theory) + weighted mis-coverage(trace, sequence)
-* replace the lowest cost one found if cheaper
+  * evaluate the cost of the theory
+    * size(theory) + weighted mis-coverage(trace, sequence)
+  * replace the lowest cost one found if cheaper
 
 ### Abducing initial conditions
 
@@ -100,28 +99,30 @@ For every predicate p appearing the initial state or in a rule
 * define a mutual exclusion constraint with one or more other predicates of the same type
 * or, if binary on objects, define an existential rule
 
-### Computing the trace
-
 The spatial constraint is predefined as:
 
-* Success if fail to find two objects o1 and o2 in any state of the trace that o1 and o2 are not related directly or indirectly
+* Success if fail to find two objects o1 and o2 in any state of the trace such that o1 and o2 are not related directly or indirectly.
 
-Starting with initial state as St,
+The static and causal constraints will be implicitly satisfied by the successful construction of a trace.
+
+### Computing the trace
+
+Starting with initial state as S1,
 
 * While length(trace) < length(sequence) and no state is repeated
-  * apply static rules to S t to validate and augment the state to St*
+  * apply static rules to Si t to validate and augment the state Si
+  * carry over into what's not incomposible from Si-1
   * verify spatial and conceptual contraints
-  * apply causal rules to St* to generate St+1
-  * carry over what's composible from St*
+  * apply causal rules to Si to generate Si+1
 
 ## Costing a theory
 
-A low-cost theory has low complexity and its trace covers well he sequence.
+A low-cost theory has low complexity and its trace covers well the apperception task's sequence.
 
-If the len(trace) < length(sequence) then the trace repeats itsef.
+If the len(trace) < length(sequence) then repeat the traceuntil it has the same length as the sequence.
 
 To compute mis-coverage, for each SSi = state(sequence, i) and STi = state(trace, i), count the number of properties in SSi and not in STi.
 
-To compute complexity, count the number of atoms in all its rules.
+To compute complexity, count the number of atoms in all the rules.
 
-Cost = complexity + K * mis-coverage
+Cost = complexity + K * mis-coverage (K = TBD)
