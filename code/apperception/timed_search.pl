@@ -13,11 +13,13 @@ candidate(_Candidate1, Rating1) \ candidate(_Candidate2, Rating2) <=> Rating1 #>
 best_candidate(P2), candidate(P1, _)#passive <=> P1 = P2.
 
 % The first argument of the candidate-generating goal is a candidate solution
-% The first arg of the rated is the value being rated, the second arg is the rating
+% The first arg of the rater is the value being rated, the second arg is the rating
 search(Module:Goal, Module:Rater, Seconds, Answer) :-
    timebox(Seconds),
    Goal =.. [_, Result | _],
    TimedGoal =.. [timed, Module:Goal],
+   % Aggregations that can be computed incrementally avoid findall/3 and run in constant memory.
+   % See https://www.swi-prolog.org/pldoc/man?section=aggregate
    aggregate(bag(Result), TimedGoal, Answers),
    select_answer(Answers, Module:Rater, Answer).
 

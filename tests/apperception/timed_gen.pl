@@ -13,9 +13,11 @@ find_big_even(Low, High, Secs, Best) :-
 gen(Value, S) :-
     member(Value, S), % choice point for solutions
     format('Candidate ~d~n', [Value]),
+    % Make finding a solution artifically time-consuming
     sleep(0.5).
 
 % First arg is the value being rated, second arg is the rating
+% The solution is worth itself if divisible by Factor, else worth 0
 rate_value(Value, Value, Factor) :-
     0 is Value mod Factor, !.
 

@@ -1,5 +1,53 @@
 # Karma's Apperception Engine
 
+The problem the apperception engine is solving is this:  Given a sequence of discrete observations (observations at time T, at time T+1 etc.),  find a logic program that can more or less recreate that sequence and thus predict the next observations, making it a (symbolic and non-probabilistic) generative model.
+
+There's an infinite number of logic programs. Only a few can be considered solutions to a particular sequence of observations. A "good" logic program encodes guessed-at objects that are "out there" causing the observations. Its rules dictate what states these objects can be together in, how their states change over time, and what states cause what observations. Finding one or more of these good logic programs in a restricted amount of time is hard. In fact, it is uncertain whether one can be found, let alone quickly enough.
+
+The paper's implementation of an apperception engine is not pressed for time. It systematically searches for logic programs of increasing complexity.  It will spend hours if need be but it will very likely find a solution if it exists.
+
+My implementation will have a very limited amount of time to try to find a good logic program given a sequence of observations. So it will "poke around" randomly chosen regions of the search space, since it it won't have time to visit it systematically. It will choose with a higher probability regions with smaller logic programs (Occam's razor).
+
+
+Start with the prior <= N theories
+
+Within a set amount of time, generate theories and keep the N least costly
+
+To generate theories from rounds of observations
+
+	Get a consecutive sequence of simultaneous observations
+	Re-cost the prior theories
+	Extract a minimal type signature and initial conditions from the sequence
+	Produce the entire set of theories templates
+		Augment the minimal type signature
+			Add 0..5 object types
+			Add 0..5 typed predicates
+			Add 0..5 typed variables
+		Set bounds on theory complexity
+			MaxStatic in 1..10
+			MaxCausal in 1..10
+			MaxAtoms = MaxStatic * MaxCausal * 10
+		Evaluate frugality (of means)
+			Frugality = size of signature extension + MaxStatic + MaxCausal
+	Choose a template
+		Test overall time not expired
+		Randomly select a different generated template, strongly favoring frugality
+		Allocate a slice of the time budget to the template
+	Build and evaluate new theories for the template chosen (until time budget expired)
+		Build a theory using the extended type signature
+			Choose MaxStatic static rules
+			Choose MaxCausal causal rules (limited by MaxAtoms)
+			Choose constraint rules (limited by MaxAtoms)
+			Test unified
+			Evaluate the cost of the theory
+				Evaluate complexity
+				Evaluate accuracy
+				cost = complexity - K * accuracy
+			Optimize on complexity
+				Remove as many rules as possible while maintaining unified status and not reducing accuracy
+			Keep if new in N least costly
+				New? compute hash of theory to compare with other theories for identity
+
 ## Algorithm
 
 Given an experience,
