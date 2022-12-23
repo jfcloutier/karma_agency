@@ -1,20 +1,6 @@
+:- module(sudoku, [sudoku/1]).
+
 :- use_module(library(clpfd)).
-
-list_length([], 0).
-list_length([_ | Ls], Length) :-
-Length #= Length0 + 1,
-list_length(Ls, Length0).
-
-num_leaves(Tree, N) :-
-    phrase(num_leaves_(Tree), [0], [N]).
-
-num_leaves_(nil), [N] --> [N0], {N #= N0 + 1}.
-num_leaves_(node(_,Left,Right)) --> 
-    num_leaves_(Left),
-    num_leaves_(Right).
-
-nt1, [b] --> [a].
-nt2      --> [b].
 
 % Given a 9x9 matrix of variables and integers, solve the sudoku
 sudoku(Rows) :-

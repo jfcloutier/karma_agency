@@ -46,7 +46,7 @@ reset_max_templates(MinTypeSignature, SignatureExtensionTuple) :-
     assert(max_templates(Max)),
     retractall(template_count(_)),
     assert(template_count(0)),
-    format('MAX ~p TEMPLATES ALLOWED!~n', [Max]).
+    format('MAX ~p TEMPLATES ALLOWED~n', [Max]).
 
 increment_template_count() :-
     template_count(Count),
