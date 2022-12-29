@@ -68,7 +68,7 @@ run() :-
     run().
 
 process_message(subscribe(Name, Topic)) :-
-    format("[pubsub] Subcribing ~w to topic ~w~n", [Name, Topic]),
+    format("[pubsub] Subscribing ~w to topic ~w~n", [Name, Topic]),
     assertz(subscription(Name, Topic)).
 
 process_message(unsubscribe(Name)) :-
