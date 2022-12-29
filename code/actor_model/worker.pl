@@ -34,13 +34,13 @@ stop(Name) :-
     format("[worker] Stopping worker ~w~n", [Name]),
     % Cause a normal exit
     send_message(Name, control(stop)),
-   wait_for_actor_stopped(Name).
+    wait_for_actor_stopped(Name).
 
 kill(Name) :-
     format("[worker] Killing worker ~w~n", [Name]),
     % Force exit
     send_message(Name, control(die)),
-   wait_for_actor_stopped(Name).
+    wait_for_actor_stopped(Name).
 
 %%% Public
 
