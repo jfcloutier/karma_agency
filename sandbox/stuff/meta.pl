@@ -1,4 +1,6 @@
-:-module(meta, [causal_rule/3, all_rules/2]).
+:-module(meta, [causal_rule/3, all_rules/2, causal_rules/5, count_atoms/2]).
+
+% TODO: Use engines?
 
 :- use_module(library(lists)).
 
@@ -13,6 +15,106 @@ all_rules(TypedPredicates, TypedVariables) :-
     tell('listings/on.pl'), listing(on(_,_)), told,
     tell('listings/next_to.pl'), listing(next_to(_,_)), told,
     tell('listings/light.pl'),listing(light(_,_)), told.
+
+% Causal rules
+% Grow a set of causal rules given a set of typed predicates and of typed variables such that
+% * There is at least one rule
+% * They do no exceed the resources allocated (max number of causal rules, max number of atoms)
+% * No rule repeats another
+% * No rule contradicts another
+
+causal_rules(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, CausalRules) :-
+    causal_rule(TypedPredicates, TypedVariables, CausalRule),
+    valid_causal_rules([CausalRule], MaxCausal, MaxAtoms),
+    maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, [CausalRule], CausalRules).
+
+maybe_add_causal_rule(_, _, _, _, CausalRules, CausalRules).
+
+maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, Acc, CausalRules) :-
+    causal_rule(TypedPredicates, TypedVariables, CausalRule),
+    valid_causal_rules([CausalRule | Acc], MaxCausal, MaxAtoms),
+    maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, [CausalRule | Acc], CausalRules).
+   
+valid_causal_rules(CausalRules, MaxCausal, MaxAtoms) :-
+    \+ rules_exceed_resources(CausalRules, MaxCausal, MaxAtoms),
+    \+ repeated_rule(CausalRules),
+    \+ contradicting_rules(CausalRules).
+
+rules_exceed_resources(Rules, MaxRules, _) :-
+    length(Rules, NumberOfRules),
+    NumberOfRules > MaxRules, !,
+    format('Exceeding max rules of ~p~n', [MaxRules]).
+
+rules_exceed_resources(Rules, _, MaxAtoms) :-
+    count_atoms(Rules, NumberOfAtoms),
+    NumberOfAtoms > MaxAtoms,
+    format('Exceeding resource limit of ~p~n', [MaxAtoms]),
+    !.
+
+% An atom, here, is a singular, non-compound term.
+count_atoms(Var, 1) :-
+    var(Var), !.
+count_atoms([], 0) :- !.
+count_atoms([Term | OtherTerms], Count) :-
+    !,
+    count_atoms(Term, N1),
+    count_atoms(OtherTerms, N2),
+    Count is N1 + N2.
+count_atoms(Term, Count) :-
+    compound(Term),
+    !,
+    Term =.. SubTerms,
+    count_atoms(SubTerms, Count).
+count_atoms(_, 1).
+
+% TODO: This does not work
+% Rules = [(on(_A, true):-next_to(_A, _B), on(_B, true)), (on(_C, true):-next_to(_C, _D), on(_D, true)), (on(_E, true):-next_to(_E, _F), on(_F, true))],
+repeated_rule([Rule | OtherRules]) :- 
+    member(OtherRule, OtherRules),
+    rule_repeats(Rule, OtherRule).
+
+rule_repeats(Rule, OtherRule) :-
+    Rule =.. [:-, Head, Body],
+    OtherRule =.. [:-, OtherHead, OtherBody],
+    equivalent_predicates(Head, OtherHead),
+    equivalent_bodies(Body, OtherBody).
+
+equivalent_predicates(Predicate, OtherPredicate) :- 
+    Predicate =.. [PredicateName | Args],
+    OtherPredicate =.. [PredicateName | OtherArgs],
+    equivalent_args(Args, OtherArgs).
+
+equivalent_args([], []).
+equivalent_args([Arg | Rest], [OtherArg | OtherRest]) :-
+    var(Arg),
+    var(OtherArg),
+    !,
+    equivalent_args(Rest, OtherRest).
+equivalent_args([Arg | Rest], [Arg | OtherRest]) :-
+    equivalent_args(Rest, OtherRest).
+
+equivalent_bodies(Body, OtherBody) :-
+    subsumed_conjunctions(Body, OtherBody) -> true ; subsumed_conjunctions(OtherBody, Body).
+
+% True if all predicates in a body are equivalent to predicates in the other body
+subsumed_conjunctions([], []).
+subsumed_conjunctions([Predicate | Rest], [OtherPredicate | OtherRest]) :-
+    equivalent_predicates(Predicate, OtherPredicate),
+    subsumed_conjunctions(Rest, OtherRest).
+
+% There exists two rules that contradict one another
+% TODO: This is too broad b/c head1(X, Y) :- pred1(X, Y) contradicts head1(X, Y) :- pred1(Y, X) 
+% even though they don't. Maybe first consistently rename the vars to constants.
+contradicting_rules([Rule | OtherRules]) :- 
+    Rule =.. [:-, Head, Body],
+    member(OtherRule, OtherRules),
+    OtherRule =.. [:-, OtherHead, OtherBody],
+    equivalent_predicates(Head, OtherHead),
+    contradicting_predicates(Body, OtherBody).
+
+% There exists two predicates that contradict one another
+contradicting_predicates([Predicate | Rest], [OtherPredicate | OtherRest]) :-
+    contradiction_in([Predicate | OtherPredicate]) -> true ; contradicting_predicates(Rest, OtherRest).
 
 % Assert a causal rule made from predicates, objects and variables
 % TypedPredicates = [predicate(on, [object_type(led), value_type(boolean), ...]
@@ -67,7 +169,7 @@ contradicts(BodyPredicate, Head) :-
 contradicting_args([Arg1 | Rest1], [Arg2 | Rest2]) :-
    var(Arg1),
    var(Arg2),
-   Arg1 == Arg2 -> contradicting_args(Rest1, Rest2) ; fail.
+   (Arg1 == Arg2 -> contradicting_args(Rest1, Rest2) ; fail).
 contradicting_args([Arg1 | _], [Arg2 | _]) :-
     nonvar(Arg1),
     nonvar(Arg2),
@@ -79,13 +181,24 @@ contradicting_args([_ | Rest1], [_ | Rest2]) :-
 % Together, the body predicates cover all variables in the head.
 % All variables are related in the head OR body
 valid_body_predicates(BodyPredicates, Head) :-
-    all_head_vars_in_body(Head, BodyPredicates),
+    \+ singleton_var_exists([Head | BodyPredicates]),
     all_vars_related([Head | BodyPredicates]).
 
-all_head_vars_in_body(Head, BodyPredicates) :-
-    collect_vars([Head], HeadVars),
-    collect_vars(BodyPredicates, BodyVars),
-    all_members(HeadVars, BodyVars).
+singleton_var_exists(Predicates) :-
+    collect_vars(Predicates, Vars),
+    member(Var, Vars),
+    predicates_with_var(Var, Predicates, PredicatesWithVar),
+    length(PredicatesWithVar, Count),
+    Count == 1, !.
+
+predicates_with_var(_, [], []).
+predicates_with_var(Var, [Predicate | OtherPredicates], PredicatesWithVar) :-
+    Predicate =.. [_ |Args],
+    (
+     memberchk_eq(Var, Args) -> predicates_with_var(Var, OtherPredicates, OtherPredicatesWithVar), PredicatesWithVar = [Predicate | OtherPredicatesWithVar] 
+     ;
+     predicates_with_var(Var, OtherPredicates, PredicatesWithVar)
+     ).
 
 collect_vars([], []).
 collect_vars([Predicate | OtherPredicates], Vars) :-
@@ -113,11 +226,6 @@ select_vars([Term | Rest], [Term | Vars]) :-
 select_vars([_ | Rest], Vars) :-
     select_vars(Rest, Vars).
 
-all_members([], _).
-all_members([Item | Rest], List) :-
-    memberchk_eq(Item, List),
-    all_members(Rest, List).
-
 memberchk_eq(_, []) :- !, fail.
 memberchk_eq(_, List) :- var(List), !, fail.
 memberchk_eq(Term, [El | Rest]) :-
@@ -126,7 +234,7 @@ memberchk_eq(Term, [El | Rest]) :-
 different_predicate_from(Predicate, OtherPredicate) :-
     Predicate =.. [Name | Args],
     OtherPredicate =.. [OtherName, OtherArgs],
-    Name == OtherName -> different_args(Args, OtherArgs); true.
+    (Name == OtherName -> different_args(Args, OtherArgs); true).
 
 different_args([], []).
 different_args([Arg | Rest], [OtherArg | OtherRest]) :-
@@ -194,29 +302,32 @@ distinguish_from(Var, [Other | Rest]) :-
 
 all_vars_related(Predicates) :-
     collect_vars(Predicates, Vars),
-    \+ unrelated_pair(Vars, Predicates).
+    \+ unrelated_vars(Vars, Predicates).
 
-unrelated_pair(Vars, Predicates) :-
+unrelated_vars(Vars, Predicates) :-
     member(Var1, Vars),
     member(Var2, Vars),
     Var1 \== Var2,
-    \+ related(Var1, Var2, Predicates).
+    \+ vars_related(Var1, Var2, Predicates).
 
-related(Var1, Var2, Predicates) :-
+% Two different vars are directly related within a single predicate
+vars_related(Var1, Var2, Predicates) :-
     member(Predicate, Predicates),
     Predicate =.. [_ | Args],
     select_vars(Args, VarArgs),
+    (directly_related_vars(Var1, Var2, VarArgs) -> true; indirectly_related_vars(Var1, Var2, VarArgs, Predicates)).
+
+directly_related_vars(Var1, Var2, VarArgs) :-
     memberchk_eq(Var1, VarArgs),
-    memberchk_eq(Var2, VarArgs), !.
-related(Var1, Var2, Predicates) :-
-    member(Predicate, Predicates),
-    Predicate =.. [_ | Args],
-    select_vars(Args, VarArgs),
+    memberchk_eq(Var2, VarArgs).
+
+% Two different vars are indirectly related across multiple predicates
+indirectly_related_vars(Var1, Var2, VarArgs, Predicates) :-
     length(VarArgs, 2),
     memberchk_eq(Var1, VarArgs),
     member(OtherVar, VarArgs),
     OtherVar \== Var1,
-    related(OtherVar, Var2), !.
+    vars_related(OtherVar, Var2, Predicates), !.
 
 and([], []) :- true.
 and([Goal], Goal) :- !.
@@ -229,3 +340,4 @@ and([Goal | Rest], Anded) :-
 % [meta].
 % TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], causal_rule(TypedPredicates, TypedVariables, Rule).
 % TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], all_rules(TypedPredicates, TypedVariables).
+% TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], causal_rules(TypedPredicates, TypedVariables, 2, 20, Rules).
