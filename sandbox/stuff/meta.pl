@@ -1,4 +1,4 @@
-:-module(meta, [causal_rule/3, all_rules/2, causal_rules/5, count_atoms/2]).
+:-module(meta, [static_rules/5]).
 
 % TODO: Use engines?
 
@@ -7,49 +7,53 @@
 domain_is(boolean, [true, false]).
 domain_is(color, [red, green, blue]).
 
-all_rules(TypedPredicates, TypedVariables) :-
-    retractall(on(_,_)),
-    retractall(next_to(_,_)),
-    retractall(light(_,_)),
-    forall(causal_rule(TypedPredicates, TypedVariables, Rule), assertz(Rule)),
-    tell('listings/on.pl'), listing(on(_,_)), told,
-    tell('listings/next_to.pl'), listing(next_to(_,_)), told,
-    tell('listings/light.pl'),listing(light(_,_)), told.
-
-% Causal rules
-% Grow a set of causal rules given a set of typed predicates and of typed variables such that
+% Static rules
+% Grow a set of static rules given a set of typed predicates and of typed variables such that
 % * There is at least one rule
-% * They do no exceed the resources allocated (max number of causal rules, max number of atoms)
+% * They do no exceed the limits set (max number of static rules, max number of atoms)
 % * No rule repeats another
 % * No rule contradicts another
 
-causal_rules(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, CausalRules) :-
-    causal_rule(TypedPredicates, TypedVariables, CausalRule),
-    valid_causal_rules([CausalRule], MaxCausal, MaxAtoms),
-    maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, [CausalRule], CausalRules).
+static_rules(TypedPredicates, TypedVariables, MaxStatic, MaxAtoms, Rules) :-
+    static_rule(TypedPredicates, TypedVariables, Head-BodyPredicates),
+    valid_static_rules([Head-BodyPredicates], MaxStatic, MaxAtoms),
+    maybe_add_static_rule(TypedPredicates, TypedVariables, MaxStatic, MaxAtoms, [Head-BodyPredicates], RulePairs),
+    pairs_rules(RulePairs, Rules).
 
-maybe_add_causal_rule(_, _, _, _, CausalRules, CausalRules).
+pairs_rules([], []).
+pairs_rules([Head-BodyPredicates | OtherPairs], [Rule | OtherRules]) :-
+    pair_rule(Head-BodyPredicates, Rule),
+    pairs_rules(OtherPairs, OtherRules).
 
-maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, Acc, CausalRules) :-
-    causal_rule(TypedPredicates, TypedVariables, CausalRule),
-    valid_causal_rules([CausalRule | Acc], MaxCausal, MaxAtoms),
-    maybe_add_causal_rule(TypedPredicates, TypedVariables, MaxCausal, MaxAtoms, [CausalRule | Acc], CausalRules).
+pair_rule(Head-BodyPredicates, Rule) :-
+    and(BodyPredicates, Body),
+    Rule =.. [:-, Head, Body].
+
+maybe_add_static_rule(_, _, _, _, RulePairs, RulePairs).
+
+maybe_add_static_rule(TypedPredicates, TypedVariables, MaxStatic, MaxAtoms, Acc, RulePairs) :-
+    static_rule(TypedPredicates, TypedVariables, Head-BodyPredicates),
+    valid_static_rules([Head-BodyPredicates | Acc], MaxStatic, MaxAtoms),!,
+    maybe_add_static_rule(TypedPredicates, TypedVariables, MaxStatic, MaxAtoms, [Head-BodyPredicates | Acc], RulePairs).
    
-valid_causal_rules(CausalRules, MaxCausal, MaxAtoms) :-
-    \+ rules_exceed_resources(CausalRules, MaxCausal, MaxAtoms),
-    \+ repeated_rule(CausalRules),
-    \+ contradicting_rules(CausalRules).
+valid_static_rules(RulePairs, MaxStatic, MaxAtoms) :-
+    \+ rules_exceed_limits(RulePairs, MaxStatic, MaxAtoms),
+    % numerize vars in each copied rule pair before comparing them to one another
+    % to avoid head1(X, Y) :- pred1(X, Y) being seen as equivalent to head1(X, Y) :- pred1(Y, X) etc.
+    numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
+    \+ repeated_rules(RulePairsWithNumberVars),
+    \+ contradicting_rules(RulePairsWithNumberVars),
+    \+ recursion_in_rules(RulePairs).
 
-rules_exceed_resources(Rules, MaxRules, _) :-
-    length(Rules, NumberOfRules),
-    NumberOfRules > MaxRules, !,
-    format('Exceeding max rules of ~p~n', [MaxRules]).
+rules_exceed_limits(RulePairs, MaxRules, _) :-
+    length(RulePairs, NumberOfRules),
+    NumberOfRules > MaxRules, !.
+    % format('Exceeding max rules of ~p~n', [MaxRules]).
 
-rules_exceed_resources(Rules, _, MaxAtoms) :-
-    count_atoms(Rules, NumberOfAtoms),
-    NumberOfAtoms > MaxAtoms,
-    format('Exceeding resource limit of ~p~n', [MaxAtoms]),
-    !.
+rules_exceed_limits(RulePairs, _, MaxAtoms) :-
+    count_atoms(RulePairs, NumberOfAtoms),
+    NumberOfAtoms > MaxAtoms, !.
+    % format('Exceeding resource limit of ~p~n', [MaxAtoms]),
 
 % An atom, here, is a singular, non-compound term.
 count_atoms(Var, 1) :-
@@ -67,17 +71,39 @@ count_atoms(Term, Count) :-
     count_atoms(SubTerms, Count).
 count_atoms(_, 1).
 
-% TODO: This does not work
-% Rules = [(on(_A, true):-next_to(_A, _B), on(_B, true)), (on(_C, true):-next_to(_C, _D), on(_D, true)), (on(_E, true):-next_to(_E, _F), on(_F, true))],
-repeated_rule([Rule | OtherRules]) :- 
-    member(OtherRule, OtherRules),
-    rule_repeats(Rule, OtherRule).
+numerize_vars_in_rule_pairs([], []).
+numerize_vars_in_rule_pairs([HeadPredicate-BodyPredicates | OtherRulePairs], [HeadPredicate1-BodyPredicates1 | OtherRulePairs1]) :-
+    numerize_vars([HeadPredicate | BodyPredicates], [HeadPredicate1 |BodyPredicates1]),
+    numerize_vars_in_rule_pairs(OtherRulePairs, OtherRulePairs1).
 
-rule_repeats(Rule, OtherRule) :-
-    Rule =.. [:-, Head, Body],
-    OtherRule =.. [:-, OtherHead, OtherBody],
+numerize_vars(Predicates, PredicatesWithNumerizedVars) :-
+    copy_term_nat(Predicates, PredicatesWithNumerizedVars),
+    numbervars(PredicatesWithNumerizedVars, 1, _).
+
+repeated_rules([RulePair | OtherRulePairs]) :- 
+    member(OtherRulePair, OtherRulePairs),
+    (rule_repeats(RulePair, OtherRulePair) -> true ; repeated_rules(OtherRulePairs)).
+
+rule_repeats(Head-BodyPredicates, OtherHead-OtherBodyPredicates) :-
     equivalent_predicates(Head, OtherHead),
-    equivalent_bodies(Body, OtherBody).
+    equivalent_bodies(BodyPredicates, OtherBodyPredicates).
+
+equivalent_bodies(BodyPredicates, OtherBodyPredicates) :-
+    subsumed_conjunctions(BodyPredicates, OtherBodyPredicates) -> true ; subsumed_conjunctions(OtherBodyPredicates, BodyPredicates).
+
+% True if each predicate in a body is equivalent to another predicate in the other body
+subsumed_conjunctions([], _).
+subsumed_conjunctions([Predicate | Rest], OtherPredicates) :-
+    member(OtherPredicate, OtherPredicates),
+    (equivalent_predicates(Predicate, OtherPredicate) -> subsumed_conjunctions(Rest, OtherPredicates)).
+
+% A recusion exists when the head of a rule can unify with a predicate in the body of another rule.
+recursion_in_rules(RulePairs) :-
+    select(Head-_, RulePairs, OtherRulePairs),
+    member(_-OtherBody, OtherRulePairs),
+    member(OtherBodyPredicate, OtherBody),
+    Head =@= OtherBodyPredicate.
+
 
 equivalent_predicates(Predicate, OtherPredicate) :- 
     Predicate =.. [PredicateName | Args],
@@ -86,44 +112,41 @@ equivalent_predicates(Predicate, OtherPredicate) :-
 
 equivalent_args([], []).
 equivalent_args([Arg | Rest], [OtherArg | OtherRest]) :-
-    var(Arg),
-    var(OtherArg),
+    var_number(Arg, _),
+    var_number(OtherArg, _),
     !,
     equivalent_args(Rest, OtherRest).
 equivalent_args([Arg | Rest], [Arg | OtherRest]) :-
     equivalent_args(Rest, OtherRest).
 
-equivalent_bodies(Body, OtherBody) :-
-    subsumed_conjunctions(Body, OtherBody) -> true ; subsumed_conjunctions(OtherBody, Body).
-
-% True if all predicates in a body are equivalent to predicates in the other body
-subsumed_conjunctions([], []).
-subsumed_conjunctions([Predicate | Rest], [OtherPredicate | OtherRest]) :-
-    equivalent_predicates(Predicate, OtherPredicate),
-    subsumed_conjunctions(Rest, OtherRest).
 
 % There exists two rules that contradict one another
-% TODO: This is too broad b/c head1(X, Y) :- pred1(X, Y) contradicts head1(X, Y) :- pred1(Y, X) 
-% even though they don't. Maybe first consistently rename the vars to constants.
-contradicting_rules([Rule | OtherRules]) :- 
-    Rule =.. [:-, Head, Body],
-    member(OtherRule, OtherRules),
-    OtherRule =.. [:-, OtherHead, OtherBody],
+contradicting_rules([Head-Body | OtherRulePairs]) :- 
+    member(OtherHead-OtherBody, OtherRulePairs),
+    (contradicting_heads(Head-Body, OtherHead-OtherBody) -> 
+        true; 
+        contradicting_bodies(Head-Body, OtherHead-OtherBody)
+    ).
+
+contradicting_heads(Head-Body, OtherHead-OtherBody) :-
+    contradicts(Head, OtherHead),
+    equivalent_bodies(Body, OtherBody).
+
+contradicting_bodies(Head-Body, OtherHead-OtherBody) :-
     equivalent_predicates(Head, OtherHead),
     contradicting_predicates(Body, OtherBody).
 
 % There exists two predicates that contradict one another
-contradicting_predicates([Predicate | Rest], [OtherPredicate | OtherRest]) :-
-    contradiction_in([Predicate | OtherPredicate]) -> true ; contradicting_predicates(Rest, OtherRest).
+contradicting_predicates([Predicate | Rest], OtherPredicates) :-
+    contradiction_in([Predicate | OtherPredicates]) -> true ; contradicting_predicates(Rest, OtherPredicates).
 
-% Assert a causal rule made from predicates, objects and variables
+% Assert a static rule made from predicates, objects and variables
 % TypedPredicates = [predicate(on, [object_type(led), value_type(boolean), ...]
 % TypedVariables = [variables(led, 2), variables(object1, 1), ...]
-causal_rule(TypedPredicates, TypedVariables, Rule) :-
+static_rule(TypedPredicates, TypedVariables, Head-BodyPredicates) :-
     make_distinct_variables(TypedVariables, TypedVars),
     make_head(TypedPredicates, TypedVars, Head),
-    make_body(TypedPredicates, TypedVars, Head, Body),
-    Rule =.. [:-, Head, Body].
+    make_body_predicates(TypedPredicates, TypedVars, Head, BodyPredicates).
     
 make_head(TypedPredicates, TypedVars, Head) :-
     member(TypedPredicate, TypedPredicates),
@@ -132,11 +155,10 @@ make_head(TypedPredicates, TypedVars, Head) :-
 % Make sure that all vars used in the head also appear in the body
 % Do not repeat a predicate in the head + body.
 % Don't allow contradictions wthin head + body.
-make_body(TypedPredicates, TypedVars, Head, Body) :-
+make_body_predicates(TypedPredicates, TypedVars, Head, BodyPredicates) :-
     make_body_predicate(TypedPredicates, TypedVars, Head, [], BodyPredicate),
     maybe_add_body_predicates(TypedPredicates, TypedVars, Head, [BodyPredicate], BodyPredicates),
-    valid_body_predicates(BodyPredicates, Head),
-    and(BodyPredicates, Body).
+    valid_body_predicates(BodyPredicates, Head).
 
 make_body_predicate(TypedPredicates, TypedVars, Head, BodyPredicates, BodyPredicate) :-
     member(TypedPredicate, TypedPredicates),
@@ -146,8 +168,9 @@ make_body_predicate(TypedPredicates, TypedVars, Head, BodyPredicates, BodyPredic
 % Don't repeat the head predicate in the body or any body predicate
 % Don't contradict other predicates
 valid_body_predicate(BodyPredicate, Head, BodyPredicates) :-
-    all_different([Head, BodyPredicate | BodyPredicates]),
-    \+ contradiction_in([Head, BodyPredicate | BodyPredicates]).
+    numerize_vars([Head, BodyPredicate | BodyPredicates], PredicatesWithNumerizedVars),
+    all_different(PredicatesWithNumerizedVars),
+    \+ contradiction_in(PredicatesWithNumerizedVars).
 
 all_different([]).
 all_different([Term | Rest]) :-
@@ -167,16 +190,18 @@ contradicts(BodyPredicate, Head) :-
     contradicting_args(Args1, Args2).
 
 contradicting_args([Arg1 | Rest1], [Arg2 | Rest2]) :-
-   var(Arg1),
-   var(Arg2),
-   (Arg1 == Arg2 -> contradicting_args(Rest1, Rest2) ; fail).
+   var_number(Arg1, _),
+   var_number(Arg2, _),
+   !,
+   (equivalent_vars(Arg1, Arg2) -> contradicting_args(Rest1, Rest2) ; fail).
 contradicting_args([Arg1 | _], [Arg2 | _]) :-
-    nonvar(Arg1),
-    nonvar(Arg2),
-   Arg1 \== Arg2.
+   Arg1 \== Arg2, !.
 contradicting_args([_ | Rest1], [_ | Rest2]) :-
     contradicting_args(Rest1, Rest2).
 
+equivalent_vars(Var1, Var2) :-
+    var_number(Var1, N),
+    var_number(Var2, N).
 
 % Together, the body predicates cover all variables in the head.
 % All variables are related in the head OR body
@@ -242,10 +267,10 @@ different_args([Arg | Rest], [OtherArg | OtherRest]) :-
     different_args(Rest, OtherRest).
 
 different_arg(Arg, OtherArg) :-
-    var(Arg),
-    var(OtherArg),
+    var_number(Arg, _),
+    var_number(OtherArg, _),
     !,
-    Arg \== OtherArg.
+    \+ equivalent_vars(Arg, OtherArg).
 different_arg(_, _).
 
 maybe_add_body_predicates(_, _, _, CurrentBodyPredicates, CurrentBodyPredicates).
@@ -338,6 +363,4 @@ and([Goal | Rest], Anded) :-
 
 % cd('sandbox/stuff').
 % [meta].
-% TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], causal_rule(TypedPredicates, TypedVariables, Rule).
-% TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], all_rules(TypedPredicates, TypedVariables).
-% TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], causal_rules(TypedPredicates, TypedVariables, 2, 20, Rules).
+% TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(light, [object_type(led), value_type(color)]) ], TypedVariables = [variables(led, 2), variables(object1, 1)], static_rules(TypedPredicates, TypedVariables, 2, 20, Rules).
