@@ -7,6 +7,7 @@
 % predictor:empty_predictor(Predictor), C = Predictor.coverage().
 empty_predictor(predictor{coverage:0, scope: [], causal_rules:[], unity_rules:[], initial_conditions:[], static_rules:[], variables:[]}).
 
+% Applying function scope/0 on a dict P yields Scope, the value of key scope of P.
 P.scope():=Scope :-
     Scope=P.scope.
 P.coverage():=Coverage :-
