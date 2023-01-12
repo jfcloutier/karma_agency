@@ -39,15 +39,19 @@ theory(MinTypeSignature, Template, Theory) :-
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticConstraints, StaticRules) :-
-    static_rule(Template.type_signature, Head-BodyPredicates),
+    make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs),
     pairs_rules(RulePairs, StaticRules).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
-% A predicate in head must appear in the body in contradictory way (the change)
-% Rules must not exceed limits nor repeat themselves nor define contradictory changes
-causal_rules(_, tbd).
+% A predicate in head describes state at time t+1, the body describes state at time t.
+% Rules must not exceed limits nor repeat themselves nor define non-change
+causal_rules(Template, CausalRules) :-
+    make_rule(Template.type_signature, Head-BodyPredicates),
+    valid_causal_rules([Head-BodyPredicates], Template.limits),
+    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs),
+    pairs_rules(RulePairs, CausalRules).
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
 % A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
@@ -146,10 +150,10 @@ pair_rule(Head-BodyPredicates, Rule) :-
     and(BodyPredicates, Body),
     Rule =.. [:-, Head, Body].
 
-% Assert a static rule made from predicates, objects and variables
+% Make a rule made from predicates, objects and variables
 % TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
 % TypeSignature.typed_variables = [variables(led, 2), variables(object1, 1), ...]
-static_rule(TypeSignature, Head-BodyPredicates) :-
+make_rule(TypeSignature, Head-BodyPredicates) :-
     make_distinct_variables(TypeSignature.typed_variables, DistinctVars),
     make_head(TypeSignature.predicate_types, DistinctVars, Head),
     make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
@@ -157,9 +161,17 @@ static_rule(TypeSignature, Head-BodyPredicates) :-
 maybe_add_static_rule(_, _, RulePairs, RulePairs).
 
 maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
-    static_rule(Template.type_signature, Head-BodyPredicates),
+    make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates | Acc], Template.limits, StaticConstraints),!,
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+
+maybe_add_causal_rule(_, RulePairs, RulePairs).
+
+maybe_add_causal_rule(Template, Acc, RulePairs) :-
+    make_rule(Template.type_signature, Head-BodyPredicates),
+    valid_causal_rules([Head-BodyPredicates | Acc], Template.limits),!,
+    maybe_add_causal_rule(Template, [Head-BodyPredicates | Acc], RulePairs).
+
    
 valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     \+ rules_exceed_limits(RulePairs, Limits),
@@ -167,11 +179,20 @@ valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     % to avoid head1(X, Y) :- pred1(X, Y) being seen as equivalent to head1(X, Y) :- pred1(Y, X) etc.
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     \+ repeated_rules(RulePairsWithNumberVars),
+    % No two rules that contradict one another
     \+ contradicting_rules(RulePairsWithNumberVars),
     % No rule contradicts a static constraint
     \+ contradicted_static_contraint(RulePairsWithNumberVars, StaticConstraints),
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_rules(RulePairs).
+
+valid_causal_rules(RulePairs, Limits) :-
+    \+ rules_exceed_limits(RulePairs, Limits),
+    % No idempotent rule (rules where the head is found in the body)
+    \+ idempotent_causal_rules(RulePairs),
+    numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
+    % No repeated rules
+    \+ repeated_rules(RulePairsWithNumberVars).
 
 rules_exceed_limits(RulePairs, Limits) :-
     length(RulePairs, NumberOfRules),
@@ -197,6 +218,7 @@ static_rule_contradicts_constraint(_-BodyPredicates, one_relation(PredicateNames
     member(Pred2, OtherBodyPredicates),
     Pred2 =.. [PredName2, Var1, Var2],
     subset([PredName1, PredName2], PredicateNames).
+
 
 % An atom, here, is a singular, non-compound term.
 count_atoms(Var, 1) :-
@@ -247,6 +269,11 @@ recursion_in_rules(RulePairs) :-
     member(_-OtherBody, OtherRulePairs),
     member(OtherBodyPredicate, OtherBody),
     Head =@= OtherBodyPredicate.
+
+% There are idempotent causal_rules is there is one where the head is found in the body -> nothing changes
+idempotent_causal_rules(RulePairs) :-
+    member(Head-BodyPredicates, RulePairs),
+    memberchk_equal(Head, BodyPredicates), !.
 
 equivalent_predicates(Predicate, OtherPredicate) :- 
     Predicate =.. [PredicateName | Args],
