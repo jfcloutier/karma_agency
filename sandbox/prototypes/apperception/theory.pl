@@ -9,26 +9,26 @@
 /*
 cd('sandbox/prototypes/apperception').
 [leds_observations, type_signature, domains, sequence, theory].
-TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
+MinPredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
+MinTypeSignature = type_signature{predicate_types:MinPredicateTypes, typed_variables:TypedVariables},
+PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
 TypedVariables = [variables(led, 2), variables(object1, 1)], 
-TypeSignature = type_signature{typed_predicates:TypedPredicates, typed_variables:TypedVariables},
+TypeSignature = type_signature{predicate_types:PredicateTypes, typed_variables:TypedVariables},
 Limits = limits{max_rules:3, max_elements:60},
 Template = template{type_signature:TypeSignature, limits:Limits},
 sequence(leds_observations, Sequence),
-theory(Sequence, Template, Theory).
+theory(MinTypeSignature, Template, Theory).
 */
 
 % TODO: Use engines?
 
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
-% type_signature(objects: Objects, typed_predicates: TypedPredicates, typed_variables: TypedVariables)
-theory(Sequence, Template, Theory) :-
-    min_type_signature(Sequence, MinTypeSignature),
-    state_constraints(Template, MinTypeSignature, StateConstraints),
-    valid_state_constraint(Template.type_signature, StateConstraints),
-    static_rules(Template, StaticRules),
+% type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
+theory(MinTypeSignature, Template, Theory) :-
+    static_constraints(MinTypeSignature, Template.type_signature, StaticConstraints),
+    static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, state_constraints:StateConstraints}.
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints}.
 
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
@@ -36,13 +36,12 @@ theory(Sequence, Template, Theory) :-
 % * They do no exceed the limits set (max number of rules, max number of elements for the rule set)
 % * No rule repeats another
 % * No rule contradicts another
-% * TODO: Rules can not contradict constraints. 
-% * TODO: Every predicate in the sequence must appear in a rule head.
+% * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
-static_rules(Template, StaticRules) :-
+static_rules(Template, StaticConstraints, StaticRules) :-
     static_rule(Template.type_signature, Head-BodyPredicates),
-    valid_static_rules([Head-BodyPredicates], Template.limits),
-    maybe_add_static_rule(Template, [Head-BodyPredicates], RulePairs),
+    valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs),
     pairs_rules(RulePairs, StaticRules).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
@@ -55,52 +54,83 @@ causal_rules(_, tbd).
 %   one_relation([pred1, pred2, pred3]).
 % A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
 %   one_related(pred1). 
-% Meta-constraint: Each (binary) predicate in the sequence appears in some state constraint
-state_constraints(TypeSignature, StateConstraints) :-
-    state_constraint(TypeSignature, StateConstraint),
-    valid_state_constraints([StateConstraint]),
-    maybe_add_state_constraint(TypeSignature,[StateConstraint], StateConstraints).
+static_constraints(MinTypeSignature, TypeSignature, StaticConstraints) :-
+    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
+    nb_setval(visited_static_constraints, []),
+    maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
+    maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
+    valid_static_constraints(StaticConstraints, MinTypeSignature).
 
-maybe_add_state_constraint(_, StateConstraints, StateConstraints).
+all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
+    PredicateTypes = TypeSignature.predicate_types,
+    findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
 
-maybe_add_state_constraint(TypeSignature, Acc, StateConstraints) :-
-    state_constraint(TypeSignature, StateConstraint),
-    valid_state_constraints([StateConstraint | Acc]),
-    maybe_add_state_constraint(TypeSignature, [StateConstraint | Acc], StateConstraints).
+% Meta-constraint: Each (binary) predicate in the sequence appears in some static constraint
+% Do not repeat previously visited static constraints
+valid_static_constraints(StaticConstraints, MinTypeSignature) :-
+    min_static_constraints_converage(StaticConstraints, MinTypeSignature),
+    not_repetitive_static_constraints(StaticConstraints).
+
+not_repetitive_static_constraints(StaticConstraints) :-
+    nb_getval(visited_static_constraints, Visited),
+    \+ repeats_visited_static_constraints(StaticConstraints, Visited),
+    nb_setval(visited_static_constraints, [StaticConstraints | Visited]).
+
+repeats_visited_static_constraints(StaticConstraints, Visited) :-
+    member(VisitedStaticConstraints, Visited),
+    length(StaticConstraints, L),
+    length(VisitedStaticConstraints, L),
+    subset(StaticConstraints, VisitedStaticConstraints).
+
+min_static_constraints_converage(StaticConstraints, MinTypeSignature) :-
+    all_binary_predicate_names(MinTypeSignature, AllBinaryPredicateNames),
+    \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
+
+static_constraints_cover(StaticConstraints, PredicateName) :-
+    member(StaticConstraint, StaticConstraints),
+    static_constraint_about(StaticConstraint, PredicateName), !.
+
+static_constraint_about(one_related(PredicateName), PredicateName).
+static_constraint_about(one_relation(PredicateNames), PredicateName) :-
+    memberchk(PredicateName, PredicateNames).
+
+maybe_add_static_constraint(_, _, StaticConstraints, StaticConstraints).
+
+maybe_add_static_constraint(Kind, AllBinaryPredicateNames, Acc, StaticConstraints) :-
+    static_constraint(Kind, AllBinaryPredicateNames, StaticConstraint),
+    valid_static_constraint(StaticConstraint, Acc),
+    maybe_add_static_constraint(Kind, AllBinaryPredicateNames, [StaticConstraint | Acc], StaticConstraints).
 
 % Uniqueness constraint:  For any X, there is one and only one Y such that r(X, Y).
-state_constraint(TypeSignature, StateConstraint) :-
-    binary_predicate_name(TypeSignature.typed_predicates, BinaryPredicateName),
-    StateConstraint =.. [one_related, BinaryPredicateName].
+static_constraint(one_related, AllBinaryPredicateNames, StaticConstraint) :-
+    member(BinaryPredicateName, AllBinaryPredicateNames),
+    StaticConstraint =.. [one_related, BinaryPredicateName].
 
 % Exclusion constraint: There must one and only one relation r1(X, Y), r2(X, Y), r3(X, Y)
-state_constraint(TypeSignature, StateConstraint) :-
-    binary_predicate_names(TypeSignature.typed_predicates, BinaryPredicateNames),
-    StateConstraint =.. [one_relation, BinaryPredicateNames].
-
-valid_state_constraints(StateConstraints) :-
-    \+ redundant_state_constraints(StateConstraints).
-
-redundant_state_constraints([Constraint | OtherConstraints]) :-
-    member(OtherConstraint, OtherConstraints),
-    (subsumed_state_constraint(Constraint, OtherConstraint) -> true 
-    ; 
-    redundant_state_constraints(OtherConstraints)).
-
-subsumed_state_constraint(one_relation(PredicateNames), one_relation(OtherPredicateNames)) :-
-    subset(PredicateNames, OtherPredicateNames) ; subset(OtherPredicateNames, PredicateNames).
-
-subsumed_state_constraint(one_related(PredicateName), one_related(PredicateName)).
-
-binary_predicate_name(TypedPredicates, BinaryPredicateName) :-
-    member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), TypedPredicates).
-
-binary_predicate_names(TypedPredicates, BinaryPredicateNames) :-
-    bagof(BinaryPredicateName, TypedPredicates^binary_predicate_name(TypedPredicates, BinaryPredicateName), AllBinaryPredicateNames),
+static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraint) :-
     sublist(BinaryPredicateNames, AllBinaryPredicateNames),
     length(BinaryPredicateNames, Length),
-    Length > 1.
+    Length > 1,
+    StaticConstraint =.. [one_relation, BinaryPredicateNames].
 
+valid_static_constraint(StaticConstraint, OtherStaticConstraints) :-
+    \+ redundant_static_constraints([StaticConstraint | OtherStaticConstraints]).
+
+redundant_static_constraints([Constraint | OtherConstraints]) :-
+    member(OtherConstraint, OtherConstraints),
+    (subsumed_static_constraint(Constraint, OtherConstraint) -> true 
+    ; 
+    redundant_static_constraints(OtherConstraints)).
+
+subsumed_static_constraint(one_relation(PredicateNames), one_relation(OtherPredicateNames)) :-
+    subset(PredicateNames, OtherPredicateNames) ; subset(OtherPredicateNames, PredicateNames).
+
+subsumed_static_constraint(one_related(PredicateName), one_related(PredicateName)).
+
+binary_predicate_name(PredicateTypes, BinaryPredicateName) :-
+    member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), PredicateTypes).
+
+% Sublist of a list (order is preserved)
 sublist([], []).
 sublist(Sub, [_| Rest]) :-
     sublist(Sub, Rest).
@@ -117,27 +147,29 @@ pair_rule(Head-BodyPredicates, Rule) :-
     Rule =.. [:-, Head, Body].
 
 % Assert a static rule made from predicates, objects and variables
-% TypeSignature.typed_predicates = [predicate(on, [object_type(led), value_type(boolean), ...]
+% TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
 % TypeSignature.typed_variables = [variables(led, 2), variables(object1, 1), ...]
 static_rule(TypeSignature, Head-BodyPredicates) :-
     make_distinct_variables(TypeSignature.typed_variables, DistinctVars),
-    make_head(TypeSignature.typed_predicates, DistinctVars, Head),
-    make_body_predicates(TypeSignature.typed_predicates, DistinctVars, Head, BodyPredicates).
+    make_head(TypeSignature.predicate_types, DistinctVars, Head),
+    make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
     
-maybe_add_static_rule(_, RulePairs, RulePairs).
+maybe_add_static_rule(_, _, RulePairs, RulePairs).
 
-maybe_add_static_rule(Template, Acc, RulePairs) :-
+maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
     static_rule(Template.type_signature, Head-BodyPredicates),
-    valid_static_rules([Head-BodyPredicates | Acc], Template.limits),!,
-    maybe_add_static_rule(Template, [Head-BodyPredicates | Acc], RulePairs).
+    valid_static_rules([Head-BodyPredicates | Acc], Template.limits, StaticConstraints),!,
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
    
-valid_static_rules(RulePairs, Limits) :-
+valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     \+ rules_exceed_limits(RulePairs, Limits),
     % numerize vars in each copied rule pair before comparing them to one another
     % to avoid head1(X, Y) :- pred1(X, Y) being seen as equivalent to head1(X, Y) :- pred1(Y, X) etc.
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     \+ repeated_rules(RulePairsWithNumberVars),
     \+ contradicting_rules(RulePairsWithNumberVars),
+    % No rule contradicts a static constraint
+    \+ contradicted_static_contraint(RulePairsWithNumberVars, StaticConstraints),
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_rules(RulePairs).
 
@@ -150,6 +182,21 @@ rules_exceed_limits(RulePairs, Limits) :-
     count_atoms(RulePairs, NumberOfAtoms),
     NumberOfAtoms > Limits.max_elements, !.
     % format('Exceeding resource limit of ~p~n', [MaxElements]),
+
+contradicted_static_contraint(RulePairs, StaticConstraints) :-
+    member(Rule, RulePairs),
+    member(StaticConstraint, StaticConstraints),
+    static_rule_contradicts_constraint(Rule, StaticConstraint), !.
+
+% There are at least two binary predicates in the body with names in PredicateNames and relating the same vars
+static_rule_contradicts_constraint(_-BodyPredicates, one_relation(PredicateNames)) :-
+    select(Pred1, BodyPredicates, OtherBodyPredicates),
+    Pred1 =.. [PredName1, Var1, Var2],
+    var_number(Var1, _),
+    var_number(Var2 , _),
+    member(Pred2, OtherBodyPredicates),
+    Pred2 =.. [PredName2, Var1, Var2],
+    subset([PredName1, PredName2], PredicateNames).
 
 % An atom, here, is a singular, non-compound term.
 count_atoms(Var, 1) :-
@@ -239,19 +286,19 @@ contradicting_bodies(Head-Body, OtherHead-OtherBody) :-
 contradicting_predicates([Predicate | Rest], OtherPredicates) :-
     contradiction_in([Predicate | OtherPredicates]) -> true ; contradicting_predicates(Rest, OtherPredicates).
 
-make_head(TypedPredicates, DistinctVars, Head) :-
-    member(TypedPredicate, TypedPredicates),
-    make_rule_predicate(TypedPredicate, DistinctVars, Head).
+make_head(PredicateTypes, DistinctVars, Head) :-
+    member(PredicateType, PredicateTypes),
+    make_rule_predicate(PredicateType, DistinctVars, Head).
 
 % Make a list of at least one mutually valid body predicates
-make_body_predicates(TypedPredicates, DistinctVars, Head, BodyPredicates) :-
-    make_body_predicate(TypedPredicates, DistinctVars, Head, [], BodyPredicate),
-    maybe_add_body_predicates(TypedPredicates, DistinctVars, Head, [BodyPredicate], BodyPredicates),
+make_body_predicates(PredicateTypes, DistinctVars, Head, BodyPredicates) :-
+    make_body_predicate(PredicateTypes, DistinctVars, Head, [], BodyPredicate),
+    maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate], BodyPredicates),
     valid_body_predicates(BodyPredicates, Head).
 
-make_body_predicate(TypedPredicates, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
-    member(TypedPredicate, TypedPredicates),
-    make_rule_predicate(TypedPredicate, DistinctVars, BodyPredicate),
+make_body_predicate(PredicateTypes, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
+    member(PredicateType, PredicateTypes),
+    make_rule_predicate(PredicateType, DistinctVars, BodyPredicate),
     valid_body_predicate(BodyPredicate, Head, BodyPredicates).
 
 % Don't repeat the head predicate in the body or any body predicate
@@ -364,10 +411,10 @@ different_arg(_, _).
 
 maybe_add_body_predicates(_, _, _, CurrentBodyPredicates, CurrentBodyPredicates).
 
-maybe_add_body_predicates(TypedPredicates, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
-    make_body_predicate(TypedPredicates, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
+maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
+    make_body_predicate(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
     valid_body_predicates([BodyPredicate | CurrentBodyPredicates], Head),
-    maybe_add_body_predicates(TypedPredicates, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
+    maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
 
 % Don't repeat a var in the args of a predicate
 make_rule_predicate(predicate(Name, TypedArgs), TypedVars, RulePredicate) :-
