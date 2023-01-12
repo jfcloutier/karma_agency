@@ -1,31 +1,34 @@
-:-module(theory, [theory/2]).
+:-module(theory, [theory/3]).
+
+:- use_module(library(lists)).
+:- use_module(type_signature).
+:- use_module(domains).
 
 % Generates a valid theory given a template.
 
 /*
-cd('sandbox/stuff').
-[theory].
+cd('sandbox/prototypes/apperception').
+[leds_observations, type_signature, domains, sequence, theory].
 TypedPredicates = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
 TypedVariables = [variables(led, 2), variables(object1, 1)], 
 TypeSignature = type_signature{typed_predicates:TypedPredicates, typed_variables:TypedVariables},
 Limits = limits{max_rules:3, max_elements:60},
-theory(template{type_signature:TypeSignature, limits:Limits}, Theory).
+Template = template{type_signature:TypeSignature, limits:Limits},
+sequence(leds_observations, Sequence),
+theory(Sequence, Template, Theory).
 */
 
 % TODO: Use engines?
 
-:- use_module(library(lists)).
-
-domain_is(boolean, [true, false]).
-domain_is(color, [red, green, blue]).
-
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, typed_predicates: TypedPredicates, typed_variables: TypedVariables)
-theory(Template, Theory) :-
+theory(Sequence, Template, Theory) :-
+    min_type_signature(Sequence, MinTypeSignature),
+    state_constraints(Template, MinTypeSignature, StateConstraints),
+    valid_state_constraint(Template.type_signature, StateConstraints),
     static_rules(Template, StaticRules),
     causal_rules(Template, CausalRules),
-    constraint_rules(Template, ConstraintRules),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, constraint_rules:ConstraintRules}.
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, state_constraints:StateConstraints}.
 
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
@@ -33,6 +36,8 @@ theory(Template, Theory) :-
 % * They do no exceed the limits set (max number of rules, max number of elements for the rule set)
 % * No rule repeats another
 % * No rule contradicts another
+% * TODO: Rules can not contradict constraints. 
+% * TODO: Every predicate in the sequence must appear in a rule head.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticRules) :-
     static_rule(Template.type_signature, Head-BodyPredicates),
@@ -40,8 +45,67 @@ static_rules(Template, StaticRules) :-
     maybe_add_static_rule(Template, [Head-BodyPredicates], RulePairs),
     pairs_rules(RulePairs, StaticRules).
 
+% Rules that produce the changes in the next state from the current one (frame axiom)
+% A predicate in head must appear in the body in contradictory way (the change)
+% Rules must not exceed limits nor repeat themselves nor define contradictory changes
 causal_rules(_, tbd).
-constraint_rules(_,tbd).
+
+% Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
+% A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
+%   one_relation([pred1, pred2, pred3]).
+% A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
+%   one_related(pred1). 
+% Meta-constraint: Each (binary) predicate in the sequence appears in some state constraint
+state_constraints(TypeSignature, StateConstraints) :-
+    state_constraint(TypeSignature, StateConstraint),
+    valid_state_constraints([StateConstraint]),
+    maybe_add_state_constraint(TypeSignature,[StateConstraint], StateConstraints).
+
+maybe_add_state_constraint(_, StateConstraints, StateConstraints).
+
+maybe_add_state_constraint(TypeSignature, Acc, StateConstraints) :-
+    state_constraint(TypeSignature, StateConstraint),
+    valid_state_constraints([StateConstraint | Acc]),
+    maybe_add_state_constraint(TypeSignature, [StateConstraint | Acc], StateConstraints).
+
+% Uniqueness constraint:  For any X, there is one and only one Y such that r(X, Y).
+state_constraint(TypeSignature, StateConstraint) :-
+    binary_predicate_name(TypeSignature.typed_predicates, BinaryPredicateName),
+    StateConstraint =.. [one_related, BinaryPredicateName].
+
+% Exclusion constraint: There must one and only one relation r1(X, Y), r2(X, Y), r3(X, Y)
+state_constraint(TypeSignature, StateConstraint) :-
+    binary_predicate_names(TypeSignature.typed_predicates, BinaryPredicateNames),
+    StateConstraint =.. [one_relation, BinaryPredicateNames].
+
+valid_state_constraints(StateConstraints) :-
+    \+ redundant_state_constraints(StateConstraints).
+
+redundant_state_constraints([Constraint | OtherConstraints]) :-
+    member(OtherConstraint, OtherConstraints),
+    (subsumed_state_constraint(Constraint, OtherConstraint) -> true 
+    ; 
+    redundant_state_constraints(OtherConstraints)).
+
+subsumed_state_constraint(one_relation(PredicateNames), one_relation(OtherPredicateNames)) :-
+    subset(PredicateNames, OtherPredicateNames) ; subset(OtherPredicateNames, PredicateNames).
+
+subsumed_state_constraint(one_related(PredicateName), one_related(PredicateName)).
+
+binary_predicate_name(TypedPredicates, BinaryPredicateName) :-
+    member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), TypedPredicates).
+
+binary_predicate_names(TypedPredicates, BinaryPredicateNames) :-
+    bagof(BinaryPredicateName, TypedPredicates^binary_predicate_name(TypedPredicates, BinaryPredicateName), AllBinaryPredicateNames),
+    sublist(BinaryPredicateNames, AllBinaryPredicateNames),
+    length(BinaryPredicateNames, Length),
+    Length > 1.
+
+sublist([], []).
+sublist(Sub, [_| Rest]) :-
+    sublist(Sub, Rest).
+sublist([X | Others], [X | Rest]) :-
+    sublist(Others, Rest).
 
 pairs_rules([], []).
 pairs_rules([Head-BodyPredicates | OtherPairs], [Rule | OtherRules]) :-

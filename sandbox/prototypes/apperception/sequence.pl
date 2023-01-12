@@ -1,4 +1,4 @@
-:- module(sequence, [time_range/3, state/3, sequence/2, initial_conditions/2]).
+:- module(sequence, [time_range/3, state/3, sequence/2]).
 
 time_range(ObservationsModule, StartTime, EndTime) :-
     memberchk(ObservationKind, [sensed, enacted]),
@@ -22,10 +22,6 @@ sequence(ObservationsModule, Sequence) :-
             (between(StartTime, EndTime, Time), state(ObservationsModule, Time, State)), 
             Sequence).
 
-initial_conditions([], []).
-
-initial_conditions([State | _], State).
-
 % cd('sandbox/prototypes/apperception').
 % [leds_observations, sequence].
-% sequence(leds_observations, Sequence), initial_conditions(Sequence, InitialConditions).
+% sequence(leds_observations, Sequence).

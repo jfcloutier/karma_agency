@@ -1,5 +1,7 @@
 :- module(experience, [enacted_sensory_experience/3, episode/2]).
 
+% OBSOLETE
+
 :- use_module(library(lists)).
 
 % Return a complete, uninterrupted experience of what was enacted or sensed per round.

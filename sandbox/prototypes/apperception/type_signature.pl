@@ -2,10 +2,11 @@
 
 :- use_module(domains).
 
-min_type_signature(Sequence, type_signature(ObjectTypes, Objects, PredicateTypes)) :-
+min_type_signature(Sequence, TypeSignature) :-
     setof(object_type(ObjectType), Object^sequence_mentions_object(Sequence, object(ObjectType, Object)), ObjectTypes),
     setof(object(ObjectType, Object), ObjectType^sequence_mentions_object(Sequence, object(ObjectType, Object)), Objects),
-    setof(PredicateType, sequence_implies_predicate_types(Sequence,  PredicateType), PredicateTypes).
+    setof(PredicateType, sequence_implies_predicate_types(Sequence,  PredicateType), PredicateTypes),
+    TypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}.
 
 sequence_mentions_object([State | _], Mention) :-
     state_mentions_object(State, Mention).

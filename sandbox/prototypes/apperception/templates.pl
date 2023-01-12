@@ -30,8 +30,8 @@ theory_template(MinTypeSignature, SignatureExtensionLimits, Template) :-
     % generated
     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
     % implied
-    theory_complexity_bounds(ExtendedTypeSignature, TheoryComplexityBounds),
-    Template = template(ExtendedTypeSignature, TheoryComplexityBounds),
+    theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
+    Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
     increment_template_count().
 
 max_templates_reached() :-
@@ -182,15 +182,14 @@ max_index([Term | Others], Prefix, Position, Max, MaxIndex) :-
 max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
     max_index(Others, Prefix, Position, Max, MaxIndex).
 
-theory_complexity_bounds(type_signature(ObjectTypes, Objects, PredicateTypes), 
-                         theory_bounds(max_static_rules(MaxStatic), max_causal_rules(MaxCausal), max_atoms(MaxAtoms))) :-
+theory_complexity_bounds(type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}, Limits) :-
     length(ObjectTypes, ObjectTypesCount),
     length(Objects, ObjectsCount),
     length(PredicateTypes, PredicateTypesCount),
     Count is ObjectTypesCount + ObjectsCount + PredicateTypesCount,
-    MaxStatic is Count * 2,
-    MaxCausal is Count * 2,
-    MaxAtoms is Count * Count.
+    MaxRules is Count * 2,
+    MaxElements is Count * Count,
+    Limits = Limits.
 
 % cd('sandbox/prototypes/apperception').
 % [leds_observations, sequence, type_signature, domains, templates].
