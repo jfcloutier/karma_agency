@@ -1,34 +1,56 @@
-:-module(theory, [theory/3]).
+:-module(theory_engine, [create_theory_engine/2]).
 
 :- use_module(library(lists)).
 :- use_module(type_signature).
 :- use_module(domains).
 
-% Generates a valid theory given a template.
+% TODO - add initial_state to theory
+% TODO - Pass VisitedConstraints instead of UUID
+
+% An engine that generates valid theories on demand,
+% given a minimal type signature (from the sequence) and a template (which sets the scope of the search space).
 
 /*
 cd('sandbox/prototypes/apperception').
-[leds_observations, type_signature, domains, sequence, theory].
-MinPredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
-MinTypeSignature = type_signature{predicate_types:MinPredicateTypes, typed_variables:TypedVariables},
-PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]) ], 
+[type_signature, domains, theory_engine].
+
+PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
 TypedVariables = [variables(led, 2), variables(object1, 1)], 
 TypeSignature = type_signature{predicate_types:PredicateTypes, typed_variables:TypedVariables},
 Limits = limits{max_rules:3, max_elements:60},
 Template = template{type_signature:TypeSignature, limits:Limits},
-sequence(leds_observations, Sequence),
-theory(MinTypeSignature, Template, Theory).
+
+create_theory_engine(Template, TheoryEngine),
+engine_next(TheoryEngine, Theory1),
+engine_next(TheoryEngine, Theory2),
+engine_destroy(TheoryEngine).
 */
 
-% TODO: Use engines?
+% Create an engine that produces theories.
+create_theory_engine(Template, TheoryEngine) :-
+    % Use a UUID atom to store global state
+    uuid(UUID),
+    engine_create(Theory, theory(Template, UUID, Theory), TheoryEngine), !.
 
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
-theory(MinTypeSignature, Template, Theory) :-
-    static_constraints(MinTypeSignature, Template.type_signature, StaticConstraints),
+theory(Template, UUID, Theory) :-
+    static_constraints(Template.type_signature, UUID, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints}.
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, rating: 0}.
+
+% Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
+% A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
+%   one_relation([pred1, pred2, pred3]).
+% A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
+%   one_related(pred1). 
+static_constraints(TypeSignature, UUID, StaticConstraints) :-
+    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
+    nb_setval(UUID, []),
+    maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
+    maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
+    valid_static_constraints(StaticConstraints, TypeSignature, UUID).
 
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
@@ -53,32 +75,16 @@ causal_rules(Template, CausalRules) :-
     maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs),
     pairs_rules(RulePairs, CausalRules).
 
-% Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
-% A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
-%   one_relation([pred1, pred2, pred3]).
-% A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
-%   one_related(pred1). 
-static_constraints(MinTypeSignature, TypeSignature, StaticConstraints) :-
-    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    nb_setval(visited_static_constraints, []),
-    maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
-    maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
-    valid_static_constraints(StaticConstraints, MinTypeSignature).
-
-all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
-    PredicateTypes = TypeSignature.predicate_types,
-    findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
-
-% Meta-constraint: Each (binary) predicate in the sequence appears in some static constraint
+% Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
-valid_static_constraints(StaticConstraints, MinTypeSignature) :-
-    min_static_constraints_converage(StaticConstraints, MinTypeSignature),
-    not_repetitive_static_constraints(StaticConstraints).
+valid_static_constraints(StaticConstraints, TypeSignature, UUID) :-
+    conceptually_unified(StaticConstraints, TypeSignature),
+    not_repetitive_static_constraints(StaticConstraints, UUID).
 
-not_repetitive_static_constraints(StaticConstraints) :-
-    nb_getval(visited_static_constraints, Visited),
+not_repetitive_static_constraints(StaticConstraints, UUID) :-
+    nb_getval(UUID, Visited),
     \+ repeats_visited_static_constraints(StaticConstraints, Visited),
-    nb_setval(visited_static_constraints, [StaticConstraints | Visited]).
+    nb_setval(UUID, [StaticConstraints | Visited]).
 
 repeats_visited_static_constraints(StaticConstraints, Visited) :-
     member(VisitedStaticConstraints, Visited),
@@ -86,8 +92,8 @@ repeats_visited_static_constraints(StaticConstraints, Visited) :-
     length(VisitedStaticConstraints, L),
     subset(StaticConstraints, VisitedStaticConstraints).
 
-min_static_constraints_converage(StaticConstraints, MinTypeSignature) :-
-    all_binary_predicate_names(MinTypeSignature, AllBinaryPredicateNames),
+conceptually_unified(StaticConstraints, TypeSignature) :-
+    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
     \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
 
 static_constraints_cover(StaticConstraints, PredicateName) :-
@@ -130,6 +136,10 @@ subsumed_static_constraint(one_relation(PredicateNames), one_relation(OtherPredi
     subset(PredicateNames, OtherPredicateNames) ; subset(OtherPredicateNames, PredicateNames).
 
 subsumed_static_constraint(one_related(PredicateName), one_related(PredicateName)).
+
+all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
+    PredicateTypes = TypeSignature.predicate_types,
+    findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
 
 binary_predicate_name(PredicateTypes, BinaryPredicateName) :-
     member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), PredicateTypes).
@@ -188,7 +198,7 @@ valid_static_rules(RulePairs, Limits, StaticConstraints) :-
 
 valid_causal_rules(RulePairs, Limits) :-
     \+ rules_exceed_limits(RulePairs, Limits),
-    % No idempotent rule (rules where the head is found in the body)
+    % No idempotent rules (rules where the head is found in the body)
     \+ idempotent_causal_rules(RulePairs),
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     % No repeated rules
