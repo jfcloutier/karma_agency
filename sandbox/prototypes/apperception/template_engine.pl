@@ -14,7 +14,7 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[leds_observations, sequence, type_signature, domains, template_engine].
+[leds_observations, sequence, type_signature, domains, global, template_engine].
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -26,39 +26,46 @@ engine_destroy(TheoryTemplateEngine).
 
 :- module(template_engine, [create_theory_template_engine/3]).
 
+:- use_module(global).
 :- use_module(library(chr)).
 :- use_module(domains).
 
 create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine) :-
-    uuid(UUID),
-    engine_create(Template, theory_template(MinTypeSignature, MaxSignatureExtension, UUID, Template), TheoryTemplateEngine).
+    init_template_counter(),
+    engine_create(Template, theory_template(MinTypeSignature, MaxSignatureExtension, Template), TheoryTemplateEngine).
 
-theory_template(MinTypeSignature, MaxSignatureExtension, UUID, Template) :-
+% Add a value to the global variable to keep count of templates produced vs maximum allowed
+init_template_counter() :-
+    set_global(apperception, template_engine/max_templates, 0),
+    set_global(apperception, template_engine/template_count, 0).
+
+theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
     % generated
     signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
-    reset_max_templates(UUID, MinTypeSignature, SignatureExtensionTuple),
+    reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
     % generated
-    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, UUID, ExtendedTypeSignature),
+    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
     Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
-    increment_template_count(UUID).
+    increment_template_count().
 
-reset_max_templates(UUID, MinTypeSignature, SignatureExtensionTuple) :-
+reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
-    nb_setval(UUID, global{max_templates:Max, template_count:0}),
+    set_global(apperception, template_engine/max_templates, Max),
+    set_global(apperception, template_engine/template_count, 0),
     format('MAX ~p TEMPLATES ALLOWED~n', [Max]).
 
-max_templates_reached(UUID) :-
-    nb_getval(UUID, Global),
-    Global.template_count == Global.max_templates,
-    format('MAX ~p TEMPLATES EXCEEDED!~n', [Global.max_templates]).
+max_template_count_reached() :-
+    get_global(apperception, template_engine/max_templates, Max),
+    get_global(apperception, template_engine/template_count, Max),
+    format('MAX ~p TEMPLATES EXCEEDED!~n', [Max]).
 
-increment_template_count(UUID) :-
-    nb_getval(UUID, Global),
-    Inc is Global.template_count + 1,
-    nb_setval(UUID, global{template_count:Inc, max_templates:Global.max_templates}),
+increment_template_count() :-
+    get_global(apperception, template_engine/template_count, Count),
+    Inc is Count + 1,
+    set_global(apperception, template_engine/template_count, Inc),
     format('COUNT IS NOW ~p~n', [Inc]).
 
 allow_max_templates(TypeSignature,
@@ -101,38 +108,37 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
     RandomOrder is Random * Frugality.
 
 extended_type_signature(TypeSignature,
-                        tuple(NumObjectTypes, NumObjects, NumPredicateTypes), 
-                        UUID,
+                        tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
                         ExtendedTypeSignature) :-
-    extended_object_types(TypeSignature.object_types, NumObjectTypes, UUID, ExtendedObjectTypes),
-    extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, UUID, ExtendedObjects),
-    extended_predicate_types(TypeSignature.predicate_types, ExtendedObjectTypes, NumPredicateTypes, UUID, ExtendedPredicateTypes),
+    extended_object_types(TypeSignature.object_types, NumObjectTypes, ExtendedObjectTypes),
+    extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, ExtendedObjects),
+    extended_predicate_types(TypeSignature.predicate_types, ExtendedObjectTypes, NumPredicateTypes, ExtendedPredicateTypes),
     ExtendedTypeSignature = type_signature{object_types:ExtendedObjectTypes, objects:ExtendedObjects, predicate_types:ExtendedPredicateTypes}.
 
-extended_object_types(ObjectTypes, N, UUID, ExtendedObjectTypes) :-
-    max_templates_reached(UUID) -> fail ; extended_object_types_(ObjectTypes, N, UUID, ExtendedObjectTypes).
+extended_object_types(ObjectTypes, N, ExtendedObjectTypes) :-
+    max_template_count_reached() -> fail ; extended_object_types_(ObjectTypes, N, ExtendedObjectTypes).
 
-extended_object_types_(ObjectTypes, 0, _, ObjectTypes).
-extended_object_types_(ObjectTypes, N, UUID, ExtendedObjectTypes) :-
+extended_object_types_(ObjectTypes, 0, ObjectTypes).
+extended_object_types_(ObjectTypes, N, ExtendedObjectTypes) :-
     N > 0,
     new_object_type(ObjectTypes, NewObjectType),
     N1 is N - 1,
-    extended_object_types([NewObjectType | ObjectTypes], N1, UUID, ExtendedObjectTypes).
+    extended_object_types([NewObjectType | ObjectTypes], N1, ExtendedObjectTypes).
 
 new_object_type(ObjectTypes, object_type(NewTypeName)) :-
     max_index(ObjectTypes, type_, 1, 0, Index),
     Index1 is Index + 1,
     atom_concat(type_, Index1, NewTypeName).
 
-extended_objects(Objects, ObjectTypes, N, UUID, ExtendedObjects) :-
-    max_templates_reached(UUID) -> fail ; extended_objects_(Objects, ObjectTypes, N, UUID, ExtendedObjects).
+extended_objects(Objects, ObjectTypes, N, ExtendedObjects) :-
+    max_template_count_reached() -> fail ; extended_objects_(Objects, ObjectTypes, N, ExtendedObjects).
 
-extended_objects_(Objects, _, 0, _, Objects).
-extended_objects_(Objects, ObjectTypes, N, UUID, ExtendedObjects) :-
+extended_objects_(Objects, _, 0, Objects).
+extended_objects_(Objects, ObjectTypes, N, ExtendedObjects) :-
     N > 0,
     new_object(Objects, ObjectTypes, NewObject),
     N1 is N - 1,
-    extended_objects([NewObject | Objects], ObjectTypes, N1, UUID, ExtendedObjects).
+    extended_objects([NewObject | Objects], ObjectTypes, N1, ExtendedObjects).
 
 new_object(Objects, ObjectTypes, object(ObjectType, ObjectName)) :-
     member(object_type(ObjectType), ObjectTypes),
@@ -140,15 +146,15 @@ new_object(Objects, ObjectTypes, object(ObjectType, ObjectName)) :-
     Index1 is Index + 1,
     atom_concat(object_, Index1, ObjectName).
 
-extended_predicate_types(PredicateTypes, ObjectTypes, N, UUID, ExtendedPredicateTypes) :-
-    max_templates_reached(UUID) -> fail ; extended_predicate_types_(PredicateTypes, ObjectTypes, N, UUID, ExtendedPredicateTypes).
+extended_predicate_types(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
+    max_template_count_reached() -> fail ; extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes).
 
-extended_predicate_types_(PredicateTypes, _, 0, _, PredicateTypes).
-extended_predicate_types_(PredicateTypes, ObjectTypes, N, UUID, ExtendedPredicateTypes) :-
+extended_predicate_types_(PredicateTypes, _, 0, PredicateTypes).
+extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
     N > 0,
     new_predicate_type(PredicateTypes, ObjectTypes, NewPredicateType),
     N1 is N - 1,
-    extended_predicate_types([NewPredicateType | PredicateTypes], ObjectTypes, N1, UUID, ExtendedPredicateTypes).
+    extended_predicate_types([NewPredicateType | PredicateTypes], ObjectTypes, N1, ExtendedPredicateTypes).
 
 new_predicate_type(PredicateTypes, ObjectTypes, predicate(PredicateName, ArgumentTypes)) :-
     make_argument_types(ObjectTypes, ArgumentTypes),

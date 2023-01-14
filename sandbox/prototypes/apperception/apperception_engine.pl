@@ -1,12 +1,13 @@
 :- module(apperception_engine, [apperceive/3]).
 
+:- use_module(global).
 :- use_module(template_engine).
 :- use_module(theory_engine).
 
 %% An apperception engine.
 
-%% Given a sequence of observations, it searches for the best theory explaining the sequence
-%% it can find in a set amount of time.
+%% Given a sequence of observations, it searches for theories (a logic program) best explaining the sequence.
+%% The search completes after a preset amount of time or when a great theory is found.
 
 %% The apperception engine searches by iterating through theory templates of roughly increasing complexity,
 %% each template specifying a region of the search space of theories.
@@ -29,7 +30,9 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     min_type_signature(Sequence, MinTypeSignature),
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TheoryTemplateEngine),
     find_best_theories(TheoryTemplateEngine, ApperceptionLimits, Search, Theories), !,
-    engine_destroy(TheoryTemplateEngine).
+    engine_destroy(TheoryTemplateEngine),
+    % Remove all global state produced during apperception
+    delete_global(apperception).
 
 % Iterate over templates, exploring a maximum of theories for each, validating theories found and keeping the best of the valid theories.
 find_best_theories(TheoryTemplateEngine, ApperceptionLimits, Search, Theories) :-

@@ -5,14 +5,13 @@
 :- use_module(domains).
 
 % TODO - add initial_state to theory
-% TODO - Pass VisitedConstraints instead of UUID
 
 % An engine that generates valid theories on demand,
 % given a minimal type signature (from the sequence) and a template (which sets the scope of the search space).
 
 /*
 cd('sandbox/prototypes/apperception').
-[type_signature, domains, theory_engine].
+[type_signature, domains, global, theory_engine].
 
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
 TypedVariables = [variables(led, 2), variables(object1, 1)], 
@@ -28,29 +27,32 @@ engine_destroy(TheoryEngine).
 
 % Create an engine that produces theories.
 create_theory_engine(Template, TheoryEngine) :-
-    % Use a UUID atom to store global state
-    uuid(UUID),
-    engine_create(Theory, theory(Template, UUID, Theory), TheoryEngine), !.
+    engine_create(Theory, theory(Template, Theory), TheoryEngine), !.
 
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
-theory(Template, UUID, Theory) :-
-    static_constraints(Template.type_signature, UUID, StaticConstraints),
+theory(Template, Theory) :-
+    init_visited_constraints(),
+    static_constraints(Template.type_signature, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
     Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, rating: 0}.
+
+% Initialize set of visited constraints to empty
+init_visited_constraints() :-
+    set_global(apperception, theory_engine/visited_constraints, []).
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
 % A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
 %   one_relation([pred1, pred2, pred3]).
 % A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
 %   one_related(pred1). 
-static_constraints(TypeSignature, UUID, StaticConstraints) :-
+static_constraints(TypeSignature, StaticConstraints) :-
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    nb_setval(UUID, []),
+    init_visited_constraints(),
     maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
     maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
-    valid_static_constraints(StaticConstraints, TypeSignature, UUID).
+    valid_static_constraints(StaticConstraints, TypeSignature).
 
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
@@ -77,14 +79,14 @@ causal_rules(Template, CausalRules) :-
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
-valid_static_constraints(StaticConstraints, TypeSignature, UUID) :-
+valid_static_constraints(StaticConstraints, TypeSignature) :-
     conceptually_unified(StaticConstraints, TypeSignature),
-    not_repetitive_static_constraints(StaticConstraints, UUID).
+    not_repetitive_static_constraints(StaticConstraints).
 
-not_repetitive_static_constraints(StaticConstraints, UUID) :-
-    nb_getval(UUID, Visited),
+not_repetitive_static_constraints(StaticConstraints) :-
+    get_global(apperception, theory_engine/visited_constraints, Visited),
     \+ repeats_visited_static_constraints(StaticConstraints, Visited),
-    nb_setval(UUID, [StaticConstraints | Visited]).
+    set_global(apperception, theory_engine/visited_constraints, [StaticConstraints | Visited]).
 
 repeats_visited_static_constraints(StaticConstraints, Visited) :-
     member(VisitedStaticConstraints, Visited),
