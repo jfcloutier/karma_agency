@@ -113,7 +113,8 @@ extended_type_signature(TypeSignature,
     extended_object_types(TypeSignature.object_types, NumObjectTypes, ExtendedObjectTypes),
     extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, ExtendedObjects),
     extended_predicate_types(TypeSignature.predicate_types, ExtendedObjectTypes, NumPredicateTypes, ExtendedPredicateTypes),
-    ExtendedTypeSignature = type_signature{object_types:ExtendedObjectTypes, objects:ExtendedObjects, predicate_types:ExtendedPredicateTypes}.
+    typed_variables(ExtendedObjects, ExtendedObjectTypes, TypedVariables),
+    ExtendedTypeSignature = type_signature{object_types:ExtendedObjectTypes, objects:ExtendedObjects, predicate_types:ExtendedPredicateTypes, typed_variables:TypedVariables}.
 
 extended_object_types(ObjectTypes, N, ExtendedObjectTypes) :-
     max_template_count_reached() -> fail ; extended_object_types_(ObjectTypes, N, ExtendedObjectTypes).
@@ -162,6 +163,16 @@ new_predicate_type(PredicateTypes, ObjectTypes, predicate(PredicateName, Argumen
     Index1 is Index + 1,
     atom_concat(pred_, Index1, PredicateName).
 
+% [variables(led, 2), variables(object1, 1)]
+typed_variables(Objects, ObjectTypes, TypedVariables) :-
+    typed_variables_(Objects, ObjectTypes, [], TypedVariables).
+
+typed_variables_(_, [], TypedVariables, TypedVariables).
+typed_variables_(Objects, [object_type(ObjectType) | OtherObjectTypes], Acc, TypedVariables) :-
+    findall(ObjectName, member(object(ObjectType, ObjectName), Objects), ObjectNames),
+    length(ObjectNames, Count),
+    typed_variables_(Objects, OtherObjectTypes, [variables(ObjectType, Count) | Acc], TypedVariables).
+
 % [predicate(distance_from, [object_type(wall), value_type(proximity)]), 
 %  predicate(on, [object_type(led), value_type(boolean)])]
 make_argument_types(ObjectTypes, [ArgumentType1, ArgumentType2]) :-
@@ -191,10 +202,10 @@ max_index([Term | Others], Prefix, Position, Max, MaxIndex) :-
 max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
     max_index(Others, Prefix, Position, Max, MaxIndex).
 
-theory_complexity_bounds(type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}, Limits) :-
-    length(ObjectTypes, ObjectTypesCount),
-    length(Objects, ObjectsCount),
-    length(PredicateTypes, PredicateTypesCount),
+theory_complexity_bounds(TypeSignature, Limits) :-
+    length(TypeSignature.object_types, ObjectTypesCount),
+    length(TypeSignature.objects, ObjectsCount),
+    length(TypeSignature.predicate_types, PredicateTypesCount),
     Count is ObjectTypesCount + ObjectsCount + PredicateTypesCount,
     MaxRules is Count * 2,
     MaxElements is Count * Count,
