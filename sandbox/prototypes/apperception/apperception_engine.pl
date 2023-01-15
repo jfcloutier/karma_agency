@@ -31,7 +31,7 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TheoryTemplateEngine),
     find_best_theories(TheoryTemplateEngine, ApperceptionLimits, Search, Theories), !,
     engine_destroy(TheoryTemplateEngine),
-    % Remove all global state produced during apperception
+    % Remove all remaining global state produced during apperception
     delete_global(apperception).
 
 % Iterate over templates, exploring a maximum of theories for each, validating theories found and keeping the best of the valid theories.
@@ -43,8 +43,8 @@ find_best_theories(TheoryTemplateEngine, ApperceptionLimits, Search, Theories) :
 
 find_best_theories(TheoryTemplateEngine, ApperceptionLimits, Search, Theories) :-   
     find_theory(TheoryTemplateEngine, ApperceptionLimits, Search, Theory, UpdatedSearch),
-    make_trace(Theory, Trace),
-    (theory_unified(Theory, Trace) -> 
+    make_finite_trace(Theory, Trace),
+    (spatially_unified(Trace) -> 
         rate_theory(Sequence, Theory, Trace, Rating),
         maybe_keep_theory(Theory, Rating, ApperceptionLimits, UpdatedSearch, CurrentSearch)
         ; CurrentSearch = UpdatedSearch),
@@ -78,7 +78,7 @@ maybe_change_template(TheoryTemplateEngine, MaxTheories, Search, UpdatedSearch) 
 max_theories_reached(MaxTheories, Search) :-
     Search.theories_count >= MaxTheories.
 
- next_theory_template(TheoryTemplateEngine, Search, UpdatedSearch) :-
+next_theory_template(TheoryTemplateEngine, Search, UpdatedSearch) :-
     engine_destroy(Search.theory_engine),
     engine_next(TheoryTemplateEngine, Template),
     create_theory_engine(Template, TheoryEngine),
@@ -90,10 +90,11 @@ next_theory(Search, Theory, UpdatedSearch) :-
     put_dict(theories_count, Search, Inc, UpdatedSearch).
     
 % TODO
-make_trace(Theory, Trace).
+make_finite_trace(Theory, Trace).
 
 % TODO
-theory_unified(Theory, Trace).
+% Every object in a state is related to every other object, directly or transitively
+spatially_unified(Trace).
 
 % TODO  
 rate_theory(Sequence, Theory, Trace, Rating).

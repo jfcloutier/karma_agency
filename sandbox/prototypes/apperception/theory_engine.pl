@@ -32,14 +32,15 @@ create_theory_engine(Template, TheoryEngine) :-
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
 theory(Template, Theory) :-
-    init_visited_constraints(),
+    reset_visited_constraints(),
     static_constraints(Template.type_signature, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, rating: 0}.
+    initial_conditions(Template.type_signature, StaticConstraints, InitialConditions),
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0}.
 
-% Initialize set of visited constraints to empty
-init_visited_constraints() :-
+% Reset visited constraints to empty
+reset_visited_constraints() :-
     set_global(apperception, theory_engine/visited_constraints, []).
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
@@ -49,7 +50,7 @@ init_visited_constraints() :-
 %   one_related(pred1). 
 static_constraints(TypeSignature, StaticConstraints) :-
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    init_visited_constraints(),
+    reset_visited_constraints(),
     maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
     maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
     valid_static_constraints(StaticConstraints, TypeSignature).
@@ -286,6 +287,144 @@ recursion_in_rules(RulePairs) :-
 idempotent_causal_rules(RulePairs) :-
     member(Head-BodyPredicates, RulePairs),
     memberchk_equal(Head, BodyPredicates), !.
+
+%% CONSTRUCTING VALID INITIAL CONDITIONS
+
+initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
+    make_initial_condition(TypeSignature, InitialCondition),
+    maybe_add_initial_condition(TypeSignature, [InitialCondition], InitialConditions),
+    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints).
+
+make_initial_condition(TypeSignature, Property) :-
+    make_property(TypeSignature, Property).
+
+make_initial_condition(TypeSignature, Relation) :-
+    make_relation(TypeSignature, Relation).
+
+make_property(TypeSignature, Property) :-
+    member(object(ObjectType, ObjectName), TypeSignature.objects),
+    member(predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]), TypeSignature.typed_predicates),
+    domain_is(Domain, Values),
+    member(Value, Values),
+    Property =.. [PredicateName, ObjectName, Value].
+
+make_relation(TypeSignature, Relation) :-
+    select(object(ObjectType1, ObjectName1), TypeSignature.objects, RemainingObjects),
+    member(object(ObjectType2, ObjectName2), RemainingObjects),
+    member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), TypeSignature.typed_predicates),
+    Relation =.. [PredicateName, ObjectName1, ObjectName2].
+
+maybe_add_initial_condition(_, InitialConditions, InitialConditions).
+maybe_add_initial_condition(TypeSignature, Acc, InitialConditions) :-
+    make_initial_condition(TypeSignature, InitialCondition),
+    % No repetition.
+    \+ redundant_initial_conditions([InitialCondition | Acc]),
+    maybe_add_initial_condition(TypeSignature, [InitialCondition | Acc], InitialConditions).
+
+% Two conditions where one is redundant or one contradicts the another.
+redundant_initial_conditions([InitialCondition | Others]) :-
+    (member(OtherInitialCondition, Others),
+     conditions_repeat(InitialCondition, OtherInitialCondition) 
+     )-> 
+        true 
+        ; 
+        redundant_initial_conditions(Others).
+
+% Repeated property on the same object irrespective of domain value,
+% Or repeated relation between identical pair of objects. 
+conditions_repeat(Condition, OtherCondition) :-
+    Condition =.. [PredName, ObjectName, Arg],
+    OtherCondition  =.. [PredName, ObjectName, OtherArg],
+    (Arg == OtherArg; is_domain_value(Arg), is_domain_value(OtherArg)).
+
+% All objects are represented.
+% All objects are inter-related.
+% No static constraint is broken.
+valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
+  \+ missing_object(InitialConditions, TypeSignature.objects),
+  \+ unrelated_objects(TypeSignature, InitialConditions),
+  \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature).
+
+% One object in the type signature does not appear in a condition
+missing_object(InitialConditions, Objects) :-
+    member(object(_, ObjectName), Objects),
+    \+ object_referenced(ObjectName, InitialConditions).
+
+% An object is referenced by name somewhere in the initial conditions
+object_referenced(ObjectName, InitialConditions) :-
+    member(InitialCondition, InitialConditions),
+    InitialCondition =.. [_ | ObjectNames],
+    member(ObjectName, ObjectNames).
+
+% Some pair of objects from the type signature aren ot related, directly or indirectly, in the  initial conditions.
+unrelated_objects(TypeSignature, InitialConditions) :-
+    object_name_pair(TypeSignature.objects, ObjectName1-Objectname2),
+    \+ related(ObjectName1, ObjectName2, TypeSignature, InitialConditions).
+
+% Some pair of objects from the type signature
+object_name_pair(TypeSignatureObjects, ObjectName1-Objectname2) :-
+    select(object(_, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
+    member(object(_, ObjectName2), RemainingSignatureObjects).
+
+% Two objects are directly related in one initial condition
+related(ObjectName1, ObjectName2, InitialConditions) :-
+    member(InitialCondition, InitialConditions),
+    InitialCondition =.. [_ | ObjectNames],
+    memberchk(ObjectName1, ObjectNames),
+    memberchk(ObjectName2, ObjectNames).
+
+% Two objects are indirectly related in the initial conditions
+related(ObjectName1, ObjectName2, TypeSignature, InitialConditions) :-
+    select(InitialCondition, InitialConditions, OtherInitialConditions),
+    InitialCondition =.. [PredicateName | ObjectNames],
+    % It's a relation between two objects
+    member(predicate(PredicateName, [object_type(_), object_type(_)]), TypeSignature.predicate_types),
+    select(ObjectName1, ObjectNames, [OtherObjectName]),
+    related(OtherObjectName, ObjectName2, OtherInitialConditions).
+
+% Only one constraint need to be broken
+breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature) :-
+    member(StaticConstraint, StaticConstraints),
+    broken_static_constraint(StaticConstraint, InitialConditions, TypeSignature).
+
+% There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there.
+broken_static_constraint(one_relation(PredicateNames), InitialConditions, TypeSignature) :-
+   % There is a pair of objects in the initial conditions
+   select(object(ObjectType1, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
+   member(object(ObjectType2, ObjectName2), RemainingSignatureObjects),
+   % for which at least one of the "exactly one" relations apply (the others willl apply as well or else they wouldn't be in the smae constraint)
+   member(PredicateName, PredicateNames),
+   member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), TypeSignature.typed_predicates),
+   % And none are found for the pair of objects in the initial conditions
+   \+ (member(PName, PredicateNames),
+     member(InitialCondition, InitialConditions),
+     InitialCondition =.. [PName, ObjectName1, ObjectName2]
+    ).
+
+% More than one condition on the same objects from the set of mutually exclusive predicates
+broken_static_constraint(one_relation(PredicateNames), InitialConditions, TypeSignature) :-
+    select(InitialCondition, InitialConditions, OtherInitialConditions),
+    InitialCondition =.. [PredicateName, ObjectName1, ObjectName2],
+    member(predicate(PredicateName, [object_type(_), object_type(_)]), TypeSignature.typed_predicates),
+    select(PredicateName, PredicateNames, OtherPredicateNames),
+    member(OtherInitialCondition, OtherInitialConditions),
+    OtherInitialCondition =.. [OtherPredicateName, ObjectName1, ObjectName2],
+    memberchk(OtherPredicateName, OtherPredicateNames).
+
+% If there is an object to which the one-related predicate applies, there must be one such condition and only one.
+broken_static_constraint(one_related(PredicateName), InitialConditions, TypeSignature) :-
+    member(object(ObjectName, ObjectType), TypeSignature.objects),
+    member(predicate(PredicateName, [object_type(OjectType), _]), TypeSignature.typed_predicates),
+    ((select(InitialCondition, InitialConditions, OtherInitialConditions),
+     InitialCondition =.. [PredicateName, ObjectName, _]) ->
+        \+ (
+            member(OtherInitialCondition, OtherInitialConditions),
+            OtherInitialCondition =.. [PredicateName, ObjectName, _]
+        )
+     ;
+     fail.
+     )
+%%
 
 equivalent_predicates(Predicate, OtherPredicate) :- 
     Predicate =.. [PredicateName | Args],
