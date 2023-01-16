@@ -65,20 +65,18 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * No rule contradicts another
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
-static_rules(Template, StaticConstraints, StaticRules) :-
+static_rules(Template, StaticConstraints, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs),
-    pairs_rules(RulePairs, StaticRules).
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
-causal_rules(Template, CausalRules) :-
+causal_rules(Template, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates], Template.limits),
-    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs),
-    pairs_rules(RulePairs, CausalRules).
+    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs)
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -156,14 +154,6 @@ sublist(Sub, [_| Rest]) :-
 sublist([X | Others], [X | Rest]) :-
     sublist(Others, Rest).
 
-pairs_rules([], []).
-pairs_rules([Head-BodyPredicates | OtherPairs], [Rule | OtherRules]) :-
-    pair_rule(Head-BodyPredicates, Rule),
-    pairs_rules(OtherPairs, OtherRules).
-
-pair_rule(Head-BodyPredicates, Rule) :-
-    and(BodyPredicates, Body),
-    Rule =.. [:-, Head, Body].
 
 % Make a rule made from predicates, objects and variables
 % TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
@@ -448,40 +438,63 @@ broken_static_constraint(one_related(PredicateName), InitialConditions, TypeSign
 % i.e. we can compute the closure of the initial conditions under the static rules
 % without causing a contradiction or breaking a static constraint.
 static_unity(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
+    get_global(apperception, uuid, Module),
     setup_call_cleanup(
-            (clear_rules(), assert_rules(StaticRules)), 
-            static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature),
-            clear_rules(StaticRules)
+            setup_module_rules(Module, StaticRules), 
+            static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module),
+            cleanup_module(Module, StaticRules, TypeSignature.predicate_types)
     ).
 
-static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
-     reassert_conditions(Conditions),
-     apply_static_rules(StaticRules, AugmentedConditions),
+setup_module_rules(Module, StaticRules) :-
+    clear_rules(Module, StaticRules), 
+    assert_rules(Module, StaticRules).
+
+cleanup_module(Module, StaticRules, PredicateTypes) :-
+    clear_rules(Module, StaticRules),
+    clear_facts(Module, PredicateTypes).
+
+static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module) :-
+     clear_facts(Module, TypeSignature.predicate_types),
+     assert_facts(Module, Conditions),
+     apply_static_rules(Module, StaticRules, Answers),
+     merge_consistent(Conditions, Answers, AugmentedConditions),
+     !,
+     \+ contradicting_conditions(AugmentedConditions),
     (  (length(Conditions, L),
         length(AugmentedConditions, L)
        ) ->
         \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature)
         ;
-        static_unity_(AugmentedConditions, StaticRules, StaticConstraints, TypeSignature)
+        static_unity_(AugmentedConditions, StaticRules, StaticConstraints, TypeSignature, Module)
     ).
 
-% TODO
-% Assert the rules in it.
-% See dynamic/1, assertz/1
-assert_rules(StaticRules).
+apply_static_rules(Module, StaticRules, Results) :-
+    apply_static_rules_(Module, StaticRules, [], Results).
 
-% TODO
-% Clear all rules from the dynamic module
-clear_rules().
+apply_static_rules_(Module, [], Results, Results).
+apply_static_rules_(Module, [Head-_ | OtherStaticRules], Acc, Results) :-
+    answer_query(Module, Head, Answers),
+    append(Answers, Acc, Acc1),
+    apply_static_rules_(Module, OtherStaticRules, Acc1, Results).
 
-% TODO
-%Replace any previously asserted conditions with these ones.
-reassert_conditions(Conditions).
+% Merge removing duplicates. Fail if attempting to merge contradictory conditions.
+merge_consistent(Conditions, Answers, AugmentedConditions) :-
+    merge_consistent_(Conditions, Answers, [], AugmentedConditions).
+    
+merge_consistent(Conditions, [], Conditions).
+merge_consistent(Conditions, [Answer | OtherAnswers], MergedConditions) :-
+    \+ (member(Condition, Conditions), factual_contradiction(Condition, Answer)),
+    (memberchk(Answer, Conditions) ->
+        merge_consistent(Conditions, OtherAnswers, MergedConditions)
+        ;
+        merge_consistent([Answer | Conditions], OtherAnswers, MergedConditions)
+    ).
 
-% TODO
-% For each rule head, do a bagof in that module and augment the conditions without repetitions.
-% Succeed if there is no contradiction produced
-apply_static_rules(StaticRules,  AugmentedConditions).
+factual_contradiction(Condition, Answer) :-
+    Condition =.. [PredicateName, ObjectName, Arg],
+    Answer =.. [PredicateName, ObjectName, Arg1],
+    Arg \== Arg1,
+    is_domain_value(_, Arg), !.
     
 %% Utilities
 
@@ -726,9 +739,3 @@ indirectly_related_vars(Var1, Var2, VarArgs, Predicates) :-
     member(OtherVar, VarArgs),
     OtherVar \== Var1,
     vars_related(OtherVar, Var2, Predicates), !.
-
-and([], []) :- true.
-and([Goal], Goal) :- !.
-and([Goal | Rest], Anded) :-
-    and(Rest, Others),
-    Anded =..  [(','), Goal, Others].
