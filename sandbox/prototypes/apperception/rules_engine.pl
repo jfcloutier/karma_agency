@@ -1,31 +1,33 @@
-:- module(rules_engine, [clear_rules/2, clear_facts/2, assert_rules/2, assert_facts/2, save_modules/1, answer_query/3]).
+:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, answer_query/3]).
 
 % Dynamic module from where rules and facts are added/removed,
 % and new facts are inferred by running the rules.
 
 /*
 [rules_engine].
-RulePairs = [head(X, Y)-[body(X),body(Y)]],
+RulePairs = [next_to(X, Y)-[on(X, true),on(Y, false)], on(X, true)-[light(X, red)]],
 uuid(Module),
-clear_rules(Module, RulePairs),
-% assert_rules(Module, RulePairs),
+PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), 
+		  predicate(light, [object_type(led), value_type(color)]), 
+		  predicate(next_to, [object_type(led), object_type(led)])
+		  ],
+Facts = [on(b, false), light(a, red), light(b, green)],
+clear(Module, PredicateTypes),
+assert_rules(Module, RulePairs),
+assert_facts(Module, Facts),
+answer_query(Module, next_to(X, Y), Answers),
 save_module(Module).
+
 */
 
-% Clear all rules from the dynamic module
-clear_rules(Module, RulePairs) :-
-    forall(member(Head-_, RulePairs), retract_rules(Module, Head)).
-
-retract_rules(Module, RuleHead) :-
-    copy_term_nat(RuleHead, CopiedHead),
-    ClauseHead =.. [:, Module, CopiedHead],
-    retractall(ClauseHead).
+% Clear all rules and facts from the dynamic module
+% TODO - Find a way to remove a dynamic module entirely
+clear(Module, PredicateTypes) :-
+    forall(member(PredicateType, PredicateTypes), retract_predicates(Module, PredicateType)).
 
 % Assert the rules in it.
 assert_rules(Module, RulePairs) :-
-    forall(member(Head-Body, RulePairs), assert_rule(Module, Head-Body)),
-    module_db(Module, DBModule),
-    add_import_module(Module, DBModule, start).
+    forall(member(Head-Body, RulePairs), assert_rule(Module, Head-Body)).
 
 assert_rule(Module, Head-Body) :-
     make_dynamic(Module, Head),
@@ -43,48 +45,31 @@ descriptor(Module, Term, Descriptor) :-
     LocalDescriptor =.. [/, PredicateName, L],
     Descriptor =.. [:, Module, LocalDescriptor].
 
-clear_facts(Module, PredicateTypes) :-
-    module_db(Module, ModuleDB),
-    forall(member(PredicateType, PredicateTypes), retract_facts(ModuleDB, PredicateType)).
-
-module_db(Module, DBModule) :-
-    atom_concat(Module, '_DB', DBModule).
-
-retract_facts(ModuleDB, predicate(PredicateName, Args)) :-
+retract_predicates(Module, predicate(PredicateName, Args)) :-
     length(Args, L),
     length(Vars, L),
     Term =.. [PredicateName | Vars],
-    DBModuleTerm =.. [:, ModuleDB, Term],
-    retractall(DBModuleTerm).
+    ModuleTerm =.. [:, Module, Term],
+    retractall(ModuleTerm).
     
 % Assert facts into the module
 assert_facts(Module, Facts) :-
     forall(member(Fact, Facts), assert_fact(Module, Fact)).
 
 assert_fact(Module, Fact) :-
-    module_db(Module, DBModule),
-    make_dynamic(DBModule, Fact),
-    DBModuleFact =.. [:, DBModule, Fact],
-    assertz(DBModuleFact).
+    make_dynamic(Module, Fact),
+    ModuleFact =.. [:, Module, Fact],
+    asserta(ModuleFact).
 
 answer_query(Module, Query, Answers) :-
     ModuleQuery =.. [:, Module, Query],
     findall(Query, ModuleQuery, Answers).
-
-save_modules(Module) :-
-    module_db(Module, DBModule),
-    save_module(Module),
-    save_module(DBModule).
 
 save_module(Atom) :-
     atom_string(Atom, Name),
     concat(Name, '.pl', File),
     tell(File),
     format(":- module(~p, []).~n", [Atom]),
-    ((import_module(Atom, Imported), Imported \== user) ->
-        format("~n:- add_import_module(~p, ~p, end)~n", [Atom, Imported])
-        ; true
-    ),
     listing(Atom:_),
     told, !.
 

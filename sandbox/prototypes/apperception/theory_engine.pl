@@ -4,14 +4,14 @@
 :- use_module(type_signature).
 :- use_module(domains).
 :- use_module(global).
+:- use_module(rules_engine).
 
 % An engine that generates valid theories on demand,
 % given a minimal type signature (from the sequence) and a template (which sets the scope of the search space).
 
 /*
 cd('sandbox/prototypes/apperception').
-[type_signature, domains, global, theory_engine].
-
+[type_signature, domains, global, theory_engine, rules_engine].
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
 TypedVariables = [variables(led, 2)], 
@@ -33,6 +33,8 @@ create_theory_engine(Template, TheoryEngine) :-
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
 theory(Template, Theory) :-
+    uuid(UUID),
+    set_global(apperception, uuid, UUID),
     reset_visited_constraints(),
     static_constraints(Template.type_signature, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
@@ -67,6 +69,7 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticConstraints, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
+    valid_static_rule(Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
@@ -76,7 +79,7 @@ static_rules(Template, StaticConstraints, RulePairs) :-
 causal_rules(Template, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates], Template.limits),
-    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs)
+    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -177,7 +180,15 @@ maybe_add_causal_rule(Template, Acc, RulePairs) :-
     valid_causal_rules([Head-BodyPredicates | Acc], Template.limits),!,
     maybe_add_causal_rule(Template, [Head-BodyPredicates | Acc], RulePairs).
 
-   
+valid_static_rule(RulePair) :-
+    \+ recursive_rule(RulePair).
+
+recursive_rule(Head-BodyPredicates) :-
+    copy_term_nat(Head, CopiedHead),
+    member(BodyPredicate, BodyPredicates),
+    copy_term_nat(BodyPredicate, CopiedBodyPredicate),
+    CopiedHead =@= CopiedBodyPredicate.
+
 valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     \+ rules_exceed_limits(RulePairs, Limits),
     % numerize vars in each copied rule pair before comparing them to one another
@@ -440,30 +451,23 @@ broken_static_constraint(one_related(PredicateName), InitialConditions, TypeSign
 static_unity(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
     get_global(apperception, uuid, Module),
     setup_call_cleanup(
-            setup_module_rules(Module, StaticRules), 
+            clear(Module, TypeSignature.predicate_types), 
             static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module),
-            cleanup_module(Module, StaticRules, TypeSignature.predicate_types)
+            clear(Module, TypeSignature.predicate_types)
     ).
 
-setup_module_rules(Module, StaticRules) :-
-    clear_rules(Module, StaticRules), 
-    assert_rules(Module, StaticRules).
-
-cleanup_module(Module, StaticRules, PredicateTypes) :-
-    clear_rules(Module, StaticRules),
-    clear_facts(Module, PredicateTypes).
-
 static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module) :-
-     clear_facts(Module, TypeSignature.predicate_types),
+     clear(Module, TypeSignature.predicate_types),
      assert_facts(Module, Conditions),
+     assert_rules(Module, StaticRules),
+     save_module(Module),
      apply_static_rules(Module, StaticRules, Answers),
      merge_consistent(Conditions, Answers, AugmentedConditions),
      !,
-     \+ contradicting_conditions(AugmentedConditions),
     (  (length(Conditions, L),
         length(AugmentedConditions, L)
        ) ->
-        \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature)
+        \+ breaks_static_constraints(AugmentedConditions, StaticConstraints, TypeSignature)
         ;
         static_unity_(AugmentedConditions, StaticRules, StaticConstraints, TypeSignature, Module)
     ).
@@ -471,16 +475,13 @@ static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module)
 apply_static_rules(Module, StaticRules, Results) :-
     apply_static_rules_(Module, StaticRules, [], Results).
 
-apply_static_rules_(Module, [], Results, Results).
+apply_static_rules_(_, [], Results, Results).
 apply_static_rules_(Module, [Head-_ | OtherStaticRules], Acc, Results) :-
     answer_query(Module, Head, Answers),
     append(Answers, Acc, Acc1),
     apply_static_rules_(Module, OtherStaticRules, Acc1, Results).
 
-% Merge removing duplicates. Fail if attempting to merge contradictory conditions.
-merge_consistent(Conditions, Answers, AugmentedConditions) :-
-    merge_consistent_(Conditions, Answers, [], AugmentedConditions).
-    
+% Merge removing duplicates. Fail if attempting to merge contradictory conditions.    
 merge_consistent(Conditions, [], Conditions).
 merge_consistent(Conditions, [Answer | OtherAnswers], MergedConditions) :-
     \+ (member(Condition, Conditions), factual_contradiction(Condition, Answer)),
