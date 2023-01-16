@@ -26,6 +26,8 @@ apperceive()
 
 % Given a sequence and some limits, find winning theories.
 apperceive(Sequence, ApperceptionLimits, Theories) :-
+    uuid(UUID),
+    set_global(apperception, uuid, UUID),
     init_search(TheoryTemplateEngine, Search),
     min_type_signature(Sequence, MinTypeSignature),
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TheoryTemplateEngine),

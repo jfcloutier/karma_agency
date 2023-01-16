@@ -38,6 +38,7 @@ theory(Template, Theory) :-
     static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
     initial_conditions(Template.type_signature, StaticConstraints, InitialConditions),
+    static_unity(InitialConditions, StaticRules, StaticConstraints, Template.type_signature),
     Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0}.
 
 % Reset visited constraints to empty
@@ -83,18 +84,18 @@ causal_rules(Template, CausalRules) :-
 % Do not repeat previously visited static constraints
 valid_static_constraints(StaticConstraints, TypeSignature) :-
     conceptually_unified(StaticConstraints, TypeSignature),
-    not_repetitive_static_constraints(StaticConstraints).
+    not_already_visited(StaticConstraints, theory_engine/visited_constraints).
 
-not_repetitive_static_constraints(StaticConstraints) :-
-    get_global(apperception, theory_engine/visited_constraints, Visited),
-    \+ repeats_visited_static_constraints(StaticConstraints, Visited),
-    set_global(apperception, theory_engine/visited_constraints, [StaticConstraints | Visited]).
+not_already_visited(Solution, Path) :-
+    get_global(apperception, Path, AllVisited),
+    \+ repeats_visited(Solution, AllVisited),
+    set_global(apperception, Path, [Solution | AllVisited]).
 
-repeats_visited_static_constraints(StaticConstraints, Visited) :-
-    member(VisitedStaticConstraints, Visited),
-    length(StaticConstraints, L),
-    length(VisitedStaticConstraints, L),
-    subset(StaticConstraints, VisitedStaticConstraints).
+repeats_visited(Solution, AllVisited) :-
+    member(VisitedSolution, AllVisited),
+    length(Solution, L),
+    length(VisitedSolution, L),
+    subset(Solution, VisitedSolution).
 
 conceptually_unified(StaticConstraints, TypeSignature) :-
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
@@ -292,22 +293,35 @@ idempotent_causal_rules(RulePairs) :-
 %% CONSTRUCTING VALID INITIAL CONDITIONS
 
 initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
-    make_initial_condition(TypeSignature, InitialCondition),
-    maybe_add_initial_conditions(TypeSignature, [InitialCondition], InitialConditions),
-    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints).
+    reset_visited_initial_conditions(),
+    make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
+    maybe_add_initial_relations(TypeSignature, InitialProperties, InitialConditions),
+    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints),
+    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
 
-make_initial_condition(TypeSignature, Property) :-
-    make_property(TypeSignature, Property).
+% Reset visited initial conditions to empty
+reset_visited_initial_conditions() :-
+    set_global(apperception, theory_engine/visited_initial_conditions, []).
 
-make_initial_condition(TypeSignature, Relation) :-
-    make_relation(TypeSignature, Relation).
+% For each object, for each applicable property, make one with some domain value.
+make_initial_properties([], _, []).
+make_initial_properties([Object | OtherObjects], PredicateTypes, Properties) :-
+    make_object_properties(Object, PredicateTypes, ObjectProperties),
+    make_initial_properties(OtherObjects, PredicateTypes, OtherObjectProperties),
+    append(ObjectProperties, OtherObjectProperties, Properties).
 
-make_property(TypeSignature, Property) :-
-    member(object(ObjectType, ObjectName), TypeSignature.objects),
-    member(predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]), TypeSignature.predicate_types),
+make_object_properties(_, [], []).
+make_object_properties(object(ObjectType, ObjectName), 
+                       [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes], 
+                       [Property | OtherObjectProperties]) :-
+    !,
     domain_is(Domain, Values),
     member(Value, Values),
-    Property =.. [PredicateName, ObjectName, Value].
+    Property =.. [PredicateName, ObjectName, Value],
+    make_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, OtherObjectProperties).
+
+make_object_properties(Object, [_ | OtherPredicateTypes], ObjectProperties) :-
+    make_object_properties(Object, OtherPredicateTypes, ObjectProperties).
 
 make_relation(TypeSignature, Relation) :-
     select(object(ObjectType1, ObjectName1), TypeSignature.objects, RemainingObjects),
@@ -315,12 +329,12 @@ make_relation(TypeSignature, Relation) :-
     member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), TypeSignature.predicate_types),
     Relation =.. [PredicateName, ObjectName1, ObjectName2].
 
-maybe_add_initial_conditions(_, InitialConditions, InitialConditions).
-maybe_add_initial_conditions(TypeSignature, Acc, InitialConditions) :-
-    make_initial_condition(TypeSignature, InitialCondition),
+maybe_add_initial_relations(_, InitialConditions, InitialConditions).
+maybe_add_initial_relations(TypeSignature, Acc, InitialConditions) :-
+    make_relation(TypeSignature, InitialCondition),
     % No redundancy
     \+ redundant_initial_conditions([InitialCondition | Acc]),
-    maybe_add_initial_conditions(TypeSignature, [InitialCondition | Acc], InitialConditions).
+    maybe_add_initial_relations(TypeSignature, [InitialCondition | Acc], InitialConditions).
 
 % Two conditions where one is redundant or one contradicts the another.
 redundant_initial_conditions([InitialCondition | Others]) :-
@@ -416,21 +430,59 @@ broken_static_constraint(one_relation(PredicateNames), InitialConditions, _) :-
 % If there is an object to which the one-related predicate applies, there must be one such condition and only one.
 broken_static_constraint(one_related(PredicateName), InitialConditions, TypeSignature) :-
     % There is an object that can be related to another by the predicate named in the constraint
-    member(object(ObjectName, ObjectType), TypeSignature.objects),
+    member(object(ObjectType, ObjectName), TypeSignature.objects),
     member(predicate(PredicateName, [object_type(ObjectType), _]), TypeSignature.predicate_types),
     % such that
-    % if there is such a relation to another object in the initial conditions, there is not a second such relation to yet another object
+    % if there is such a relation to another object in the initial conditions, a second such relation to yet another object breaks the constraint
     ((select(InitialCondition, InitialConditions, OtherInitialConditions),
      InitialCondition =.. [PredicateName, ObjectName, _]) ->
-        \+ (
-            member(OtherInitialCondition, OtherInitialConditions),
-            OtherInitialCondition =.. [PredicateName, ObjectName, _]
+        (member(OtherInitialCondition, OtherInitialConditions),
+         OtherInitialCondition =.. [PredicateName, ObjectName, _]
         )
      ;
-     % If no first relation for that object is found, the constraint is broken
+     % If no such relation for that object is found, the constraint is broken
      true
      ).
 
+% Verify that the initial conditions are consistent with the static rules and constraints,
+% i.e. we can compute the closure of the initial conditions under the static rules
+% without causing a contradiction or breaking a static constraint.
+static_unity(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
+    setup_call_cleanup(
+            (clear_rules(), assert_rules(StaticRules)), 
+            static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature),
+            clear_rules(StaticRules)
+    ).
+
+static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
+     reassert_conditions(Conditions),
+     apply_static_rules(StaticRules, AugmentedConditions),
+    (  (length(Conditions, L),
+        length(AugmentedConditions, L)
+       ) ->
+        \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature)
+        ;
+        static_unity_(AugmentedConditions, StaticRules, StaticConstraints, TypeSignature)
+    ).
+
+% TODO
+% Assert the rules in it.
+% See dynamic/1, assertz/1
+assert_rules(StaticRules).
+
+% TODO
+% Clear all rules from the dynamic module
+clear_rules().
+
+% TODO
+%Replace any previously asserted conditions with these ones.
+reassert_conditions(Conditions).
+
+% TODO
+% For each rule head, do a bagof in that module and augment the conditions without repetitions.
+% Succeed if there is no contradiction produced
+apply_static_rules(StaticRules,  AugmentedConditions).
+    
 %% Utilities
 
 equivalent_predicates(Predicate, OtherPredicate) :- 
