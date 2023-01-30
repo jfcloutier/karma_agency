@@ -1,12 +1,41 @@
-:- module(type_signature, [min_type_signature/2]).
+:- module(type_signature, [
+    min_type_signature/2, 
+    extended_type_signature/3,
+    all_binary_predicate_names/2, binary_predicate_name/2
+    ]).
+
+% cd('sandbox/prototypes/apperception').
+% [leds_observations, domains, sequence, type_signature].
+% sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
 
 :- use_module(domains).
 
+% The minimum type signature manifested by a sequence of obaservations.
 min_type_signature(Sequence, TypeSignature) :-
     setof(object_type(ObjectType), Object^sequence_mentions_object(Sequence, object(ObjectType, Object)), ObjectTypes),
     setof(object(ObjectType, Object), ObjectType^sequence_mentions_object(Sequence, object(ObjectType, Object)), Objects),
     setof(PredicateType, sequence_implies_predicate_types(Sequence,  PredicateType), PredicateTypes),
     TypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}.
+
+% An extended type signature given a starting type signature, extension bounds, and global counters to limit the number of extensions that can be produced.
+extended_type_signature(TypeSignature,
+                        tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
+                        ExtendedTypeSignature) :-
+    extended_object_types(TypeSignature.object_types, NumObjectTypes, ExtendedObjectTypes),
+    extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, ExtendedObjects),
+    extended_predicate_types(TypeSignature.predicate_types, ExtendedObjectTypes, NumPredicateTypes, ExtendedPredicateTypes),
+    typed_variables(ExtendedObjects, ExtendedObjectTypes, TypedVariables),
+    ExtendedTypeSignature = type_signature{object_types:ExtendedObjectTypes, objects:ExtendedObjects, predicate_types:ExtendedPredicateTypes, typed_variables:TypedVariables}.
+
+
+% All relations in a type signature
+all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
+    PredicateTypes = TypeSignature.predicate_types,
+    findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
+
+% The name of a binary predicate in a list of predicate types.
+binary_predicate_name(PredicateTypes, BinaryPredicateName) :-
+    member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), PredicateTypes).
 
 sequence_mentions_object([State | _], Mention) :-
     state_mentions_object(State, Mention).
@@ -44,11 +73,98 @@ type_from_arg(object(Type, _), object_type(Type)) :- !.
 type_from_arg(Value, Domain) :-
     domain_of(Value, Domain).
 
-
 domain_of(Value, value_type(DomainName)) :-
     domain_is(DomainName, DomainValues),
     memberchk(Value, DomainValues), !.
 
-% cd('sandbox/prototypes/apperception').
-% [leds_observations, domains, sequence, type_signature].
-% sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
+extended_object_types(ObjectTypes, N, ExtendedObjectTypes) :-
+    max_template_count_reached() -> fail ; extended_object_types_(ObjectTypes, N, ExtendedObjectTypes).
+
+extended_object_types_(ObjectTypes, 0, ObjectTypes).
+extended_object_types_(ObjectTypes, N, ExtendedObjectTypes) :-
+    N > 0,
+    new_object_type(ObjectTypes, NewObjectType),
+    N1 is N - 1,
+    extended_object_types([NewObjectType | ObjectTypes], N1, ExtendedObjectTypes).
+
+new_object_type(ObjectTypes, object_type(NewTypeName)) :-
+    max_index(ObjectTypes, type_, 1, 0, Index),
+    Index1 is Index + 1,
+    atom_concat(type_, Index1, NewTypeName).
+
+extended_objects(Objects, ObjectTypes, N, ExtendedObjects) :-
+    max_template_count_reached() -> fail ; extended_objects_(Objects, ObjectTypes, N, ExtendedObjects).
+
+extended_objects_(Objects, _, 0, Objects).
+extended_objects_(Objects, ObjectTypes, N, ExtendedObjects) :-
+    N > 0,
+    new_object(Objects, ObjectTypes, NewObject),
+    N1 is N - 1,
+    extended_objects([NewObject | Objects], ObjectTypes, N1, ExtendedObjects).
+
+new_object(Objects, ObjectTypes, object(ObjectType, ObjectName)) :-
+    member(object_type(ObjectType), ObjectTypes),
+    max_index(Objects, object_, 2, 0, Index),
+    Index1 is Index + 1,
+    atom_concat(object_, Index1, ObjectName).
+
+extended_predicate_types(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
+    max_template_count_reached() -> fail ; extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes).
+
+extended_predicate_types_(PredicateTypes, _, 0, PredicateTypes).
+extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
+    N > 0,
+    new_predicate_type(PredicateTypes, ObjectTypes, NewPredicateType),
+    N1 is N - 1,
+    extended_predicate_types([NewPredicateType | PredicateTypes], ObjectTypes, N1, ExtendedPredicateTypes).
+
+new_predicate_type(PredicateTypes, ObjectTypes, predicate(PredicateName, ArgumentTypes)) :-
+    make_argument_types(ObjectTypes, ArgumentTypes),
+    max_index(PredicateTypes, pred_, 1, 0, Index),
+    Index1 is Index + 1,
+    atom_concat(pred_, Index1, PredicateName).
+
+% [variables(led, 2), variables(object1, 1)]
+typed_variables(Objects, ObjectTypes, TypedVariables) :-
+    typed_variables_(Objects, ObjectTypes, [], TypedVariables).
+
+typed_variables_(_, [], TypedVariables, TypedVariables).
+typed_variables_(Objects, [object_type(ObjectType) | OtherObjectTypes], Acc, TypedVariables) :-
+    findall(ObjectName, member(object(ObjectType, ObjectName), Objects), ObjectNames),
+    length(ObjectNames, Count),
+    typed_variables_(Objects, OtherObjectTypes, [variables(ObjectType, Count) | Acc], TypedVariables).
+
+% [predicate(distance_from, [object_type(wall), value_type(proximity)]), 
+%  predicate(on, [object_type(led), value_type(boolean)])]
+make_argument_types(ObjectTypes, [ArgumentType1, ArgumentType2]) :-
+    bagof(DomainType, Domain^domain_is(DomainType, Domain), DomainTypes),
+    make_argument_type(ObjectTypes, ArgumentType1),
+    make_argument_type(ObjectTypes, DomainTypes, ArgumentType2).
+
+make_argument_type(ObjectTypes, ObjectType) :-
+    member(ObjectType, ObjectTypes).
+
+make_argument_type(ObjectTypes, _, ObjectType) :-
+    make_argument_type(ObjectTypes, ObjectType).
+make_argument_type(_, DomainTypes, value_type(DomainType)) :-
+    member(DomainType, DomainTypes).
+
+max_index([], _, _, MaxIndex, MaxIndex).
+max_index([Term | Others], Prefix, Position, Max, MaxIndex) :-
+    Term =.. List,
+    nth0(Position, List, IndexedAtom),
+    atom_concat(Prefix, IndexAtom, IndexedAtom),
+    atom_string(IndexAtom, IndexString),
+    number_string(Index, IndexString),
+    Max1 is max(Index, Max),
+    !,
+    max_index(Others, Prefix, Position, Max1, MaxIndex).
+
+max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
+    max_index(Others, Prefix, Position, Max, MaxIndex).
+
+max_template_count_reached() :-
+    get_global(apperception, template_engine/max_templates, Max),
+    get_global(apperception, template_engine/template_count, Max),
+    format('MAX ~p TEMPLATES EXCEEDED!~n', [Max]).
+

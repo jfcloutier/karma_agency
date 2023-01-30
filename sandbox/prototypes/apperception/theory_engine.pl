@@ -1,21 +1,23 @@
-:-module(theory_engine, [create_theory_engine/2]).
+:- module(theory_engine, [create_theory_engine/2]).
 
 :- use_module(library(lists)).
 :- use_module(type_signature).
 :- use_module(domains).
 :- use_module(global).
+:- use_module(unity).
 :- use_module(rules_engine).
+
 
 % An engine that generates valid theories on demand,
 % given a minimal type signature (from the sequence) and a template (which sets the scope of the search space).
 
 /*
 cd('sandbox/prototypes/apperception').
-[type_signature, domains, global, theory_engine, rules_engine].
+[type_signature, domains, global, predicates, theory_engine, trace, unity, rules_engine].
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
-TypedVariables = [variables(led, 2)], 
 Objects = [object(led, light1), object(led, light2)],
+TypedVariables = [variables(led, 2)], 
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
 Limits = limits{max_rules:3, max_elements:60},
 Template = template{type_signature:TypeSignature, limits:Limits},
@@ -84,7 +86,7 @@ causal_rules(Template, RulePairs) :-
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
 valid_static_constraints(StaticConstraints, TypeSignature) :-
-    conceptually_unified(StaticConstraints, TypeSignature),
+    conceptual_unity(StaticConstraints, TypeSignature),
     not_already_visited(StaticConstraints, theory_engine/visited_constraints).
 
 not_already_visited(Solution, Path) :-
@@ -97,18 +99,6 @@ repeats_visited(Solution, AllVisited) :-
     length(Solution, L),
     length(VisitedSolution, L),
     subset(Solution, VisitedSolution).
-
-conceptually_unified(StaticConstraints, TypeSignature) :-
-    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
-
-static_constraints_cover(StaticConstraints, PredicateName) :-
-    member(StaticConstraint, StaticConstraints),
-    static_constraint_about(StaticConstraint, PredicateName), !.
-
-static_constraint_about(one_related(PredicateName), PredicateName).
-static_constraint_about(one_relation(PredicateNames), PredicateName) :-
-    memberchk(PredicateName, PredicateNames).
 
 maybe_add_static_constraint(_, _, StaticConstraints, StaticConstraints).
 
@@ -143,12 +133,6 @@ subsumed_static_constraint(one_relation(PredicateNames), one_relation(OtherPredi
 
 subsumed_static_constraint(one_related(PredicateName), one_related(PredicateName)).
 
-all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
-    PredicateTypes = TypeSignature.predicate_types,
-    findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
-
-binary_predicate_name(PredicateTypes, BinaryPredicateName) :-
-    member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), PredicateTypes).
 
 % Sublist of a list (order is preserved)
 sublist([], []).
@@ -340,163 +324,30 @@ maybe_add_initial_relations(TypeSignature, Acc, InitialConditions) :-
 % Two conditions where one is redundant or one contradicts the another.
 redundant_initial_conditions([InitialCondition | Others]) :-
     (member(OtherInitialCondition, Others),
-     conditions_repeat(InitialCondition, OtherInitialCondition) 
+     facts_repeat(InitialCondition, OtherInitialCondition) 
      )-> 
         true 
         ; 
         redundant_initial_conditions(Others).
 
-% Repeated property on the same object irrespective of domain value,
-% Or repeated relation between identical pair of objects. 
-conditions_repeat(Condition, OtherCondition) :-
-    Condition =.. [PredName, ObjectName, Arg],
-    OtherCondition  =.. [PredName, ObjectName, OtherArg],
-    (Arg == OtherArg; is_domain_value(_, Arg), is_domain_value(_, OtherArg)).
-
 % All objects are represented.
-% All objects are inter-related.
-% No static constraint is broken.
+% Spatial unity and no broken static constraints.
 valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
-  \+ unrelated_objects(InitialConditions, TypeSignature),
+  spatial_unity(InitialConditions, TypeSignature),
   \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature).
 
 % One object in the type signature does not appear in a condition
-unrepresented_object(InitialConditions, Objects) :-
+unrepresented_object(Round, Objects) :-
     member(object(_, ObjectName), Objects),
-    \+ object_referenced(ObjectName, InitialConditions).
-
+    \+ object_referenced(ObjectName, Round).
+    
 % An object is referenced by name somewhere in the initial conditions
-object_referenced(ObjectName, InitialConditions) :-
-    member(InitialCondition, InitialConditions),
-    InitialCondition =.. [_ | ObjectNames],
+object_referenced(ObjectName, Round) :-
+    member(Fact, Round),
+    Fact =.. [_ | ObjectNames],
     member(ObjectName, ObjectNames).
 
-% Some pair of objects from the type signature aren't related, directly or indirectly, in the  initial conditions.
-unrelated_objects(InitialConditions, TypeSignature) :-
-    object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
-    \+ related(ObjectName1, ObjectName2, TypeSignature, InitialConditions).
-
-% Some pair of objects from the type signature
-object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
-    select(object(_, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
-    member(object(_, ObjectName2), RemainingSignatureObjects).
-
-% Two objects are directly related in one initial condition
-related(ObjectName1, ObjectName2, InitialConditions) :-
-    member(InitialCondition, InitialConditions),
-    InitialCondition =.. [_ | ObjectNames],
-    memberchk(ObjectName1, ObjectNames),
-    memberchk(ObjectName2, ObjectNames).
-
-% Two objects are indirectly related in the initial conditions
-related(ObjectName1, ObjectName2, TypeSignature, InitialConditions) :-
-    select(InitialCondition, InitialConditions, OtherInitialConditions),
-    InitialCondition =.. [PredicateName | ObjectNames],
-    % It's a relation between two objects
-    member(predicate(PredicateName, [object_type(_), object_type(_)]), TypeSignature.predicate_types),
-    select(ObjectName1, ObjectNames, [OtherObjectName]),
-    related(OtherObjectName, ObjectName2, OtherInitialConditions).
-
-% Only one constraint need to be broken
-breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature) :-
-    member(StaticConstraint, StaticConstraints),
-    broken_static_constraint(StaticConstraint, InitialConditions, TypeSignature).
-
-% There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there.
-broken_static_constraint(one_relation(PredicateNames), InitialConditions, TypeSignature) :-
-   % There is a pair of objects in the type signature
-   select(object(ObjectType1, ObjectName1), TypeSignature.objects, RemainingSignatureObjects),
-   member(object(ObjectType2, ObjectName2), RemainingSignatureObjects),
-   % for which one of the "exactly one" relations applies (the others apply as well or else they wouldn't be in the same constraint)
-   member(PredicateName, PredicateNames),
-   member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), TypeSignature.predicate_types),
-   % And no relation exists in the initial conditions for this pair of objects which name is ones given in the constraint
-   \+ (member(PName, PredicateNames),
-      member(InitialCondition, InitialConditions),
-      InitialCondition =.. [PName, ObjectName1, ObjectName2]
-      ).
-
-% More than one condition on the same objects from the set of mutually exclusive predicates
-broken_static_constraint(one_relation(PredicateNames), InitialConditions, _) :-
-    % There is a relation named in the constraint between two objects
-    select(InitialCondition, InitialConditions, OtherInitialConditions),
-    InitialCondition =.. [PredicateName, ObjectName1, ObjectName2],
-    select(PredicateName, PredicateNames, OtherPredicateNames),
-    % And there is another condition also named in the constraint between these two objects
-    member(OtherInitialCondition, OtherInitialConditions),
-    OtherInitialCondition =.. [OtherPredicateName, ObjectName1, ObjectName2],
-    memberchk(OtherPredicateName, OtherPredicateNames).
-
-% If there is an object to which the one-related predicate applies, there must be one such condition and only one.
-broken_static_constraint(one_related(PredicateName), InitialConditions, TypeSignature) :-
-    % There is an object that can be related to another by the predicate named in the constraint
-    member(object(ObjectType, ObjectName), TypeSignature.objects),
-    member(predicate(PredicateName, [object_type(ObjectType), _]), TypeSignature.predicate_types),
-    % such that
-    % if there is such a relation to another object in the initial conditions, a second such relation to yet another object breaks the constraint
-    ((select(InitialCondition, InitialConditions, OtherInitialConditions),
-     InitialCondition =.. [PredicateName, ObjectName, _]) ->
-        (member(OtherInitialCondition, OtherInitialConditions),
-         OtherInitialCondition =.. [PredicateName, ObjectName, _]
-        )
-     ;
-     % If no such relation for that object is found, the constraint is broken
-     true
-     ).
-
-% Verify that the initial conditions are consistent with the static rules and constraints,
-% i.e. we can compute the closure of the initial conditions under the static rules
-% without causing a contradiction or breaking a static constraint.
-static_unity(Conditions, StaticRules, StaticConstraints, TypeSignature) :-
-    get_global(apperception, uuid, Module),
-    setup_call_cleanup(
-            clear(Module, TypeSignature.predicate_types), 
-            static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module),
-            clear(Module, TypeSignature.predicate_types)
-    ).
-
-static_unity_(Conditions, StaticRules, StaticConstraints, TypeSignature, Module) :-
-     clear(Module, TypeSignature.predicate_types),
-     assert_facts(Module, Conditions),
-     assert_rules(Module, StaticRules),
-     save_module(Module),
-     apply_static_rules(Module, StaticRules, Answers),
-     merge_consistent(Conditions, Answers, AugmentedConditions),
-     !,
-    (  (length(Conditions, L),
-        length(AugmentedConditions, L)
-       ) ->
-        \+ breaks_static_constraints(AugmentedConditions, StaticConstraints, TypeSignature)
-        ;
-        static_unity_(AugmentedConditions, StaticRules, StaticConstraints, TypeSignature, Module)
-    ).
-
-apply_static_rules(Module, StaticRules, Results) :-
-    apply_static_rules_(Module, StaticRules, [], Results).
-
-apply_static_rules_(_, [], Results, Results).
-apply_static_rules_(Module, [Head-_ | OtherStaticRules], Acc, Results) :-
-    answer_query(Module, Head, Answers),
-    append(Answers, Acc, Acc1),
-    apply_static_rules_(Module, OtherStaticRules, Acc1, Results).
-
-% Merge removing duplicates. Fail if attempting to merge contradictory conditions.    
-merge_consistent(Conditions, [], Conditions).
-merge_consistent(Conditions, [Answer | OtherAnswers], MergedConditions) :-
-    \+ (member(Condition, Conditions), factual_contradiction(Condition, Answer)),
-    (memberchk(Answer, Conditions) ->
-        merge_consistent(Conditions, OtherAnswers, MergedConditions)
-        ;
-        merge_consistent([Answer | Conditions], OtherAnswers, MergedConditions)
-    ).
-
-factual_contradiction(Condition, Answer) :-
-    Condition =.. [PredicateName, ObjectName, Arg],
-    Answer =.. [PredicateName, ObjectName, Arg1],
-    Arg \== Arg1,
-    is_domain_value(_, Arg), !.
-    
 %% Utilities
 
 equivalent_predicates(Predicate, OtherPredicate) :- 

@@ -1,4 +1,4 @@
-:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, answer_query/3]).
+:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
 
 % Dynamic module from where rules and facts are added/removed,
 % and new facts are inferred by running the rules.
@@ -17,7 +17,6 @@ assert_rules(Module, RulePairs),
 assert_facts(Module, Facts),
 answer_query(Module, next_to(X, Y), Answers),
 save_module(Module).
-
 */
 
 % Clear all rules and facts from the dynamic module
@@ -60,6 +59,15 @@ assert_fact(Module, Fact) :-
     make_dynamic(Module, Fact),
     ModuleFact =.. [:, Module, Fact],
     asserta(ModuleFact).
+
+apply_rules(Module, Rules, Results) :-
+    apply_rules_(Module, Rules, [], Results).
+
+apply_rules_(_, [], Results, Results).
+apply_rules_(Module, [Head-_ | OtherRules], Acc, Results) :-
+    answer_query(Module, Head, Facts),
+    append(Facts, Acc, Acc1),
+    apply_rules_(Module, OtherRules, Acc1, Results).
 
 answer_query(Module, Query, Answers) :-
     ModuleQuery =.. [:, Module, Query],
