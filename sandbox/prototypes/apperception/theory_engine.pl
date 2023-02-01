@@ -13,7 +13,7 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[type_signature, domains, global, predicates, theory_engine, trace, unity, rules_engine].
+[type_signature, domains, global, unity, rules_engine, theory_engine].
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
 Objects = [object(led, light1), object(led, light2)],

@@ -1,4 +1,4 @@
-:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
+:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/4]).
 
 % Dynamic module from where rules and facts are added/removed,
 % and new facts are inferred by running the rules.
@@ -60,18 +60,30 @@ assert_fact(Module, Fact) :-
     ModuleFact =.. [:, Module, Fact],
     asserta(ModuleFact).
 
-apply_rules(Module, Rules, Results) :-
-    apply_rules_(Module, Rules, [], Results).
+apply_rules(Module, Rules, Scope, Results) :-
+    apply_rules_(Module, Rules, Scope,[], Results).
 
-apply_rules_(_, [], Results, Results).
-apply_rules_(Module, [Head-_ | OtherRules], Acc, Results) :-
-    answer_query(Module, Head, Facts),
+apply_rules_(_, [], _, Results, Results).
+apply_rules_(Module, [Head-_ | OtherRules], Scope, Acc, Results) :-
+    answer_query(Module, Scope, Head, Facts),
     append(Facts, Acc, Acc1),
-    apply_rules_(Module, OtherRules, Acc1, Results).
+    apply_rules_(Module, OtherRules, Scope, Acc1, Results).
 
-answer_query(Module, Query, Answers) :-
-    ModuleQuery =.. [:, Module, Query],
-    findall(Query, ModuleQuery, Answers).
+answer_query(Module, all, Query, Answers) :-
+    copy_term(Query, CopiedQuery),
+    ModuleQuery =.. [:, Module, CopiedQuery],
+    (setof(CopiedQuery, ModuleQuery, Answers) ->
+      true
+      ; Answers = []).
+
+% TODO - WRONG
+answer_query(Module, one, Query, Answers) :-
+    copy_term(Query, CopiedQuery),
+    ModuleQuery =.. [:, Module, CopiedQuery],
+    (findnsols(1, CopiedQuery, ModuleQuery, Answers) ->
+      true
+      ; Answers = []).
+
 
 save_module(Atom) :-
     atom_string(Atom, Name),

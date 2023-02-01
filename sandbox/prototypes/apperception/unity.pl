@@ -29,7 +29,7 @@ static_unity(Round, StaticRules, StaticConstraints, TypeSignature) :-
             clear(Module, TypeSignature.predicate_types), 
             static_unity_(Round, StaticRules, StaticConstraints, TypeSignature, Module),
             clear(Module, TypeSignature.predicate_types)
-    ).
+    ),!.
 
 % The facts in a round breaks static constraints given a type signature.
 % Only one constraint need to be broken.
