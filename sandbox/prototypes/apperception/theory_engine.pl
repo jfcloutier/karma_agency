@@ -80,8 +80,10 @@ static_rules(Template, StaticConstraints, RulePairs) :-
 % Rules must not exceed limits nor repeat themselves nor define non-change
 causal_rules(Template, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rules([Head-BodyPredicates], Template.limits),
-    maybe_add_causal_rule(Template, [Head-BodyPredicates], RulePairs).
+    % Nextifying the rule
+    NextifiedHead =.. [next, Head],
+    valid_causal_rules([NextifiedHead-BodyPredicates], Template.limits),
+    maybe_add_causal_rule(Template, [NextifiedHead-BodyPredicates], RulePairs).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -161,8 +163,11 @@ maybe_add_causal_rule(_, RulePairs, RulePairs).
 
 maybe_add_causal_rule(Template, Acc, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rules([Head-BodyPredicates | Acc], Template.limits),!,
-    maybe_add_causal_rule(Template, [Head-BodyPredicates | Acc], RulePairs).
+    valid_causal_rule(Head-BodyPredicates),
+    % Nextifying the rule
+    NextifiedHead =.. [next, Head],
+    valid_causal_rules([NextifiedHead-BodyPredicates | Acc], Template.limits),!,
+    maybe_add_causal_rule(Template, [NextifiedHead-BodyPredicates | Acc], RulePairs).
 
 valid_static_rule(RulePair) :-
     \+ recursive_rule(RulePair).
@@ -186,10 +191,18 @@ valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_rules(RulePairs).
 
+%Checking rule before it is nextified
+valid_causal_rule(Head-BodyPredicates) :-
+    \+ idempotent_causal_rule(Head-BodyPredicates).
+
+% An idempotent causal rule is is one where the head is found in the body -> nothing changes
+idempotent_causal_rules(Head-BodyPredicates) :-
+    memberchk_equal(Head, BodyPredicates), !.
+
+% Checking nextified rules
 valid_causal_rules(RulePairs, Limits) :-
+    % Not too many rules
     \+ rules_exceed_limits(RulePairs, Limits),
-    % No idempotent rules (rules where the head is found in the body)
-    \+ idempotent_causal_rules(RulePairs),
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     % No repeated rules
     \+ repeated_rules(RulePairsWithNumberVars).
@@ -269,11 +282,6 @@ recursion_in_rules(RulePairs) :-
     member(_-OtherBody, OtherRulePairs),
     member(OtherBodyPredicate, OtherBody),
     Head =@= OtherBodyPredicate.
-
-% There are idempotent causal_rules is there is one where the head is found in the body -> nothing changes
-idempotent_causal_rules(RulePairs) :-
-    member(Head-BodyPredicates, RulePairs),
-    memberchk_equal(Head, BodyPredicates), !.
 
 %% CONSTRUCTING VALID INITIAL CONDITIONS
 

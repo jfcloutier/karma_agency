@@ -18,11 +18,11 @@
 /*
 cd('sandbox/prototypes/apperception').
 [leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, rules_engine, apperception_engine].
-spy(rules_engine:save_module/1).
+spy(trace:make_trace/4).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 600},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 30},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -44,7 +44,7 @@ find_best_theories(ApperceptionLimits, Search, _, Theories) :-
 find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-   
     (find_theory(ApperceptionLimits, Search, Theory, UpdatedSearch) ->
         % Making a trace can fail
-        (make_trace(Theory, Search.template.type_signature, Trace, Search.module) ->
+        (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
             rate_theory(Theory, Sequence, Trace, RatedTheory),
             maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch)
             ;
@@ -88,7 +88,7 @@ next_theory_template(Search, UpdatedSearch) :-
     create_theory_engine(Template, TheoryEngine),
     put_dict(theories_count, Search, 0, Search1),
     put_dict(template, Search1, Template, Search2),
-    put_dict(theory_engine, Search2, TheoryEngine, UpdatedSearch).
+    put_dict(theory_engine, Search2, TheoryEngine, UpdatedSearch), !.
 
 next_theory(Search, Theory, UpdatedSearch) :-
     engine_next_reified(Search.theory_engine, Response),
@@ -107,7 +107,7 @@ handle_theory_engine_reponse(no, Theory, Search, UpdatedSearch) :-
 rate_theory(Theory, Sequence, Trace, RatedTheory) :-
     rate_coverage(Trace, Sequence, CoverageRating),
     rate_theory_simplicity(Theory, SimplicityRating),
-    Rating is (3 * CoverageRating) + SimplicityRating,
+    Rating is CoverageRating + (CoverageRating * SimplicityRating),
     put_dict(rating, Theory, Rating, RatedTheory).
 
 % Find the best coverage and rate it as a percentage.
@@ -154,7 +154,7 @@ rate_round_pair(TraceRound-SequenceRound, Rating) :-
     intersection(TraceRound, SequenceRound, CommonFacts),
     length(CommonFacts, CommonLength),
     length(SequenceRound, ObservedLength),
-    Coverage is ObservedLength / CommonLength,
+    (CommonLength == 0 -> Coverage = 0; Coverage is ObservedLength / CommonLength),
     Percent is Coverage * 100,
     round(Percent, Rating).
     
@@ -180,11 +180,16 @@ count_elements(Term, Count) :-
     Count is C1 + 1.
 count_elements(_, 1).
 
+% Never keep a theory with a rating of 0.
 % If there are already the max number of kept theories, replace the lowest rated one
 % the theory has higher rating.
+maybe_keep_theory(RatedTheory, _, Search, Search) :-
+    RatedTheory.rating == 0.0, !.
+
 maybe_keep_theory(RatedTheory, KeepHowMany, Search, UpdatedSearch) :-
     length(Search.best_theories, L),
     L < KeepHowMany, !,
+    format("Keeping theory with rating ~p~n", RatedTheory.rating),
     put_dict(best_theories, Search, [RatedTheory | Search.best_theories], UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
@@ -194,6 +199,7 @@ maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
 
 add_if_better(RatedTheory, SortedTheories, [RatedTheory | Others]) :-
     find_worse(SortedTheories, RatedTheory.rating, WorseTheory),!,
+    format("Keeping theory with rating ~p~n", RatedTheory.rating),
     delete(SortedTheories, WorseTheory, Others).
 add_if_better(_, SortedTheories, SortedTheories).
 

@@ -31,8 +31,8 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
     ).
 
 next_round(Round, Theory, TypeSignature, Module, NextRound) :-
-    make_round(Round, Theory, TypeSignature, Module, NextRound),
-    spatial_unity(NextRound).
+    make_round(Round, Theory, TypeSignature, Module, NextRound), !,
+    spatial_unity(NextRound, TypeSignature).
 
 % Apply causal rules to a round to produce a caused facts.
 % Apply static rules to the new round to add implied facts.
@@ -40,31 +40,34 @@ next_round(Round, Theory, TypeSignature, Module, NextRound) :-
 % or break and static constraints.
 make_round(Round, Theory, TypeSignature, Module, NextRound) :-
     apply_causal_rules_on_facts(Theory.causal_rules, Round, TypeSignature.predicate_types, Module, CausedFacts),
-    apply_static_rules_on_facts(Theory.static_rules, CausedFacts, TypeSignature.predicate_types, Module, FullCausedFacts),
-    carry_over_composable(Round, FullCausedFacts, Theory, NextRound).
+    apply_rules_on_facts(Theory.static_rules, CausedFacts, TypeSignature.predicate_types, Module, FullCausedFacts),
+    carry_over_composable(Round, FullCausedFacts, Theory, TypeSignature, NextRound).
 
-apply_static_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
-    clear(Module, PredicateTypes),
-    assert_rules(Module, Rules),
-    assert_facts(Module, Facts),
-    apply_rules(Module, Rules, all, Caused).
-
-% TODO - causal rules can be recursive!!
 apply_causal_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
+    apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Answers),
+    denextify_facts(Answers, Caused).
+
+apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     clear(Module, PredicateTypes),
     assert_rules(Module, Rules),
     assert_facts(Module, Facts),
-    apply_rules(Module, Rules, one, Caused).
+    apply_rules(Module, Rules, Caused).
 
+denextify_facts([], []).
+denextify_facts([NextFact | Rest], [Fact | OtherFacts]) :-
+    NextFact =.. [next, Fact],
+    denextify_facts(Rest, OtherFacts).
 
 % Add as many prior facts into caused facts without introducing a contradiction or breaking a static constraint.
-% carry_over_composable(PriorFacts, CausedFacts, Theory, Module, ComposedFacts) :-
 carry_over_composable([], ComposedFacts, _, _, ComposedFacts).
-carry_over_composable([PriorFact | OtherPriorFacts], CausedFacts, Theory, Module, ComposedFacts) :-
+carry_over_composable([PriorFact | OtherPriorFacts], CausedFacts, Theory, TypeSignature, ComposedFacts) :-
     \+ (member(CausedFact, CausedFacts), facts_repeat(PriorFact, CausedFact)),
     \+ (member(CausedFact, CausedFacts), factual_contradiction(PriorFact, CausedFact)),
-    \+ breaks_static_constraints([PriorFact | CausedFacts], Theory.static_constraints, Theory.type_signature),
-    carry_over_composable(OtherPriorFacts, [PriorFact | CausedFacts], Theory, Module, ComposedFacts).
+    \+ breaks_static_constraints([PriorFact | CausedFacts], Theory.static_constraints, TypeSignature),
+    !,
+    carry_over_composable(OtherPriorFacts, [PriorFact | CausedFacts], Theory, TypeSignature, ComposedFacts).
+carry_over_composable([_ | OtherPriorFacts], CausedFacts, Theory, TypeSignature, ComposedFacts) :-
+    carry_over_composable(OtherPriorFacts, CausedFacts, Theory, TypeSignature, ComposedFacts).
 
 % Succeeds if can find another round in the trace that's a permutation of it.
 round_in_trace(Round, Trace) :-
