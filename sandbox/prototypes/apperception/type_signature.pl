@@ -5,9 +5,10 @@
     ]).
 
 % cd('sandbox/prototypes/apperception').
-% [leds_observations, domains, sequence, type_signature].
+% [logger, leds_observations, domains, sequence, type_signature].
 % sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
 
+:- use_module(logger).
 :- use_module(domains).
 
 % The minimum type signature manifested by a sequence of obaservations.
@@ -116,7 +117,9 @@ extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes
     N > 0,
     new_predicate_type(PredicateTypes, ObjectTypes, NewPredicateType),
     N1 is N - 1,
-    extended_predicate_types([NewPredicateType | PredicateTypes], ObjectTypes, N1, ExtendedPredicateTypes).
+    % Append abducted predicates to favor predicates from min type signature in theory search
+    append(PredicateTypes, [NewPredicateType], Acc),
+    extended_predicate_types(Acc, ObjectTypes, N1, ExtendedPredicateTypes).
 
 new_predicate_type(PredicateTypes, ObjectTypes, predicate(PredicateName, ArgumentTypes)) :-
     make_argument_types(ObjectTypes, ArgumentTypes),
@@ -166,5 +169,5 @@ max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
 max_template_count_reached() :-
     get_global(apperception, template_engine/max_templates, Max),
     get_global(apperception, template_engine/template_count, Max),
-    format('MAX ~p TEMPLATES EXCEEDED!~n', [Max]).
+    log(warn, type_signature, 'MAX ~p TEMPLATES EXCEEDED!', [Max]).
 

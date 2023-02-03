@@ -1,12 +1,12 @@
 :- module(trace, [make_trace/4]).
 
-
+:- use_module(logger).
 :- use_module(unity).
 :- use_module(rules_engine).
 
 /*
 cd('sandbox/prototypes/apperception').
-[trace, unity, rules_engine].
+[logger, trace, unity, rules_engine].
 */
 
 % Starting from initial conditions as round(0) of the trace, apply the theory to construct round(1), etc. until a round repeats a prior round.

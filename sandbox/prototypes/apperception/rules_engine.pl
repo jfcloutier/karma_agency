@@ -1,10 +1,12 @@
 :- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
 
+:- use_module(logger).
+
 % Dynamic module from where rules and facts are added/removed,
 % and new facts are inferred by running the rules.
 
 /*
-[rules_engine].
+[logger, rules_engine].
 RulePairs = [next_to(X, Y)-[on(X, true),on(Y, false)], on(X, true)-[light(X, red)]],
 uuid(Module),
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), 

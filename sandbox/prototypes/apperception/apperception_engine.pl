@@ -1,5 +1,6 @@
 :- module(apperception_engine, [apperceive/3]).
 
+:- use_module(logger).
 :- use_module(global).
 :- use_module(template_engine).
 :- use_module(theory_engine).
@@ -17,12 +18,12 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, rules_engine, apperception_engine].
-spy(trace:make_trace/4).
+[logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, unity, rules_engine, apperception_engine].
+set_log_level(info).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theory_duds: 3, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 30},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -32,26 +33,28 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TheoryTemplateEngine),
     init_search(TheoryTemplateEngine, Search),
     find_best_theories(ApperceptionLimits, Search, Sequence, Theories), !,
-    engine_destroy(TheoryTemplateEngine).
+    destroy_engine(TheoryTemplateEngine).
 
 % Iterate over templates, exploring a maximum of theories for each, validating theories found and keeping the best of the valid theories.
 find_best_theories(ApperceptionLimits, Search, _, Theories) :-
     time_expired(ApperceptionLimits, Search),
+    log(warn, apperception_engine, 'TIME EXPIRED!'),
     !,
     stop_search(Search),
     Theories = Search.best_theories.
 
 find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-   
-    (find_theory(ApperceptionLimits, Search, Theory, UpdatedSearch) ->
-        % Making a trace can fail
-        (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
-            rate_theory(Theory, Sequence, Trace, RatedTheory),
-            maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch)
-            ;
-            LatestSearch = UpdatedSearch
-        );
-        LatestSearch = Search
-    ),
+    log(info, apperception_engine, 'Searching for a theory. Search = ~p', [Search]),
+    find_theory(ApperceptionLimits, Search, Theory, UpdatedSearch),
+    log(info, apperception_engine, 'Found theory ~p', [Theory]),
+    % Making a trace can fail
+    (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
+        log(info, apperception_engine, 'Created trace ~p~', [Trace]),
+        rate_theory(Theory, Sequence, Trace, RatedTheory),
+        maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch)
+        ;
+        LatestSearch = UpdatedSearch
+    ), !,
     find_best_theories(ApperceptionLimits, LatestSearch, Sequence, Theories).
 
 init_search(TheoryTemplateEngine, Search) :-
@@ -59,11 +62,14 @@ init_search(TheoryTemplateEngine, Search) :-
     engine_next(TheoryTemplateEngine, Template),
     create_theory_engine(Template, TheoryEngine),
     uuid(Module),
-    Search = search{started_at: Now, theories_count: 0, best_theories: [], template_engine: TheoryTemplateEngine, template: Template, theory_engine: TheoryEngine, module: Module}.
+    Search = search{started_at: Now, theories_count: 0, best_theories: [], theory_duds: 0, template_engine: TheoryTemplateEngine, template: Template, theory_engine: TheoryEngine, module: Module}.
 
 stop_search(Search) :-
-    engine_destroy(Search.template_engine),
-    engine_destroy(Search.theory_engine).
+    destroy_engine(Search.template_engine),
+    destroy_engine(Search.theory_engine).
+
+destroy_engine(Engine) :-
+    catch(engine_destroy(Engine), _, true).
 
 time_expired(ApperceptionLimits, Search) :-
     get_time(Now),
@@ -72,26 +78,35 @@ time_expired(ApperceptionLimits, Search) :-
 
 % Find a theory
 find_theory(ApperceptionLimits, Search, Theory, LatestSearch) :-
-    maybe_change_template(ApperceptionLimits.max_theories_per_template, Search, UpdatedSearch),
-    next_theory(UpdatedSearch, Theory, LatestSearch),
-    !.
+    maybe_change_template(ApperceptionLimits, Search, UpdatedSearch),
+    !,
+    next_theory(UpdatedSearch, Theory, LatestSearch).
 
-maybe_change_template(MaxTheories, Search, UpdatedSearch) :-
-    Search.theories_count >= MaxTheories,
+maybe_change_template(ApperceptionLimits, Search, UpdatedSearch) :-
+    Search.theories_count >= ApperceptionLimits.max_theories_per_template,
+    log(info, apperception_engine, 'Max theory count ~p for template!', [Search.theories_count]),
+    next_theory_template(Search, UpdatedSearch).
+
+maybe_change_template(ApperceptionLimits, Search, UpdatedSearch) :-
+    Search.theory_duds >= ApperceptionLimits.max_theory_duds,
+    log(warn, apperception_engine, 'Max theory duds reached ~p for template!', [Search.theory_duds]),
     next_theory_template(Search, UpdatedSearch).
 
 maybe_change_template(_, Search, Search).
 
 next_theory_template(Search, UpdatedSearch) :-
-    engine_destroy(Search.theory_engine),
+    destroy_engine(Search.theory_engine),
     engine_next(Search.template_engine, Template),
+    log(info, apperception_engine, 'NEXT TEMPLATE ~p', [Template]),
     create_theory_engine(Template, TheoryEngine),
     put_dict(theories_count, Search, 0, Search1),
-    put_dict(template, Search1, Template, Search2),
-    put_dict(theory_engine, Search2, TheoryEngine, UpdatedSearch), !.
+    put_dict(theory_duds, Search1, 0, Search2),
+    put_dict(template, Search2, Template, Search3),
+    put_dict(theory_engine, Search3, TheoryEngine, UpdatedSearch), !.
 
 next_theory(Search, Theory, UpdatedSearch) :-
     engine_next_reified(Search.theory_engine, Response),
+    !,
     handle_theory_engine_reponse(Response, Theory, Search, UpdatedSearch).
 
 handle_theory_engine_reponse(the(Theory), Theory, Search, UpdatedSearch) :-
@@ -99,15 +114,27 @@ handle_theory_engine_reponse(the(Theory), Theory, Search, UpdatedSearch) :-
     put_dict(theories_count, Search, Inc, UpdatedSearch), !.
 
 handle_theory_engine_reponse(no, Theory, Search, UpdatedSearch) :-
+    log(info, apperception_engine, 'NO MORE THEORIES for the template'),
     next_theory_template(Search, Search1),
     !,
     next_theory(Search1, Theory, UpdatedSearch).
+
+handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine, _))), Theory, Search, UpdatedSearch) :-
+    log(info, apperception_engine, 'Time expired getting a theory. Trying another template.'),
+    next_theory_template(Search, Search1),
+    !,
+    next_theory(Search1, Theory, UpdatedSearch).
+
+handle_theory_engine_reponse(exception(Exception), _, _, _) :-
+    log(error, apperception_engine, '!!! EXCEPTION getting next theory: ~p', [Exception]),
+    fail.
 
 % Rate how well the trace covers the sequence and how simple the theory is.
 rate_theory(Theory, Sequence, Trace, RatedTheory) :-
     rate_coverage(Trace, Sequence, CoverageRating),
     rate_theory_simplicity(Theory, SimplicityRating),
     Rating is CoverageRating + (CoverageRating * SimplicityRating),
+    log(info, apperception_engine, 'Theory rated ~p (coverage ~p, simplicity ~p)', [Rating, CoverageRating, SimplicityRating]),
     put_dict(rating, Theory, Rating, RatedTheory).
 
 % Find the best coverage and rate it as a percentage.
@@ -139,6 +166,7 @@ pair_rounds(Trace, Index, [SequenceRound | OtherSequenceRounds], Acc, RoundPairs
     trace_round_at(Trace, Index, NextIndex, TraceRound),
     pair_rounds(Trace, NextIndex, OtherSequenceRounds, [TraceRound-SequenceRound | Acc], RoundPairs).
 
+% Consider the trace circular
 trace_round_at(Trace, Index, NextIndex, TraceRound) :-
     length(Trace, L),
     (Index =< L ->
@@ -180,16 +208,20 @@ count_elements(Term, Count) :-
     Count is C1 + 1.
 count_elements(_, 1).
 
-% Never keep a theory with a rating of 0.
+% Never keep a theory with a rating of 0; count it as a dud.
 % If there are already the max number of kept theories, replace the lowest rated one
 % the theory has higher rating.
-maybe_keep_theory(RatedTheory, _, Search, Search) :-
-    RatedTheory.rating == 0.0, !.
+maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
+    RatedTheory.rating == 0.0 -> 
+        TheoryDuds is Search.theory_duds + 1,
+        put_dict(theory_duds, Search, TheoryDuds, UpdatedSearch)
+        ;
+        UpdatedSearch = Search.
 
 maybe_keep_theory(RatedTheory, KeepHowMany, Search, UpdatedSearch) :-
     length(Search.best_theories, L),
     L < KeepHowMany, !,
-    format("Keeping theory with rating ~p~n", RatedTheory.rating),
+    log(info, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
     put_dict(best_theories, Search, [RatedTheory | Search.best_theories], UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
@@ -199,7 +231,7 @@ maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
 
 add_if_better(RatedTheory, SortedTheories, [RatedTheory | Others]) :-
     find_worse(SortedTheories, RatedTheory.rating, WorseTheory),!,
-    format("Keeping theory with rating ~p~n", RatedTheory.rating),
+    log(info, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
     delete(SortedTheories, WorseTheory, Others).
 add_if_better(_, SortedTheories, SortedTheories).
 

@@ -14,7 +14,7 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[leds_observations, sequence, type_signature, domains, global, template_engine].
+[logger, leds_observations, sequence, type_signature, domains, global, template_engine].
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -26,6 +26,7 @@ engine_destroy(TheoryTemplateEngine).
 
 :- module(template_engine, [create_theory_template_engine/3]).
 
+:- use_module(logger).
 :- use_module(global).
 :- use_module(type_signature).
 :- use_module(domains).
@@ -56,13 +57,13 @@ reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
     set_global(apperception, template_engine/max_templates, Max),
     set_global(apperception, template_engine/template_count, 0),
-    format('MAX ~p TEMPLATES ALLOWED~n', [Max]).
+    log(info, template_engine, 'MAX ~p TEMPLATES ALLOWED', [Max]).
 
 increment_template_count() :-
     get_global(apperception, template_engine/template_count, Count),
     Inc is Count + 1,
     set_global(apperception, template_engine/template_count, Inc),
-    format('COUNT IS NOW ~p~n', [Inc]).
+    log(info, template_engine, 'COUNT IS NOW ~p', [Inc]).
 
 allow_max_templates(TypeSignature,
                     tuple(NumObjectTypes, NumObjects, NumPredicateTypes), 
@@ -88,7 +89,7 @@ signature_extension_tuple(MaxSignatureExtension, Tuple) :-
     !,
     member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
     Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
-    format('****TUPLE ~p~n', [Tuple]).
+    log(info, template_engine, '****TUPLE ~p', [Tuple]).
 
 rated_tuple(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObjects, max_predicate_types:MaxPredicateTypes}, IndexedTuple) :-
     between(0, MaxObjectTypes, NumObjectTypes),
@@ -109,5 +110,6 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.predicate_types, PredicateTypesCount),
     Count is ObjectTypesCount + ObjectsCount + PredicateTypesCount,
     MaxRules is Count * 2,
-    MaxElements is Count * Count,
-    Limits = limits{max_rules:MaxRules, max_elements:MaxElements}.
+    MaxElements is 10 * Count * Count,
+    MaxTheoryTime is MaxElements * 0.01,
+    Limits = limits{max_rules: MaxRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime}.

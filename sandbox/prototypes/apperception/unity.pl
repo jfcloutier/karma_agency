@@ -6,24 +6,28 @@
         facts_repeat/2,
         factual_contradiction/2]).
 
-:- use_module(rules_engine).
+:- use_module(logger).
 :- use_module(global).
+:- use_module(rules_engine).
 :- use_module(type_signature).
 
 % Check that the static constraints achiev conceptual unity over relation predicates.
 % Property predicates are implicitly unified via domain exclusion.
 conceptual_unity(StaticConstraints, TypeSignature) :-
+    log(info, unity, 'Checking conceptual unity'),
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
     \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
 
 % A round si spatially unified if all objects are inter-related.
 spatial_unity(Round, TypeSignature) :-
+    log(info, unity, 'Checking spatial unity...'),
     \+ unrelated_objects(Round, TypeSignature).
 
 % Verify that the round is consistent with the static rules and constraints,
 % i.e. compute the closure of the round under the static rules
 % without causing a contradiction or breaking a static constraint.
 static_unity(Round, StaticRules, StaticConstraints, TypeSignature) :-
+    log(info, unity, 'Checking static unity'),
     get_global(apperception, uuid, Module),
     setup_call_cleanup(
             clear(Module, TypeSignature.predicate_types), 
@@ -35,7 +39,8 @@ static_unity(Round, StaticRules, StaticConstraints, TypeSignature) :-
 % Only one constraint need to be broken.
 breaks_static_constraints(Round, StaticConstraints, TypeSignature) :-
     member(StaticConstraint, StaticConstraints),
-    broken_static_constraint(StaticConstraint, Round, TypeSignature).
+    broken_static_constraint(StaticConstraint, Round, TypeSignature),
+    log(info, unity, 'Broken static constraint in round ~p', [Round]).
 
 % Repeated property on the same object irrespective of domain value,
 % Or repeated relation between identical pair of objects. 
@@ -56,7 +61,8 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 % Some pair of objects from the type signature aren't related, directly or indirectly, in the  initial conditions.
 unrelated_objects(Round, TypeSignature) :-
     object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
-    \+ related(ObjectName1, ObjectName2, TypeSignature, Round).
+    \+ related(ObjectName1, ObjectName2, TypeSignature, Round),
+    log(debug, unity, 'Unrelated objects in round ~p!', [Round]).
 
 % Some pair of objects from the type signature
 object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
@@ -123,7 +129,8 @@ broken_static_constraint(one_relation(PredicateNames), Round, TypeSignature) :-
    \+ (member(PName, PredicateNames),
       member(Fact, Round),
       Fact =.. [PName, ObjectName1, ObjectName2]
-      ).
+      ),
+   log(debug, unity, 'Zero one_relation(~p)', [PredicateNames]).
 
 % More than one condition on the same objects from the set of mutually exclusive predicates
 broken_static_constraint(one_relation(PredicateNames), Round, _) :-
@@ -134,7 +141,8 @@ broken_static_constraint(one_relation(PredicateNames), Round, _) :-
     % And there is another condition also named in the constraint between these two objects
     member(OtherFact, OtherRound),
     OtherFact =.. [OtherPredicateName, ObjectName1, ObjectName2],
-    memberchk(OtherPredicateName, OtherPredicateNames).
+    memberchk(OtherPredicateName, OtherPredicateNames),
+    log(debug, unity, 'Multiple one_relation(~p)', [PredicateNames]).
 
 % If there is an object to which the one-related predicate applies, there must be one such condition and only one.
 broken_static_constraint(one_related(PredicateName), Round, TypeSignature) :-
@@ -143,13 +151,16 @@ broken_static_constraint(one_related(PredicateName), Round, TypeSignature) :-
     member(predicate(PredicateName, [object_type(ObjectType), _]), TypeSignature.predicate_types),
     % such that
     % if there is such a relation to another object in the initial conditions, a second such relation to yet another object breaks the constraint
-    ((select(Fact, Round, OtherRound),
-     Fact =.. [PredicateName, ObjectName, _]) ->
+    (
+     (select(Fact, Round, OtherRound),
+      Fact =.. [PredicateName, ObjectName, _]) ->
         (member(OtherFact, OtherRound),
-         OtherFact =.. [PredicateName, ObjectName, _]
+         OtherFact =.. [PredicateName, ObjectName, _],
+         log(debug, unity, 'Multiple one_related(~p)', [PredicateName])
         )
      ;
      % If no such relation for that object is found, the constraint is broken
+     log(debug, unity, 'Zero one_related(~p)', [PredicateName]),
      true
      ).
 
