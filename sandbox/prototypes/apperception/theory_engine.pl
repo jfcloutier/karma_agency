@@ -296,14 +296,15 @@ numerize_vars(Predicates, PredicatesWithNumerizedVars) :-
     copy_term_nat(Predicates, PredicatesWithNumerizedVars),
     numbervars(PredicatesWithNumerizedVars, 1, _).
 
-repeated_rules([RulePair | OtherRulePairs]) :- 
-    member(OtherRulePair, OtherRulePairs),
-    (rule_repeats(RulePair, OtherRulePair) -> true ; repeated_rules(OtherRulePairs)).
+repeated_rules(RulePairs) :- 
+    select(RulePair, RulePairs, OtherRulePairs), 
+    member(OtherRulePair, OtherRulePairs), 
+    rule_repeats(RulePair, OtherRulePair).
 
 rule_repeats(Head-BodyPredicates, OtherHead-OtherBodyPredicates) :-
     equivalent_predicates(Head, OtherHead),
     equivalent_bodies(BodyPredicates, OtherBodyPredicates),
-    log(debug, theory_engine, 'Repeated rules!').
+    log(debug, theory_engine, 'Repeated rule ~p', Head-BodyPredicates).
 
 equivalent_bodies(BodyPredicates, OtherBodyPredicates) :-
     subsumed_conjunctions(BodyPredicates, OtherBodyPredicates) -> true ; subsumed_conjunctions(OtherBodyPredicates, BodyPredicates).
