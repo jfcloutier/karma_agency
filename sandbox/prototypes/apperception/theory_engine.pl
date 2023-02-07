@@ -361,13 +361,10 @@ maybe_add_initial_relations(TypeSignature, Acc, InitialConditions) :-
     maybe_add_initial_relations(TypeSignature, [InitialCondition | Acc], InitialConditions).
 
 % Two conditions where one is redundant or one contradicts the another.
-redundant_initial_conditions([InitialCondition | Others]) :-
-    (member(OtherInitialCondition, Others),
-     facts_repeat(InitialCondition, OtherInitialCondition) 
-     )-> 
-        true 
-        ; 
-        redundant_initial_conditions(Others).
+redundant_initial_conditions(InitialConditions) :-
+    select(InitialCondition, InitialConditions, OtherInitialConditions),
+    member(OtherInitialCondition, OtherInitialConditions),
+    facts_repeat(InitialCondition, OtherInitialCondition).
 
 % All objects are represented.
 % Spatial unity and no broken static constraints.

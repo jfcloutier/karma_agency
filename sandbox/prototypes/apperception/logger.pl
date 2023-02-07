@@ -1,4 +1,4 @@
-:- module(logger, [log/3, log/4, set_log_level/1, ignore_log_topic/1, reset_logging/0]).
+:- module(logger, [log/3, log/4, log/5, set_log_level/1, ignore_log_topic/1, reset_logging/0]).
 
 /*
 cd('sandbox/prototypes/apperception').
@@ -81,21 +81,33 @@ reset_logging() :-
     asserta(level(debug)),
     asserta(ignored([])).
 
+log(Level, Topic, Message, Params, sleep(Secs)) :-
+    log(Level, Topic, Message, Params),
+    sleep(Secs).
+
+log(Level, Topic, Message, sleep(Secs)) :-
+    log(Level, Topic, Message),
+    sleep(Secs).
+
 log(Level, Topic, Message, Params) :-
     level_covered(Level),
     topic_covered(Topic),
-    string_concat(Message, '~n', Line),
-    format(Line, Params), !.
+    add_meta(Level, Topic, Message, Params, Line, ParamsPlus),
+    format(Line, ParamsPlus).
 
 log(_, _, _, _).
 
 log(Level, Topic, Message) :-
     level_covered(Level),
     topic_covered(Topic),
-    string_concat(Message, '~n', Line),
-    format(Line), !.
+    add_meta(Level, Topic, Message, [], Line, Params),
+    format(Line, Params), !.
 
 log(_, _, _).
+
+add_meta(Level, Topic, Message, Params, Line, [Level, Topic | Params]) :-
+    string_concat(Message, '~n', Message1),
+    string_concat('~p [~p] ', Message1, Line).
 
 level_covered(Level) :-
     levels(Levels),

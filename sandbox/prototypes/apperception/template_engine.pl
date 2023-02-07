@@ -109,7 +109,8 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
     Count is ObjectTypesCount + ObjectsCount + PredicateTypesCount,
-    MaxRules is Count * 2,
+    MaxRules is Count,
     MaxElements is 10 * Count * Count,
     MaxTheoryTime is MaxElements * 0.01,
-    Limits = limits{max_rules: MaxRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime}.
+    Limits = limits{max_rules: MaxRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
+    log(info, template_engine, 'Template limits ~p', [Limits]).
