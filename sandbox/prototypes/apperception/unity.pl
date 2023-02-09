@@ -3,6 +3,7 @@
         spatial_unity/2, 
         static_unity/4, 
         breaks_static_constraints/3,
+        too_many_relations/3,
         facts_repeat/2,
         factual_contradiction/2]).
 
@@ -118,7 +119,11 @@ factual_contradiction(Condition, Fact) :-
     is_domain_value(_, Arg), !.
 
 % There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there.
-broken_static_constraint(one_relation(PredicateNames), Round, TypeSignature) :-
+broken_static_constraint(StaticConstraint, Round, TypeSignature) :-
+    missing_relation(StaticConstraint, Round, TypeSignature);
+    too_many_relations(StaticConstraint, Round, TypeSignature).
+
+missing_relation(one_relation(PredicateNames), Round, TypeSignature) :-
    % There is a pair of objects in the type signature
    select(object(ObjectType1, ObjectName1), TypeSignature.objects, RemainingSignatureObjects),
    member(object(ObjectType2, ObjectName2), RemainingSignatureObjects),
@@ -132,35 +137,51 @@ broken_static_constraint(one_relation(PredicateNames), Round, TypeSignature) :-
       ),
    log(debug, unity, 'Zero one_relation(~p)', [PredicateNames]).
 
+% If there is an object to which the one-related predicate applies, there must be one such condition and only one.
+missing_relation(one_related(PredicateName), Round, TypeSignature) :-
+    % There is an object that can be related to another by the predicate named in the constraint
+    member(object(ObjectType, ObjectName), TypeSignature.objects),
+    member(predicate(PredicateName, [object_type(ObjectType), _]), TypeSignature.predicate_types),
+    % such that
+    % if there is no such a relation to another object in the round
+    (
+     (member(Fact, Round),
+      Fact =.. [PredicateName, ObjectName, _]) ->
+        fail
+     ;
+     % If no such relation for that object is found, the constraint is broken
+     log(debug, unity, 'Zero one_related(~p)', [PredicateName]),
+     true
+     ).
+
 % More than one condition on the same objects from the set of mutually exclusive predicates
-broken_static_constraint(one_relation(PredicateNames), Round, _) :-
+too_many_relations(one_relation(PredicateNames), Round, _) :-
     % There is a relation named in the constraint between two objects
-    select(Fact, Round, OtherRound),
+    select(Fact, Round, OtherFacts),
     Fact =.. [PredicateName, ObjectName1, ObjectName2],
     select(PredicateName, PredicateNames, OtherPredicateNames),
     % And there is another condition also named in the constraint between these two objects
-    member(OtherFact, OtherRound),
+    member(OtherFact, OtherFacts),
     OtherFact =.. [OtherPredicateName, ObjectName1, ObjectName2],
     memberchk(OtherPredicateName, OtherPredicateNames),
     log(debug, unity, 'Multiple one_relation(~p)', [PredicateNames]).
 
-% If there is an object to which the one-related predicate applies, there must be one such condition and only one.
-broken_static_constraint(one_related(PredicateName), Round, TypeSignature) :-
+% If there is an object to which the one-related predicate applies, there must not be more than one.
+too_many_relations(one_related(PredicateName), Round, TypeSignature) :-
     % There is an object that can be related to another by the predicate named in the constraint
     member(object(ObjectType, ObjectName), TypeSignature.objects),
     member(predicate(PredicateName, [object_type(ObjectType), _]), TypeSignature.predicate_types),
     % such that
     % if there is such a relation to another object in the initial conditions, a second such relation to yet another object breaks the constraint
     (
-     (select(Fact, Round, OtherRound),
+     (select(Fact, Round, OtherFacts),
       Fact =.. [PredicateName, ObjectName, _]) ->
-        (member(OtherFact, OtherRound),
+        (member(OtherFact, OtherFacts),
          OtherFact =.. [PredicateName, ObjectName, _],
          log(debug, unity, 'Multiple one_related(~p)', [PredicateName])
         )
      ;
-     % If no such relation for that object is found, the constraint is broken
-     log(debug, unity, 'Zero one_related(~p)', [PredicateName]),
-     true
+     fail
      ).
+
 

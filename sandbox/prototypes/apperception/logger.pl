@@ -105,9 +105,10 @@ log(Level, Topic, Message) :-
 
 log(_, _, _).
 
-add_meta(Level, Topic, Message, Params, Line, [Level, Topic | Params]) :-
+add_meta(Level, Topic, Message, Params, Line, [Time, Level, Topic | Params]) :-
     string_concat(Message, '~n', Message1),
-    string_concat('~p [~p] ', Message1, Line).
+    time_now(Time),
+    string_concat('~p ~p [~p] ', Message1, Line).
 
 level_covered(Level) :-
     levels(Levels),
@@ -119,5 +120,9 @@ level_covered(Level) :-
 topic_covered(Topic) :-
     ignored(IgnoredTopics),
     \+ memberchk(Topic, IgnoredTopics).
+
+time_now(Time) :-
+    get_time(Timestamp),
+    format_time(atom(Time), '%H:%M:%S.%f', Timestamp).
 
 

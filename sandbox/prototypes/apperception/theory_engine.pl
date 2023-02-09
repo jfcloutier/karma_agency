@@ -20,7 +20,7 @@ PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predic
 Objects = [object(led, light1), object(led, light2)],
 TypedVariables = [variables(led, 2)], 
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
-Limits = limits{max_rules:3, max_elements:60, max_theory_time: 0.6},
+Limits = limits{max_rules:8, max_elements:60, max_theory_time: 1000},
 Template = template{type_signature:TypeSignature, limits:Limits},
 
 create_theory_engine(Template, TheoryEngine),
@@ -113,10 +113,15 @@ initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
     log(info, theory_engine, 'Initial conditions'),
     check_deadline(),
     reset_visited_initial_conditions(),
+    % For every object, give a value to every applicable property
     make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
-    maybe_add_initial_relations(TypeSignature, InitialProperties, InitialConditions),
-    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints),
-    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
+    % For each pairing of objects, add one or more relations without breaking static constraints
+    make_initial_relations(TypeSignature, StaticConstraints, InitialRelations),
+    append(InitialProperties, InitialRelations, InitialConditions),
+    % Make sure we have not produced these initial conditions already
+    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions),
+    % Verify these new initial conditions are valid
+    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -304,7 +309,7 @@ repeated_rules(RulePairs) :-
 rule_repeats(Head-BodyPredicates, OtherHead-OtherBodyPredicates) :-
     equivalent_predicates(Head, OtherHead),
     equivalent_bodies(BodyPredicates, OtherBodyPredicates),
-    log(debug, theory_engine, 'Repeated rule ~p', Head-BodyPredicates).
+    log(debug, theory_engine, 'Repeated rule ~p', [Head-BodyPredicates]).
 
 equivalent_bodies(BodyPredicates, OtherBodyPredicates) :-
     subsumed_conjunctions(BodyPredicates, OtherBodyPredicates) -> true ; subsumed_conjunctions(OtherBodyPredicates, BodyPredicates).
@@ -347,31 +352,57 @@ make_object_properties(object(ObjectType, ObjectName),
 make_object_properties(Object, [_ | OtherPredicateTypes], ObjectProperties) :-
     make_object_properties(Object, OtherPredicateTypes, ObjectProperties).
 
-make_relation(TypeSignature, Relation) :-
-    select(object(ObjectType1, ObjectName1), TypeSignature.objects, RemainingObjects),
-    member(object(ObjectType2, ObjectName2), RemainingObjects),
-    member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), TypeSignature.predicate_types),
-    Relation =.. [PredicateName, ObjectName1, ObjectName2].
+% For each pairing of objects, add one or more relations without breaking static constraints
+make_initial_relations(TypeSignature, StaticConstraints, InitialRelations) :-
+    object_pairs(TypeSignature.objects, ObjectPairs),
+    make_object_relations(ObjectPairs, TypeSignature, StaticConstraints, InitialRelations).
 
-maybe_add_initial_relations(_, InitialConditions, InitialConditions).
-maybe_add_initial_relations(TypeSignature, Acc, InitialConditions) :-
-    make_relation(TypeSignature, InitialCondition),
-    % No redundancy
-    \+ redundant_initial_conditions([InitialCondition | Acc]),
-    maybe_add_initial_relations(TypeSignature, [InitialCondition | Acc], InitialConditions).
+object_pairs(Objects, ObjectPairs) :-
+    object_pairs_(Objects, [], ObjectPairs).
+    
+object_pairs_([], Acc, Acc).
+object_pairs_([_], Acc, Acc).
+object_pairs_([Object | OtherObjects], Acc, ObjectPairs) :-
+    findall(Object-OtherObject, member(OtherObject, OtherObjects), Pairs1),
+    findall(OtherObject-Object, member(OtherObject, OtherObjects), Pairs2),
+    append(Acc, Pairs1, Acc1),
+    append(Acc1, Pairs2, Acc2),
+    object_pairs_(OtherObjects, Acc2, ObjectPairs).
 
-% Two conditions where one is redundant or one contradicts the another.
-redundant_initial_conditions(InitialConditions) :-
-    select(InitialCondition, InitialConditions, OtherInitialConditions),
-    member(OtherInitialCondition, OtherInitialConditions),
-    facts_repeat(InitialCondition, OtherInitialCondition).
+make_object_relations(ObjectPairs, TypeSignature, StaticConstraints, InitialRelations) :-
+    make_object_relations_(ObjectPairs, TypeSignature, StaticConstraints, [], InitialRelations).
 
-% All objects are represented.
-% Spatial unity and no broken static constraints.
+make_object_relations_([], _, _, InitialRelations, InitialRelations).
+make_object_relations_([ObjectPair | OtherObjectPairs], TypeSignature, StaticConstraints, Acc, InitialRelations) :-
+    object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Relations),
+    append(Acc, Relations, Acc1),
+    make_object_relations_(OtherObjectPairs, TypeSignature, StaticConstraints, Acc1, InitialRelations).
+
+object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Relations) :-
+    object_pair_relations_(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, [], Relations).
+
+object_pair_relations_(_, [], _, _, Relations, Relations).
+
+object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
+                       [predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]) | OtherPredicateTypes], 
+                       StaticConstraints,
+                       TypeSignature,
+                       Acc, 
+                       Relations) :-
+                       Relation =.. [PredicateName, ObjectName1, ObjectName2],
+                       % Don't break the at-most-one aspect of a one-relation or one-related constraint by adding the new relation
+                       \+ too_many_relations([Relation | Acc], StaticConstraints, TypeSignature),
+                       object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], Relations).
+
+object_pair_relations_(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, Relations) :-
+    object_pair_relations_(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, Relations).
+
+% Check that no static constraint is broken.
+% Check that all objects are represented and spatial unity is achieved.
 valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
-  spatial_unity(InitialConditions, TypeSignature),
-  \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature).
+  \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature),
+  spatial_unity(InitialConditions, TypeSignature).
 
 % One object in the type signature does not appear in a condition
 unrepresented_object(Round, Objects) :-
