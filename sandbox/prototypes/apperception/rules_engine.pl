@@ -78,13 +78,16 @@ answer_query(Module, Query, Answers) :-
       true
       ; Answers = []).
 
-save_module(Atom) :-
-    atom_string(Atom, Name),
-    concat(Name, '.pl', File),
+save_module(Name) :-
+    mkdir('DELETE_ME'),
+    atomic_list_concat(['DELETE_ME/', Name, '.pl'], File),
     tell(File),
-    format(":- module(~p, []).~n", [Atom]),
-    listing(Atom:_),
+    format(":- module(~p, []).~n", [Name]),
+    listing(Name:_),
     told, !.
+
+mkdir(Dir) :-
+    exists_directory(Dir) -> true; make_directory(Dir).
 
 pairs_rules([], []).
 pairs_rules([Head-BodyPredicates | OtherPairs], [Rule | OtherRules]) :-

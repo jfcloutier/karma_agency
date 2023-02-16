@@ -11,6 +11,7 @@ cd('sandbox/prototypes/apperception').
 
 % Starting from initial conditions as round(0) of the trace, apply the theory to construct round(1), etc. until a round repeats a prior round.
 make_trace(Theory, TypeSignature, Trace, Module) :-
+    log(info, trace, 'Making trace applying ~p from initial conditions ~p', [Module, Theory.initial_conditions]),
     setup_call_cleanup(
         clear(Module, TypeSignature.predicate_types),
         (expand_trace([Theory.initial_conditions], Theory, TypeSignature, Module, ReverseTrace),
@@ -25,14 +26,17 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
     [Round | _] = Trace,
     next_round(Round, Theory, TypeSignature, Module, NextRound),
     (round_in_trace(NextRound, Trace) ->
+        log(info, trace, 'Next round ~p is already in the trace ~p', [NextRound, Trace]),
         ExpandedTrace = Trace
         ;
         expand_trace([NextRound | Trace], Theory, TypeSignature, Module, ExpandedTrace)
     ).
 
 next_round(Round, Theory, TypeSignature, Module, NextRound) :-
+    log(info, trace, 'Making next round'),
     make_round(Round, Theory, TypeSignature, Module, NextRound), !,
-    spatial_unity(NextRound, TypeSignature).
+    spatial_unity(NextRound, TypeSignature),
+    log(info, trace, 'Next round ~p', [NextRound]).
 
 % Apply causal rules to a round to produce a caused facts.
 % Apply static rules to the new round to add implied facts.

@@ -116,8 +116,7 @@ initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
     % For every object, give a value to every applicable property
     make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
     % For each pairing of objects, add one or more relations without breaking static constraints
-    make_initial_relations(TypeSignature, StaticConstraints, InitialRelations),
-    append(InitialProperties, InitialRelations, InitialConditions),
+    add_initial_relations(TypeSignature, StaticConstraints, InitialProperties, InitialConditions),
     % Make sure we have not produced these initial conditions already
     not_already_visited(InitialConditions, theory_engine/visited_initial_conditions),
     % Verify these new initial conditions are valid
@@ -333,73 +332,73 @@ reset_visited_initial_conditions() :-
     set_global(apperception, theory_engine/visited_initial_conditions, []).
 
 % For each object, for each applicable property, make one with some domain value.
-make_initial_properties([], _, []).
-make_initial_properties([Object | OtherObjects], PredicateTypes, Properties) :-
-    make_object_properties(Object, PredicateTypes, ObjectProperties),
-    make_initial_properties(OtherObjects, PredicateTypes, OtherObjectProperties),
-    append(ObjectProperties, OtherObjectProperties, Properties).
+make_initial_properties(Objects, PredicateTypes, Properties) :-
+    make_initial_properties_(Objects, PredicateTypes, [], Properties).
 
-make_object_properties(_, [], []).
-make_object_properties(object(ObjectType, ObjectName), 
-                       [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes], 
-                       [Property | OtherObjectProperties]) :-
-    !,
+make_initial_properties_([], _, Properties, Properties).
+
+make_initial_properties_([Object | OtherObjects], PredicateTypes, Acc, Properties) :-
+    add_object_properties(Object, PredicateTypes, Acc, Acc1),
+    make_initial_properties_(OtherObjects, PredicateTypes, Acc1, Properties).
+
+add_object_properties(_, [], Properties, Properties).
+
+add_object_properties(object(ObjectType, ObjectName), 
+                       [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes],
+                       Acc,
+                       Properties) :-
     domain_is(Domain, Values),
     member(Value, Values),
     Property =.. [PredicateName, ObjectName, Value],
-    make_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, OtherObjectProperties).
+    add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, [Property | Acc], Properties).
 
-make_object_properties(Object, [_ | OtherPredicateTypes], ObjectProperties) :-
-    make_object_properties(Object, OtherPredicateTypes, ObjectProperties).
+add_object_properties(Object, [_ | OtherPredicateTypes], Acc, Properties) :-
+    add_object_properties(Object, OtherPredicateTypes, Acc, Properties).
 
 % For each pairing of objects, add one or more relations without breaking static constraints
-make_initial_relations(TypeSignature, StaticConstraints, InitialRelations) :-
+add_initial_relations(TypeSignature, StaticConstraints, Acc, InitialConditions) :-
     object_pairs(TypeSignature.objects, ObjectPairs),
-    make_object_relations(ObjectPairs, TypeSignature, StaticConstraints, InitialRelations).
+    add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions).
 
 object_pairs(Objects, ObjectPairs) :-
     object_pairs_(Objects, [], ObjectPairs).
     
-object_pairs_([], Acc, Acc).
-object_pairs_([_], Acc, Acc).
+object_pairs_([], ObjectPairs, ObjectPairs).
+object_pairs_([_], ObjectPairs, ObjectPairs).
 object_pairs_([Object | OtherObjects], Acc, ObjectPairs) :-
-    findall(Object-OtherObject, member(OtherObject, OtherObjects), Pairs1),
-    findall(OtherObject-Object, member(OtherObject, OtherObjects), Pairs2),
-    append(Acc, Pairs1, Acc1),
-    append(Acc1, Pairs2, Acc2),
-    object_pairs_(OtherObjects, Acc2, ObjectPairs).
+    findall([Object-OtherObject, OtherObject-Object], member(OtherObject, OtherObjects), PairsList),
+    flatten([PairsList, Acc], Acc1),
+    object_pairs_(OtherObjects, Acc1, ObjectPairs), 
+    !.
 
-make_object_relations(ObjectPairs, TypeSignature, StaticConstraints, InitialRelations) :-
-    make_object_relations_(ObjectPairs, TypeSignature, StaticConstraints, [], InitialRelations).
+add_object_relations([], _, _, InitialConditions, InitialConditions).
+add_object_relations([ObjectPair | OtherObjectPairs], TypeSignature, StaticConstraints, Acc, InitialConditions) :-
+    add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, Acc1),
+    add_object_relations(OtherObjectPairs, TypeSignature, StaticConstraints, Acc1, InitialConditions).
 
-make_object_relations_([], _, _, InitialRelations, InitialRelations).
-make_object_relations_([ObjectPair | OtherObjectPairs], TypeSignature, StaticConstraints, Acc, InitialRelations) :-
-    object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Relations),
-    append(Acc, Relations, Acc1),
-    make_object_relations_(OtherObjectPairs, TypeSignature, StaticConstraints, Acc1, InitialRelations).
+add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, InitialConditions) :-
+    add_object_pair_relations_(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, Acc, InitialConditions).
 
-object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Relations) :-
-    object_pair_relations_(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, [], Relations).
+add_object_pair_relations_(_, [], _, _, InitialConditions, InitialConditions).
 
-object_pair_relations_(_, [], _, _, Relations, Relations).
-
-object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
+add_object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
                        [predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]) | OtherPredicateTypes], 
                        StaticConstraints,
                        TypeSignature,
                        Acc, 
-                       Relations) :-
+                       InitialConditions) :-
                        Relation =.. [PredicateName, ObjectName1, ObjectName2],
                        % Don't break the at-most-one aspect of a one-relation or one-related constraint by adding the new relation
                        \+ too_many_relations([Relation | Acc], StaticConstraints, TypeSignature),
-                       object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], Relations).
+                       add_object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], InitialConditions).
 
-object_pair_relations_(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, Relations) :-
-    object_pair_relations_(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, Relations).
+add_object_pair_relations_(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, InitialConditions) :-
+    add_object_pair_relations_(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, InitialConditions).
 
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.
 valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
+  check_deadline(),
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
   \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature),
   spatial_unity(InitialConditions, TypeSignature).

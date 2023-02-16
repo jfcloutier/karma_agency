@@ -49,7 +49,7 @@ find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-
     log(info, apperception_engine, 'Found theory ~p', [Theory]),
     % Making a trace can fail
     (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
-        log(info, apperception_engine, 'Created trace ~p~', [Trace]),
+        log(warn, apperception_engine, 'Created trace ~p', [Trace]),
         rate_theory(Theory, Sequence, Trace, RatedTheory),
         maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch)
         ;

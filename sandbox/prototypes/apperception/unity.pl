@@ -20,6 +20,7 @@ conceptual_unity(StaticConstraints, TypeSignature) :-
     \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
 
 % A round si spatially unified if all objects are inter-related.
+spatial_unity([], _) :- fail, !.
 spatial_unity(Round, TypeSignature) :-
     log(info, unity, 'Checking spatial unity...'),
     \+ unrelated_objects(Round, TypeSignature).
@@ -27,6 +28,7 @@ spatial_unity(Round, TypeSignature) :-
 % Verify that the round is consistent with the static rules and constraints,
 % i.e. compute the closure of the round under the static rules
 % without causing a contradiction or breaking a static constraint.
+static_unity([], _, _, _) :- fail,!.
 static_unity(Round, StaticRules, StaticConstraints, TypeSignature) :-
     log(info, unity, 'Checking static unity'),
     get_global(apperception, uuid, Module),
