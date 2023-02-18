@@ -22,7 +22,7 @@ conceptual_unity(StaticConstraints, TypeSignature) :-
 % A round si spatially unified if all objects are inter-related.
 spatial_unity([], _) :- fail, !.
 spatial_unity(Round, TypeSignature) :-
-    log(info, unity, 'Checking spatial unity...'),
+    log(info, unity, 'Checking spatial unity'),
     \+ unrelated_objects(Round, TypeSignature).
 
 % Verify that the round is consistent with the static rules and constraints,
@@ -43,7 +43,7 @@ static_unity(Round, StaticRules, StaticConstraints, TypeSignature) :-
 breaks_static_constraints(Round, StaticConstraints, TypeSignature) :-
     member(StaticConstraint, StaticConstraints),
     broken_static_constraint(StaticConstraint, Round, TypeSignature),
-    log(info, unity, 'Broken static constraint in round ~p', [Round]).
+    log(info, unity, 'Broken static constraint ~p in round ~p', [StaticConstraint, Round]).
 
 % Repeated property on the same object irrespective of domain value,
 % Or repeated relation between identical pair of objects. 
@@ -65,7 +65,7 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 unrelated_objects(Round, TypeSignature) :-
     object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
     \+ related(ObjectName1, ObjectName2, TypeSignature, Round),
-    log(debug, unity, 'Unrelated objects in round ~p!', [Round]).
+    log(debug, unity, 'Unrelated objects ~p and ~p in round ~p!', [ObjectName1, ObjectName2, Round]).
 
 % Some pair of objects from the type signature
 object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
@@ -120,7 +120,7 @@ factual_contradiction(Condition, Fact) :-
     Arg \== Arg1,
     is_domain_value(_, Arg), !.
 
-% There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there.
+% There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there, or more than one.
 broken_static_constraint(StaticConstraint, Round, TypeSignature) :-
     missing_relation(StaticConstraint, Round, TypeSignature);
     too_many_relations(StaticConstraint, Round, TypeSignature).
@@ -137,7 +137,7 @@ missing_relation(one_relation(PredicateNames), Round, TypeSignature) :-
       member(Fact, Round),
       Fact =.. [PName, ObjectName1, ObjectName2]
       ),
-   log(debug, unity, 'Zero one_relation(~p)', [PredicateNames]).
+   log(debug, unity, 'Zero one_relation(~p) between ~p and ~p in round ~p', [PredicateNames, ObjectName1, ObjectName2, Round]).
 
 % If there is an object to which the one-related predicate applies, there must be one such condition and only one.
 missing_relation(one_related(PredicateName), Round, TypeSignature) :-
@@ -152,7 +152,7 @@ missing_relation(one_related(PredicateName), Round, TypeSignature) :-
         fail
      ;
      % If no such relation for that object is found, the constraint is broken
-     log(debug, unity, 'Zero one_related(~p)', [PredicateName]),
+     log(debug, unity, 'Zero one_related(~p) for object ~p of ~p in round ~p', [PredicateName, ObjectName, TypeSignature.objects, Round]),
      true
      ).
 
@@ -166,7 +166,7 @@ too_many_relations(one_relation(PredicateNames), Round, _) :-
     member(OtherFact, OtherFacts),
     OtherFact =.. [OtherPredicateName, ObjectName1, ObjectName2],
     memberchk(OtherPredicateName, OtherPredicateNames),
-    log(debug, unity, 'Multiple one_relation(~p)', [PredicateNames]).
+    log(debug, unity, 'Multiple one_relation(~p) from ~p in round ~p', [PredicateNames, ObjectName1, Round]).
 
 % If there is an object to which the one-related predicate applies, there must not be more than one.
 too_many_relations(one_related(PredicateName), Round, TypeSignature) :-
@@ -180,7 +180,7 @@ too_many_relations(one_related(PredicateName), Round, TypeSignature) :-
       Fact =.. [PredicateName, ObjectName, _]) ->
         (member(OtherFact, OtherFacts),
          OtherFact =.. [PredicateName, ObjectName, _],
-         log(debug, unity, 'Multiple one_related(~p)', [PredicateName])
+         log(debug, unity, 'Multiple one_related(~p) from ~p in round ~p', [PredicateName, ObjectName, Round])
         )
      ;
      fail

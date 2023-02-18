@@ -33,11 +33,11 @@ engine_destroy(TheoryTemplateEngine).
 
 %% Create an engine that produces theory templates on request
 create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine) :-
-    init_template_counter(),
+    init_template_counter,
     engine_create(Template, theory_template(MinTypeSignature, MaxSignatureExtension, Template), TheoryTemplateEngine).
 
 % Add a value to the global variable to keep count of templates produced vs maximum allowed
-init_template_counter() :-
+init_template_counter :-
     set_global(apperception, template_engine/max_templates, 0),
     set_global(apperception, template_engine/template_count, 0).
 
@@ -51,7 +51,7 @@ theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
     Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
-    increment_template_count().
+    increment_template_count.
 
 reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
@@ -59,7 +59,7 @@ reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     set_global(apperception, template_engine/template_count, 0),
     log(info, template_engine, 'MAX ~p TEMPLATES ALLOWED', [Max]).
 
-increment_template_count() :-
+increment_template_count :-
     get_global(apperception, template_engine/template_count, Count),
     Inc is Count + 1,
     set_global(apperception, template_engine/template_count, Inc),

@@ -79,12 +79,15 @@ answer_query(Module, Query, Answers) :-
       ; Answers = []).
 
 save_module(Name) :-
+    log_level(debug),
     mkdir('DELETE_ME'),
     atomic_list_concat(['DELETE_ME/', Name, '.pl'], File),
     tell(File),
     format(":- module(~p, []).~n", [Name]),
     listing(Name:_),
     told, !.
+
+save_module(_).
 
 mkdir(Dir) :-
     exists_directory(Dir) -> true; make_directory(Dir).

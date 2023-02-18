@@ -39,7 +39,7 @@ theory(Template, Theory) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
     reset_deadline(Template.limits.max_theory_time),
-    reset_visited_constraints(),
+    reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
     causal_rules(Template, CausalRules),
@@ -54,7 +54,7 @@ reset_deadline(MaxTime) :-
     set_global(apperception, theory_engine/deadline, Deadline).
 
 %  Throw an exception if too much time has been spent trying to compose a theory
-check_deadline() :-
+check_deadline :-
     get_time(Now),
     get_global(apperception, theory_engine/deadline, Deadline),
     Now > Deadline -> 
@@ -64,7 +64,7 @@ check_deadline() :-
     true.
 
 % Reset visited constraints to empty
-reset_visited_constraints() :-
+reset_visited_constraints :-
     set_global(apperception, theory_engine/visited_constraints, []).
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
@@ -74,9 +74,9 @@ reset_visited_constraints() :-
 %   one_related(pred1). 
 static_constraints(TypeSignature, StaticConstraints) :-
     log(info, theory_engine, 'Static constraints'),
-    check_deadline(),
+   check_deadline,
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    reset_visited_constraints(),
+    reset_visited_constraints,
     maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
     maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
     valid_static_constraints(StaticConstraints, TypeSignature).
@@ -91,7 +91,7 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticConstraints, RulePairs) :-
     log(info, theory_engine, 'Static rules'),
-    check_deadline(),
+   check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
@@ -102,7 +102,7 @@ static_rules(Template, StaticConstraints, RulePairs) :-
 % Rules must not exceed limits nor repeat themselves nor define non-change
 causal_rules(Template, RulePairs) :-  
     log(info, theory_engine, 'Causal rules'),
-    check_deadline(),
+    check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates], Template.limits),
     NextifiedHead =.. [next, Head],
@@ -111,8 +111,8 @@ causal_rules(Template, RulePairs) :-
 %% CONSTRUCTING VALID INITIAL CONDITIONS
 initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
     log(info, theory_engine, 'Initial conditions'),
-    check_deadline(),
-    reset_visited_initial_conditions(),
+   check_deadline,
+    reset_visited_initial_conditions,
     % For every object, give a value to every applicable property
     make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
     % For each pairing of objects, add one or more relations without breaking static constraints
@@ -328,7 +328,7 @@ recursion_in_rules(RulePairs) :-
     log(debug, theory_engine, 'Recursion in rule!').
 
 % Reset visited initial conditions to empty
-reset_visited_initial_conditions() :-
+reset_visited_initial_conditions :-
     set_global(apperception, theory_engine/visited_initial_conditions, []).
 
 % For each object, for each applicable property, make one with some domain value.
@@ -347,6 +347,7 @@ add_object_properties(object(ObjectType, ObjectName),
                        [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes],
                        Acc,
                        Properties) :-
+    !,
     domain_is(Domain, Values),
     member(Value, Values),
     Property =.. [PredicateName, ObjectName, Value],
@@ -398,7 +399,7 @@ add_object_pair_relations_(ObjectPair, [_ | OtherPredicateTypes], StaticConstrai
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.
 valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
-  check_deadline(),
+ check_deadline,
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
   \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature),
   spatial_unity(InitialConditions, TypeSignature).
@@ -407,7 +408,7 @@ valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
 unrepresented_object(Round, Objects) :-
     member(object(_, ObjectName), Objects),
     \+ object_referenced(ObjectName, Round),
-    log(debug, theory_engine, 'Unrepresented object in round').
+    log(debug, theory_engine, 'Unrepresented object ~p in round ~p', [ObjectName, Round]).
     
 % An object is referenced by name somewhere in the initial conditions
 object_referenced(ObjectName, Round) :-
@@ -466,6 +467,7 @@ make_body_predicates(PredicateTypes, DistinctVars, Head, BodyPredicates) :-
     maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate], BodyPredicates),
     valid_body_predicates(BodyPredicates, Head).
 
+% TODO - the var in the head and its use in the body must be consistently typed
 make_body_predicate(PredicateTypes, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
     member(PredicateType, PredicateTypes),
     make_rule_predicate(PredicateType, DistinctVars, BodyPredicate),

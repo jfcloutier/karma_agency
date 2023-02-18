@@ -12,6 +12,7 @@ cd('sandbox/prototypes/apperception').
 % Starting from initial conditions as round(0) of the trace, apply the theory to construct round(1), etc. until a round repeats a prior round.
 make_trace(Theory, TypeSignature, Trace, Module) :-
     log(info, trace, 'Making trace applying ~p from initial conditions ~p', [Module, Theory.initial_conditions]),
+    save_module(Module),
     setup_call_cleanup(
         clear(Module, TypeSignature.predicate_types),
         (expand_trace([Theory.initial_conditions], Theory, TypeSignature, Module, ReverseTrace),
@@ -62,13 +63,15 @@ denextify_facts([NextFact | Rest], [Fact | OtherFacts]) :-
     NextFact =.. [next, Fact],
     denextify_facts(Rest, OtherFacts).
 
-% Add as many prior facts into caused facts without introducing a contradiction or breaking a static constraint.
+% Add as many prior facts into caused facts without introducing a property contradiction or breaking a too-many-relations static constraint.
 carry_over_composable([], ComposedFacts, _, _, ComposedFacts).
 carry_over_composable([PriorFact | OtherPriorFacts], CausedFacts, Theory, TypeSignature, ComposedFacts) :-
+    log(debug, trace, 'Trying to compose prior ~p into caused ~p', [PriorFact, CausedFacts]),
     \+ (member(CausedFact, CausedFacts), facts_repeat(PriorFact, CausedFact)),
     \+ (member(CausedFact, CausedFacts), factual_contradiction(PriorFact, CausedFact)),
-    \+ breaks_static_constraints([PriorFact | CausedFacts], Theory.static_constraints, TypeSignature),
-    !,
+    \+ too_many_relations([PriorFact | CausedFacts], Theory.static_constraints, TypeSignature),
+     !,
+    log(debug, trace, 'Composed prior ~p into caused ~p', [PriorFact, CausedFacts]),
     carry_over_composable(OtherPriorFacts, [PriorFact | CausedFacts], Theory, TypeSignature, ComposedFacts).
 carry_over_composable([_ | OtherPriorFacts], CausedFacts, Theory, TypeSignature, ComposedFacts) :-
     carry_over_composable(OtherPriorFacts, CausedFacts, Theory, TypeSignature, ComposedFacts).

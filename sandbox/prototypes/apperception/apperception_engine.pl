@@ -19,7 +19,7 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, unity, rules_engine, apperception_engine].
-set_log_level(info).
+set_log_level(debug).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -46,7 +46,7 @@ find_best_theories(ApperceptionLimits, Search, _, Theories) :-
 find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-   
     log(info, apperception_engine, 'Searching for a theory. Search = ~p', [Search]),
     find_theory(ApperceptionLimits, Search, Theory, UpdatedSearch),
-    log(info, apperception_engine, 'Found theory ~p', [Theory]),
+    log(info, apperception_engine, 'Found theory ~p from template ~p', [Theory, Search.template]),
     % Making a trace can fail
     (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
         log(warn, apperception_engine, 'Created trace ~p', [Trace]),

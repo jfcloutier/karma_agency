@@ -1,10 +1,10 @@
-:- module(logger, [log/3, log/4, log/5, set_log_level/1, ignore_log_topic/1, reset_logging/0]).
+:- module(logger, [log/3, log/4, log/5, set_log_level/1, log_level/1, ignore_log_topic/1, reset_logging/0]).
 
 /*
 cd('sandbox/prototypes/apperception').
 [logger].
 
-reset_logging(),
+reset_logging,
 log(debug, test, 'This is a debug test'),
 log(debug, test, 'This is a debug test ~p', [1]),
 log(warn, test, 'This is a warn test'),
@@ -12,7 +12,7 @@ log(warn, test, 'This is a warn test ~p', [1]),
 logger:level(Level),
 logger:ignored(AllIgnored).
 
-reset_logging(),
+reset_logging,
 set_log_level(info),
 log(debug, test, 'This is a debug test'),
 log(debug, test, 'This is a debug test ~p', [1]),
@@ -23,7 +23,7 @@ log(warn, test, 'This is a warn test ~p', [1]),
 logger:level(Level),
 logger:ignored(AllIgnored).
 
-reset_logging(),
+reset_logging,
 set_log_level(error),
 log(debug, test, 'This is a debug test'),
 log(debug, test, 'This is a debug test ~p', [1]),
@@ -32,7 +32,7 @@ log(warn, test, 'This is a warn test ~p', [1]),
 logger:level(Level),
 logger:ignored(AllIgnored).
 
-reset_logging(),
+reset_logging,
 set_log_level(info),
 ignore_log_topic(test1).
 log(debug, test, 'This is a debug test'),
@@ -46,7 +46,7 @@ logger:ignored(AllIgnored).
 
 set_log_level(info),
 ignore_log_topic(test1).
-reset_logging(),
+reset_logging,
 log(debug, test, 'This is a debug test'),
 log(debug, test1, 'This is a debug test1 ~p', [bla]),
 log(info, test, 'This is an info test'),
@@ -65,6 +65,9 @@ levels([debug, info, warn, error]).
 level(debug).
 ignored([]).
 
+log_level(Level) :-
+    level(Level).
+
 set_log_level(Level) :-
     retractall(level(_)),
     asserta(level(Level)).
@@ -75,7 +78,7 @@ ignore_log_topic(Topic) :-
     retractall(ignored(_)),
     asserta(ignored(NowIgnored)).
 
-reset_logging() :-
+reset_logging :-
     retractall(level(_)),
     retractall(ignored(_)),
     asserta(level(debug)),

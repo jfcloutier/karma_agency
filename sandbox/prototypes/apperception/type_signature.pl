@@ -79,7 +79,7 @@ domain_of(Value, value_type(DomainName)) :-
     memberchk(Value, DomainValues), !.
 
 extended_object_types(ObjectTypes, N, ExtendedObjectTypes) :-
-    max_template_count_reached() -> fail ; extended_object_types_(ObjectTypes, N, ExtendedObjectTypes).
+    max_template_count_reached -> fail ; extended_object_types_(ObjectTypes, N, ExtendedObjectTypes).
 
 extended_object_types_(ObjectTypes, 0, ObjectTypes).
 extended_object_types_(ObjectTypes, N, ExtendedObjectTypes) :-
@@ -94,7 +94,7 @@ new_object_type(ObjectTypes, object_type(NewTypeName)) :-
     atom_concat(type_, Index1, NewTypeName).
 
 extended_objects(Objects, ObjectTypes, N, ExtendedObjects) :-
-    max_template_count_reached() -> fail ; extended_objects_(Objects, ObjectTypes, N, ExtendedObjects).
+    max_template_count_reached -> fail ; extended_objects_(Objects, ObjectTypes, N, ExtendedObjects).
 
 extended_objects_(Objects, _, 0, Objects).
 extended_objects_(Objects, ObjectTypes, N, ExtendedObjects) :-
@@ -110,7 +110,7 @@ new_object(Objects, ObjectTypes, object(ObjectType, ObjectName)) :-
     atom_concat(object_, Index1, ObjectName).
 
 extended_predicate_types(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
-    max_template_count_reached() -> fail ; extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes).
+    max_template_count_reached -> fail ; extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes).
 
 extended_predicate_types_(PredicateTypes, _, 0, PredicateTypes).
 extended_predicate_types_(PredicateTypes, ObjectTypes, N, ExtendedPredicateTypes) :-
@@ -137,12 +137,10 @@ typed_variables_(Objects, [object_type(ObjectType) | OtherObjectTypes], Acc, Typ
     length(ObjectNames, Count),
     typed_variables_(Objects, OtherObjectTypes, [variables(ObjectType, Count) | Acc], TypedVariables).
 
-% [predicate(distance_from, [object_type(wall), value_type(proximity)]), 
-%  predicate(on, [object_type(led), value_type(boolean)])]
+% New (latent) predicates can only be of type object or boolean
 make_argument_types(ObjectTypes, [ArgumentType1, ArgumentType2]) :-
-    bagof(DomainType, Domain^domain_is(DomainType, Domain), DomainTypes),
     make_argument_type(ObjectTypes, ArgumentType1),
-    make_argument_type(ObjectTypes, DomainTypes, ArgumentType2).
+    make_argument_type(ObjectTypes, [boolean], ArgumentType2).
 
 make_argument_type(ObjectTypes, ObjectType) :-
     member(ObjectType, ObjectTypes).
@@ -166,7 +164,7 @@ max_index([Term | Others], Prefix, Position, Max, MaxIndex) :-
 max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
     max_index(Others, Prefix, Position, Max, MaxIndex).
 
-max_template_count_reached() :-
+max_template_count_reached :-
     get_global(apperception, template_engine/max_templates, Max),
     get_global(apperception, template_engine/template_count, Max),
     log(warn, type_signature, 'MAX ~p TEMPLATES EXCEEDED!', [Max]).
