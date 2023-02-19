@@ -14,11 +14,11 @@ make_trace(Theory, TypeSignature, Trace, Module) :-
     log(info, trace, 'Making trace applying ~p from initial conditions ~p', [Module, Theory.initial_conditions]),
     save_module(Module),
     setup_call_cleanup(
-        clear(Module, TypeSignature.predicate_types),
+        clear_facts_and_rules(Module, TypeSignature.predicate_types),
         (expand_trace([Theory.initial_conditions], Theory, TypeSignature, Module, ReverseTrace),
          reverse(ReverseTrace, Trace)
         ),
-        clear(Module, TypeSignature.predicate_types)
+        clear_facts_and_rules(Module, TypeSignature.predicate_types)
     ).
 
 % Deterministic and always terminating trace expansion.
@@ -53,9 +53,10 @@ apply_causal_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     denextify_facts(Answers, Caused).
 
 apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
-    clear(Module, PredicateTypes),
+    clear_facts_and_rules(Module, PredicateTypes),
     assert_rules(Module, Rules),
     assert_facts(Module, Facts),
+    save_module(Module),
     apply_rules(Module, Rules, Caused).
 
 denextify_facts([], []).
@@ -69,7 +70,7 @@ carry_over_composable([PriorFact | OtherPriorFacts], CausedFacts, Theory, TypeSi
     log(debug, trace, 'Trying to compose prior ~p into caused ~p', [PriorFact, CausedFacts]),
     \+ (member(CausedFact, CausedFacts), facts_repeat(PriorFact, CausedFact)),
     \+ (member(CausedFact, CausedFacts), factual_contradiction(PriorFact, CausedFact)),
-    \+ too_many_relations([PriorFact | CausedFacts], Theory.static_constraints, TypeSignature),
+    \+ too_many_relations(Theory.static_constraints, [PriorFact | CausedFacts]),
      !,
     log(debug, trace, 'Composed prior ~p into caused ~p', [PriorFact, CausedFacts]),
     carry_over_composable(OtherPriorFacts, [PriorFact | CausedFacts], Theory, TypeSignature, ComposedFacts).

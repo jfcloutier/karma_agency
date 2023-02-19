@@ -42,7 +42,7 @@ theory(Template, Theory) :-
     reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
     static_rules(Template, StaticConstraints, StaticRules),
-    causal_rules(Template, CausalRules),
+    causal_rules(Template, StaticConstraints, CausalRules),
     initial_conditions(Template.type_signature, StaticConstraints, InitialConditions),
     static_unity(InitialConditions, StaticRules, StaticConstraints, Template.type_signature),
     Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0},
@@ -90,27 +90,28 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticConstraints, RulePairs) :-
-    log(info, theory_engine, 'Static rules'),
-   check_deadline,
+    log(info, theory_engine, 'Making static rules'),
+    check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_static_rule(Head-BodyPredicates),
-    valid_static_rules([Head-BodyPredicates], Template.limits, StaticConstraints),
+    valid_static_rule(Head-BodyPredicates, StaticConstraints),
+    valid_static_rules([Head-BodyPredicates], StaticConstraints),
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
-causal_rules(Template, RulePairs) :-  
-    log(info, theory_engine, 'Causal rules'),
+causal_rules(Template, StaticConstraints, RulePairs) :-  
+    log(info, theory_engine, 'Making causal rules'),
     check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rules([Head-BodyPredicates], Template.limits),
+    valid_causal_rule(Head-BodyPredicates, StaticConstraints),
+    valid_causal_rules([Head-BodyPredicates]),
     NextifiedHead =.. [next, Head],
-    maybe_add_causal_rule(Template, [NextifiedHead-BodyPredicates], RulePairs).
+    maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
 
 %% CONSTRUCTING VALID INITIAL CONDITIONS
 initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
-    log(info, theory_engine, 'Initial conditions'),
+    log(info, theory_engine, 'Making initial conditions'),
    check_deadline,
     reset_visited_initial_conditions,
     % For every object, give a value to every applicable property
@@ -120,7 +121,8 @@ initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
     % Make sure we have not produced these initial conditions already
     not_already_visited(InitialConditions, theory_engine/visited_initial_conditions),
     % Verify these new initial conditions are valid
-    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints).
+    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints),
+    log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -192,22 +194,31 @@ make_rule(TypeSignature, Head-BodyPredicates) :-
 maybe_add_static_rule(_, _, RulePairs, RulePairs).
 
 maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
+   % Not too many rules
+    \+ rules_at_limits(RulePairs, Template.limits),
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_static_rules([Head-BodyPredicates | Acc], Template.limits, StaticConstraints),!,
+    valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
 
-maybe_add_causal_rule(_, RulePairs, RulePairs).
+maybe_add_causal_rule(_, _, RulePairs, RulePairs).
 
-maybe_add_causal_rule(Template, Acc, RulePairs) :-
+maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
+   \+ rules_at_limits(RulePairs, Template.limits),
     make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rule(Head-BodyPredicates),
+    valid_causal_rule(Head-BodyPredicates, StaticConstraints),
     % Nextifying the rule
     NextifiedHead =.. [next, Head],
-    valid_causal_rules([NextifiedHead-BodyPredicates | Acc], Template.limits),!,
-    maybe_add_causal_rule(Template, [NextifiedHead-BodyPredicates | Acc], RulePairs).
+    valid_causal_rules([NextifiedHead-BodyPredicates | Acc]),!,
+    maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
 
-valid_static_rule(RulePair) :-
-    \+ recursive_rule(RulePair).
+valid_static_rule(Head-Body, StaticConstraints)  :-
+    \+ recursive_rule(Head-Body),
+    \+ too_many_relations(StaticConstraints, Body).
+
+% Checking rule before it is nextified
+valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
+    \+ idempotent_causal_rule(Head-BodyPredicates),
+    \+ too_many_relations(StaticConstraints, BodyPredicates).
 
 recursive_rule(Head-BodyPredicates) :-
     copy_term_nat(Head, CopiedHead),
@@ -215,8 +226,7 @@ recursive_rule(Head-BodyPredicates) :-
     copy_term_nat(BodyPredicate, CopiedBodyPredicate),
     CopiedHead =@= CopiedBodyPredicate.
 
-valid_static_rules(RulePairs, Limits, StaticConstraints) :-
-    \+ rules_exceed_limits(RulePairs, Limits),
+valid_static_rules(RulePairs, StaticConstraints) :-
     % numerize vars in each copied rule pair before comparing them to one another
     % to avoid head1(X, Y) :- pred1(X, Y) being seen as equivalent to head1(X, Y) :- pred1(Y, X) etc.
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
@@ -228,50 +238,44 @@ valid_static_rules(RulePairs, Limits, StaticConstraints) :-
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_rules(RulePairs).
 
-%Checking rule before it is nextified
-valid_causal_rule(Head-BodyPredicates) :-
-    \+ idempotent_causal_rule(Head-BodyPredicates).
-
 % An idempotent causal rule is is one where the head is found in the body -> nothing changes
 idempotent_causal_rule(Head-BodyPredicates) :-
     memberchk_equal(Head, BodyPredicates), !.
 
 % Checking nextified rules
-valid_causal_rules(RulePairs, Limits) :-
-    % Not too many rules
-    \+ rules_exceed_limits(RulePairs, Limits),
-    numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
+valid_causal_rules(RulePairs) :-
+     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     % No repeated rules
     \+ repeated_rules(RulePairsWithNumberVars).
 
-rules_exceed_limits(RulePairs, Limits) :-
+rules_at_limits(RulePairs, Limits) :-
     length(RulePairs, NumberOfRules),
-    NumberOfRules > Limits.max_rules,
+    NumberOfRules >= Limits.max_rules,
     log(info, theory_engine, 'Exceeding max rules of ~p', [NumberOfRules]),
     !.
 
-rules_exceed_limits(RulePairs, Limits) :-
+rules_at_limits(RulePairs, Limits) :-
     count_atoms(RulePairs, NumberOfAtoms),
-    NumberOfAtoms > Limits.max_elements, 
+    NumberOfAtoms >= Limits.max_elements, 
     log(info, theory_engine, 'Exceeding atoms limit of ~p', [NumberOfAtoms]),
     !.
 
 contradicted_static_contraint(RulePairs, StaticConstraints) :-
     member(Rule, RulePairs),
     member(StaticConstraint, StaticConstraints),
-    static_rule_contradicts_constraint(Rule, StaticConstraint), 
-    log(debug, theory_engine, 'Contradicts static constraint!'),
+    static_rule_contradicts_constraint(Rule, StaticConstraint),
     !.
 
 % There are at least two binary predicates in the body with names in PredicateNames and relating the same vars
-static_rule_contradicts_constraint(_-BodyPredicates, one_relation(PredicateNames)) :-
+static_rule_contradicts_constraint(Head-BodyPredicates, one_relation(PredicateNames)) :-
     select(Pred1, BodyPredicates, OtherBodyPredicates),
     Pred1 =.. [PredName1, Var1, Var2],
     var_number(Var1, _),
     var_number(Var2 , _),
     member(Pred2, OtherBodyPredicates),
     Pred2 =.. [PredName2, Var1, Var2],
-    subset([PredName1, PredName2], PredicateNames).
+    subset([PredName1, PredName2], PredicateNames),
+    log(debug, theory_engine, 'Static rule ~p contradicts static constraint ~p', [Head-BodyPredicates, one_relation(PredicateNames)]).
 
 
 % An atom, here, is a singular, non-compound term.
@@ -373,28 +377,67 @@ object_pairs_([Object | OtherObjects], Acc, ObjectPairs) :-
     !.
 
 add_object_relations([], _, _, InitialConditions, InitialConditions).
-add_object_relations([ObjectPair | OtherObjectPairs], TypeSignature, StaticConstraints, Acc, InitialConditions) :-
+add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions) :-
+    select(ObjectPair, ObjectPairs, OtherObjectPairs),
     add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, Acc1),
     add_object_relations(OtherObjectPairs, TypeSignature, StaticConstraints, Acc1, InitialConditions).
 
 add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, InitialConditions) :-
-    add_object_pair_relations_(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, Acc, InitialConditions).
+    add_required_pair_relations(ObjectPair, StaticConstraints, TypeSignature.predicate_types, Acc, Acc1),
+    maybe_add_object_pair_relations(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, Acc1, InitialConditions).
 
-add_object_pair_relations_(_, [], _, _, InitialConditions, InitialConditions).
+add_required_pair_relations(_, [], _, Acc, Acc).
 
-add_object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
+% Add one relation of the mutually exclusive relations per object pair 
+add_required_pair_relations(ObjectPair, 
+                           [one_relation(ConstrainedPredicateNames) | OtherStaticConstraints], 
+                           PredicateTypes, 
+                           Acc, 
+                           Acc1) :-
+    member(PredicateName, ConstrainedPredicateNames),
+    make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation),
+    add_required_pair_relations(ObjectPair, 
+                           OtherStaticConstraints, 
+                           PredicateTypes, 
+                           [Relation | Acc],
+                           Acc1).
+
+% Make sure that the first paired object has the unique relation with only one other object.
+add_required_pair_relations(ObjectPair, 
+                                [one_related(PredicateName) | OtherStaticConstraints], 
+                                PredicateTypes, 
+                                Acc, 
+                                Acc1) :-
+    object(_, ObjectName1)-_ = ObjectPair,
+    PriorRelation =.. [PredicateName, ObjectName1, _],
+    (member(PriorRelation, Acc) ->
+        add_required_pair_relations(ObjectPair, OtherStaticConstraints, PredicateTypes, Acc, Acc1)
+        ;
+        make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation),
+        add_required_pair_relations(ObjectPair, OtherStaticConstraints, PredicateTypes, [Relation | Acc], Acc1)
+    ).
+
+make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation) :-
+    object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2) = ObjectPair,
+    member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), PredicateTypes),
+    Relation =.. [PredicateName, ObjectName1, ObjectName2].
+
+maybe_add_object_pair_relations(_, [], _, _, InitialConditions, InitialConditions).
+
+maybe_add_object_pair_relations(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
                        [predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]) | OtherPredicateTypes], 
                        StaticConstraints,
                        TypeSignature,
                        Acc, 
                        InitialConditions) :-
                        Relation =.. [PredicateName, ObjectName1, ObjectName2],
+                       \+ memberchk(Relation, Acc),
                        % Don't break the at-most-one aspect of a one-relation or one-related constraint by adding the new relation
-                       \+ too_many_relations([Relation | Acc], StaticConstraints, TypeSignature),
-                       add_object_pair_relations_(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], InitialConditions).
+                       \+ too_many_relations(StaticConstraints, [Relation | Acc]),
+                       maybe_add_object_pair_relations(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], InitialConditions).
 
-add_object_pair_relations_(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, InitialConditions) :-
-    add_object_pair_relations_(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, InitialConditions).
+maybe_add_object_pair_relations(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, InitialConditions) :-
+    maybe_add_object_pair_relations(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, InitialConditions).
 
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.

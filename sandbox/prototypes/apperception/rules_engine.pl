@@ -1,4 +1,4 @@
-:- module(rules_engine, [clear/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
+:- module(rules_engine, [clear_facts_and_rules/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
 
 :- use_module(logger).
 
@@ -14,7 +14,7 @@ PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]),
 		  predicate(next_to, [object_type(led), object_type(led)])
 		  ],
 Facts = [on(b, false), light(a, red), light(b, green)],
-clear(Module, PredicateTypes),
+clear_facts_and_rules(Module, PredicateTypes),
 assert_rules(Module, RulePairs),
 assert_facts(Module, Facts),
 answer_query(Module, next_to(X, Y), Answers),
@@ -23,7 +23,8 @@ save_module(Module).
 
 % Clear all rules and facts from the dynamic module
 % TODO - Find a way to remove a dynamic module entirely
-clear(Module, PredicateTypes) :-
+clear_facts_and_rules(Module, PredicateTypes) :-
+    retractall(Module:next(_)),
     forall(member(PredicateType, PredicateTypes), retract_predicates(Module, PredicateType)).
 
 % Assert the rules in it.
