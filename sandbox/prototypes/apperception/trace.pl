@@ -27,17 +27,17 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
     [Round | _] = Trace,
     next_round(Round, Theory, TypeSignature, Module, NextRound),
     (round_in_trace(NextRound, Trace) ->
-        log(info, trace, 'Next round ~p is already in the trace ~p', [NextRound, Trace]),
+        log(debug, trace, 'Next round ~p is already in the trace ~p', [NextRound, Trace]),
         ExpandedTrace = Trace
         ;
         expand_trace([NextRound | Trace], Theory, TypeSignature, Module, ExpandedTrace)
     ).
 
 next_round(Round, Theory, TypeSignature, Module, NextRound) :-
-    log(info, trace, 'Making next round'),
+    log(debug, trace, 'Making next round'),
     make_round(Round, Theory, TypeSignature, Module, NextRound), !,
     spatial_unity(NextRound, TypeSignature),
-    log(info, trace, 'Next round ~p', [NextRound]).
+    log(debug, trace, 'Next round ~p', [NextRound]).
 
 % Apply causal rules to a round to produce a caused facts.
 % Apply static rules to the new round to add implied facts.

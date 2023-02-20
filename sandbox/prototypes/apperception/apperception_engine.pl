@@ -23,7 +23,7 @@ set_log_level(debug).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theory_duds: 3, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 300},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theory_duds: 1000, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -57,6 +57,11 @@ find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-
     ), !,
     find_best_theories(ApperceptionLimits, LatestSearch, Sequence, Theories).
 
+find_best_theories(_, Search, _, Theories) :-
+    log(warn, apperception_engine, 'No more theories!'),
+    stop_search(Search),
+    Theories = Search.best_theories.
+
 init_search(TheoryTemplateEngine, Search) :-
     get_time(Now),
     engine_next(TheoryTemplateEngine, Template),
@@ -70,6 +75,9 @@ stop_search(Search) :-
 
 destroy_engine(Engine) :-
     catch(engine_destroy(Engine), _, true).
+
+try_engine_next(Engine, Result) :-
+    catch(engine_next(Engine, Result), _, fail).
 
 time_expired(ApperceptionLimits, Search) :-
     get_time(Now),
@@ -85,18 +93,21 @@ find_theory(ApperceptionLimits, Search, Theory, LatestSearch) :-
 maybe_change_template(ApperceptionLimits, Search, UpdatedSearch) :-
     Search.theories_count >= ApperceptionLimits.max_theories_per_template,
     log(info, apperception_engine, 'Max theory count ~p for template!', [Search.theories_count]),
+    !,
     next_theory_template(Search, UpdatedSearch).
 
 maybe_change_template(ApperceptionLimits, Search, UpdatedSearch) :-
     Search.theory_duds >= ApperceptionLimits.max_theory_duds,
     log(warn, apperception_engine, 'Max theory duds reached ~p for template!', [Search.theory_duds]),
+    !,
     next_theory_template(Search, UpdatedSearch).
 
 maybe_change_template(_, Search, Search).
 
+% Fails if no more templates
 next_theory_template(Search, UpdatedSearch) :-
     destroy_engine(Search.theory_engine),
-    engine_next(Search.template_engine, Template),
+    try_engine_next(Search.template_engine, Template),
     log(info, apperception_engine, 'NEXT TEMPLATE ~p', [Template]),
     create_theory_engine(Template, TheoryEngine),
     put_dict(theories_count, Search, 0, Search1),

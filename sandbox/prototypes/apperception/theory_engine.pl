@@ -41,10 +41,13 @@ theory(Template, Theory) :-
     reset_deadline(Template.limits.max_theory_time),
     reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
+    log(info, theory_engine, 'Static constraints ~p', [StaticConstraints]),
     static_rules(Template, StaticConstraints, StaticRules),
+    log(info, theory_engine, 'Static rules ~p', [StaticRules]),
     causal_rules(Template, StaticConstraints, CausalRules),
-    initial_conditions(Template.type_signature, StaticConstraints, InitialConditions),
-    static_unity(InitialConditions, StaticRules, StaticConstraints, Template.type_signature),
+    log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
+    initial_conditions(Template.type_signature, StaticConstraints, StaticRules, InitialConditions),
+    log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
     Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0},
     reset_deadline(Template.limits.max_theory_time).
 
@@ -73,8 +76,8 @@ reset_visited_constraints :-
 % A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
 %   one_related(pred1). 
 static_constraints(TypeSignature, StaticConstraints) :-
-    log(info, theory_engine, 'Static constraints'),
-   check_deadline,
+    log(debug, theory_engine, 'Making static constraints'),
+    check_deadline,
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
     reset_visited_constraints,
     maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
@@ -90,7 +93,7 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
 static_rules(Template, StaticConstraints, RulePairs) :-
-    log(info, theory_engine, 'Making static rules'),
+    log(debug, theory_engine, 'Making static rules'),
     check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
@@ -101,7 +104,7 @@ static_rules(Template, StaticConstraints, RulePairs) :-
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
 causal_rules(Template, StaticConstraints, RulePairs) :-  
-    log(info, theory_engine, 'Making causal rules'),
+    log(debug, theory_engine, 'Making causal rules'),
     check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rule(Head-BodyPredicates, StaticConstraints),
@@ -110,9 +113,9 @@ causal_rules(Template, StaticConstraints, RulePairs) :-
     maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
 
 %% CONSTRUCTING VALID INITIAL CONDITIONS
-initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
-    log(info, theory_engine, 'Making initial conditions'),
-   check_deadline,
+initial_conditions(TypeSignature, StaticConstraints, StaticRules, InitialConditions) :-
+    log(debug, theory_engine, 'Making initial conditions'),
+    check_deadline,
     reset_visited_initial_conditions,
     % For every object, give a value to every applicable property
     make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
@@ -121,8 +124,7 @@ initial_conditions(TypeSignature, StaticConstraints, InitialConditions) :-
     % Make sure we have not produced these initial conditions already
     not_already_visited(InitialConditions, theory_engine/visited_initial_conditions),
     % Verify these new initial conditions are valid
-    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints),
-    log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]).
+    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -191,25 +193,29 @@ make_rule(TypeSignature, Head-BodyPredicates) :-
     make_head(TypeSignature.predicate_types, DistinctVars, Head),
     make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
     
+
 maybe_add_static_rule(_, _, RulePairs, RulePairs).
+maybe_add_static_rule(Template, _, RulePairs, RulePairs) :-
+    rules_at_limits(RulePairs, Template.limits), !.
 
 maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
-   % Not too many rules
-    \+ rules_at_limits(RulePairs, Template.limits),
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
 
+
 maybe_add_causal_rule(_, _, RulePairs, RulePairs).
+maybe_add_causal_rule(Template, _, RulePairs, RulePairs) :-
+    rules_at_limits(RulePairs, Template.limits), !.
 
 maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
-   \+ rules_at_limits(RulePairs, Template.limits),
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rule(Head-BodyPredicates, StaticConstraints),
     % Nextifying the rule
     NextifiedHead =.. [next, Head],
     valid_causal_rules([NextifiedHead-BodyPredicates | Acc]),!,
     maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
+
 
 valid_static_rule(Head-Body, StaticConstraints)  :-
     \+ recursive_rule(Head-Body),
@@ -251,13 +257,13 @@ valid_causal_rules(RulePairs) :-
 rules_at_limits(RulePairs, Limits) :-
     length(RulePairs, NumberOfRules),
     NumberOfRules >= Limits.max_rules,
-    log(info, theory_engine, 'Exceeding max rules of ~p', [NumberOfRules]),
+    log(info, theory_engine, 'Exceeding max rules of ~p: ~p', [NumberOfRules, RulePairs]),
     !.
 
 rules_at_limits(RulePairs, Limits) :-
     count_atoms(RulePairs, NumberOfAtoms),
     NumberOfAtoms >= Limits.max_elements, 
-    log(info, theory_engine, 'Exceeding atoms limit of ~p', [NumberOfAtoms]),
+    log(info, theory_engine, 'Exceeding atoms limit of ~p: ~p', [NumberOfAtoms, RulePairs]),
     !.
 
 contradicted_static_contraint(RulePairs, StaticConstraints) :-
@@ -441,11 +447,12 @@ maybe_add_object_pair_relations(ObjectPair, [_ | OtherPredicateTypes], StaticCon
 
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.
-valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints) :-
+valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules) :-
  check_deadline,
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
   \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature),
-  spatial_unity(InitialConditions, TypeSignature).
+  spatial_unity(InitialConditions, TypeSignature),
+  static_unity(InitialConditions, StaticRules, StaticConstraints, TypeSignature).
 
 % One object in the type signature does not appear in a condition
 unrepresented_object(Round, Objects) :-

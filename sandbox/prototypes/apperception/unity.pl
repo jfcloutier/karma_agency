@@ -15,14 +15,14 @@
 % Check that the static constraints achiev conceptual unity over relation predicates.
 % Property predicates are implicitly unified via domain exclusion.
 conceptual_unity(StaticConstraints, TypeSignature) :-
-    log(info, unity, 'Checking conceptual unity'),
+    log(debug, unity, 'Checking conceptual unity'),
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
     \+ (member(BinaryPredicateName, AllBinaryPredicateNames), \+ static_constraints_cover(StaticConstraints, BinaryPredicateName)).
 
 % Facts are spatially unified if all objects are inter-related.
 spatial_unity([], _) :- fail, !.
 spatial_unity(Facts, TypeSignature) :-
-    log(info, unity, 'Checking spatial unity'),
+    log(debug, unity, 'Checking spatial unity'),
     \+ unrelated_objects(Facts, TypeSignature).
 
 % Verify that facts consistent with the static rules and constraints,
@@ -30,7 +30,7 @@ spatial_unity(Facts, TypeSignature) :-
 % without causing a contradiction or breaking a static constraint.
 static_unity([], _, _, _) :- fail,!.
 static_unity(Facts, StaticRules, StaticConstraints, TypeSignature) :-
-    log(info, unity, 'Checking static unity'),
+    log(debug, unity, 'Checking static unity'),
     get_global(apperception, uuid, Module),
     setup_call_cleanup(
             clear_facts_and_rules(Module, TypeSignature.predicate_types), 
@@ -43,7 +43,7 @@ static_unity(Facts, StaticRules, StaticConstraints, TypeSignature) :-
 breaks_static_constraints(Facts, StaticConstraints, TypeSignature) :-
     member(StaticConstraint, StaticConstraints),
     broken_static_constraint(StaticConstraint, Facts, TypeSignature),
-    log(info, unity, 'Broken static constraint ~p in facts ~p', [StaticConstraint, Facts]).
+    log(debug, unity, 'Broken static constraint ~p in facts ~p', [StaticConstraint, Facts]).
 
 % Repeated property on the same object irrespective of domain value,
 % Or repeated relation between identical pair of objects. 
@@ -93,8 +93,8 @@ static_unity_(Facts, StaticRules, StaticConstraints, TypeSignature, Module) :-
      assert_facts(Module, Facts),
      assert_rules(Module, StaticRules),
      save_module(Module),
-     apply_rules(Module, StaticRules, Facts),
-     merge_consistent(Facts, Facts, AugmentedFacts),
+     apply_rules(Module, StaticRules, Answers),
+     merge_consistent(Facts, Answers, AugmentedFacts),
      !,
     (  (length(Facts, L),
         length(AugmentedFacts, L)
@@ -106,12 +106,12 @@ static_unity_(Facts, StaticRules, StaticConstraints, TypeSignature, Module) :-
 
 % Merge removing duplicates. Fail if attempting to merge contradictory facts.    
 merge_consistent(Facts, [], Facts).
-merge_consistent(Facts, [Fact | OtherAnswers], MergedFacts) :-
-    \+ (member(Condition, Facts), factual_contradiction(Condition, Fact)),
-    (memberchk(Fact, Facts) ->
+merge_consistent(Facts, [Answer | OtherAnswers], MergedFacts) :-
+    \+ (member(Fact, Facts), factual_contradiction(Fact, Answer)),
+    (memberchk(Answer, Facts) ->
         merge_consistent(Facts, OtherAnswers, MergedFacts)
         ;
-        merge_consistent([Fact | Facts], OtherAnswers, MergedFacts)
+        merge_consistent([Answer | Facts], OtherAnswers, MergedFacts)
     ).
 
 factual_contradiction(Condition, Fact) :-
