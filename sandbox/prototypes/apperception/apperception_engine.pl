@@ -19,7 +19,7 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, unity, rules_engine, apperception_engine].
-set_log_level(debug).
+set_log_level(info).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -142,30 +142,32 @@ handle_theory_engine_reponse(exception(Exception), _, _, _) :-
 
 % Rate how well the trace covers the sequence and how simple the theory is.
 rate_theory(Theory, Sequence, Trace, RatedTheory) :-
-    rate_coverage(Trace, Sequence, CoverageRating),
+    sequence_as_trace(Sequence, SequenceAsTrace),
+    rate_coverage(Trace, SequenceAsTrace, CoverageRating),
     rate_theory_simplicity(Theory, SimplicityRating),
     Rating is CoverageRating + (CoverageRating * SimplicityRating),
     log(info, apperception_engine, 'Theory rated ~p (coverage ~p, simplicity ~p)', [Rating, CoverageRating, SimplicityRating]),
     put_dict(rating, Theory, Rating, RatedTheory).
 
+
 % Find the best coverage and rate it as a percentage.
 % Consider the Trace as circular.
 % Cover the Sequence from beginning with the Trace, starting in turn with each round in the Trace, and score.
 % Keep the maximum score
-rate_coverage(Trace, Sequence, CoverageRating) :-
-    findall(CoverageRating, rate_shifted_coverage(Trace, Sequence, CoverageRating), Ratings),
+rate_coverage(TraceSequence, Sequence, CoverageRating) :-
+    findall(CoverageRating, rate_shifted_coverage(TraceSequence, Sequence, CoverageRating), Ratings),
     max_member(CoverageRating, Ratings).
 
-rate_shifted_coverage(Trace, Sequence, CoverageRating):-
-    length(Trace, L),
+rate_shifted_coverage(TraceSequence, Sequence, CoverageRating):-
+    length(TraceSequence, L),
     between(1, L, Start),
-    rate_coverage_starting_at(Trace, Start, Sequence, CoverageRating).
+    rate_coverage_starting_at(TraceSequence, Start, Sequence, CoverageRating).
 
 % Match sequence rouns with trace rounds from a starting point in the trace.
 % Rate coverage per round pair
 % Average rating over all pairs
-rate_coverage_starting_at(Trace, Start, Sequence, CoverageRating) :-
-    pair_rounds(Trace, Start, Sequence, [], RoundPairs),
+rate_coverage_starting_at(TraceSequence, Start, Sequence, CoverageRating) :-
+    pair_rounds(TraceSequence, Start, Sequence, [], RoundPairs),
     findall(Rating, (member(TraceRound-SequenceRound, RoundPairs), rate_round_pair(TraceRound-SequenceRound, Rating)), Ratings),
     sum_list(Ratings, Sum),
     length(Ratings, L),
@@ -173,18 +175,18 @@ rate_coverage_starting_at(Trace, Start, Sequence, CoverageRating) :-
 
 pair_rounds([], _, _, _ , []).
 pair_rounds(_, _, [], RoundPairs, RoundPairs).
-pair_rounds(Trace, Index, [SequenceRound | OtherSequenceRounds], Acc, RoundPairs) :-
-    trace_round_at(Trace, Index, NextIndex, TraceRound),
-    pair_rounds(Trace, NextIndex, OtherSequenceRounds, [TraceRound-SequenceRound | Acc], RoundPairs).
+pair_rounds(TraceSequence, Index, [SequenceRound | OtherSequenceRounds], Acc, RoundPairs) :-
+    trace_round_at(TraceSequence, Index, NextIndex, TraceRound),
+    pair_rounds(TraceSequence, NextIndex, OtherSequenceRounds, [TraceRound-SequenceRound | Acc], RoundPairs).
 
 % Consider the trace circular
-trace_round_at(Trace, Index, NextIndex, TraceRound) :-
-    length(Trace, L),
+trace_round_at(TraceSequence, Index, NextIndex, TraceRound) :-
+    length(TraceSequence, L),
     (Index =< L ->
-        nth1(Index, Trace, TraceRound),
+        nth1(Index, TraceSequence, TraceRound),
         NextIndex is Index + 1
         ;
-        nth1(1, Trace, TraceRound),
+        nth1(1, TraceSequence, TraceRound),
         NextIndex = 2
     ).
 
@@ -223,20 +225,20 @@ count_elements(_, 1).
 % If there are already the max number of kept theories, replace the lowest rated one
 % the theory has higher rating.
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
-    RatedTheory.rating == 0.0 -> 
-        TheoryDuds is Search.theory_duds + 1,
-        put_dict(theory_duds, Search, TheoryDuds, UpdatedSearch)
-        ;
-        UpdatedSearch = Search.
+    RatedTheory.rating == 0.0, !,
+    TheoryDuds is Search.theory_duds + 1,
+    put_dict(theory_duds, Search, TheoryDuds, UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, KeepHowMany, Search, UpdatedSearch) :-
-    length(Search.best_theories, L),
+    BestTheories = Search.best_theories,
+    length(BestTheories, L),
     L < KeepHowMany, !,
     log(info, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
-    put_dict(best_theories, Search, [RatedTheory | Search.best_theories], UpdatedSearch).
+    put_dict(best_theories, Search, [RatedTheory | BestTheories], UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
-    sort(rating, @=<, Search.best_theories, SortedTheories),
+    BestTheories = Search.best_theories,
+    sort(rating, @=<, BestTheories, SortedTheories),
     add_if_better(RatedTheory, SortedTheories, BetterTheories),
     put_dict(best_theories, Search, BetterTheories, UpdatedSearch).
 

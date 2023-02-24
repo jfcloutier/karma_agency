@@ -46,7 +46,7 @@ theory(Template, Theory) :-
     log(info, theory_engine, 'Static rules ~p', [StaticRules]),
     causal_rules(Template, StaticConstraints, CausalRules),
     log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
-    initial_conditions(Template.type_signature, StaticConstraints, StaticRules, InitialConditions),
+    initial_conditions(Template.type_signature, StaticConstraints, CausalRules, StaticRules, InitialConditions),
     log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
     Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0},
     reset_deadline(Template.limits.max_theory_time).
@@ -95,7 +95,7 @@ static_constraints(TypeSignature, StaticConstraints) :-
 static_rules(Template, StaticConstraints, RulePairs) :-
     log(debug, theory_engine, 'Making static rules'),
     check_deadline,
-    make_rule(Template.type_signature, Head-BodyPredicates),
+    make_static_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates], StaticConstraints),
     maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
@@ -113,18 +113,23 @@ causal_rules(Template, StaticConstraints, RulePairs) :-
     maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
 
 %% CONSTRUCTING VALID INITIAL CONDITIONS
-initial_conditions(TypeSignature, StaticConstraints, StaticRules, InitialConditions) :-
+initial_conditions(TypeSignature, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
     log(debug, theory_engine, 'Making initial conditions'),
     check_deadline,
     reset_visited_initial_conditions,
+    !,
+    satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions),
     % For every object, give a value to every applicable property
-    make_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, InitialProperties),
+    add_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, CausedConditions, WithInitialProperties),
     % For each pairing of objects, add one or more relations without breaking static constraints
-    add_initial_relations(TypeSignature, StaticConstraints, InitialProperties, InitialConditions),
+    add_initial_relations(TypeSignature, StaticConstraints, WithInitialProperties, InitialConditions),
     % Make sure we have not produced these initial conditions already
-    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions),
+    new_initial_conditions(InitialConditions),
     % Verify these new initial conditions are valid
-    valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules).
+    unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions).
+
+new_initial_conditions(InitialConditions) :-
+    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
@@ -194,16 +199,6 @@ make_rule(TypeSignature, Head-BodyPredicates) :-
     make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
     
 
-maybe_add_static_rule(_, _, RulePairs, RulePairs).
-maybe_add_static_rule(Template, _, RulePairs, RulePairs) :-
-    rules_at_limits(RulePairs, Template.limits), !.
-
-maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
-    make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
-
-
 maybe_add_causal_rule(_, _, RulePairs, RulePairs).
 maybe_add_causal_rule(Template, _, RulePairs, RulePairs) :-
     rules_at_limits(RulePairs, Template.limits), !.
@@ -216,17 +211,41 @@ maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
     valid_causal_rules([NextifiedHead-BodyPredicates | Acc]),!,
     maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
 
-
-valid_static_rule(Head-Body, StaticConstraints)  :-
-    \+ recursive_rule(Head-Body),
-    \+ too_many_relations(StaticConstraints, Body).
-
 % Checking rule before it is nextified
 valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
     \+ idempotent_causal_rule(Head-BodyPredicates),
     \+ too_many_relations(StaticConstraints, BodyPredicates).
 
-recursive_rule(Head-BodyPredicates) :-
+% An idempotent causal rule is is one where the head is found in the body -> nothing changes
+idempotent_causal_rule(Head-BodyPredicates) :-
+    memberchk_equal(Head, BodyPredicates), !.
+
+% Checking nextified rules
+valid_causal_rules(RulePairs) :-
+     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
+    % No repeated rules
+    \+ repeated_rules(RulePairsWithNumberVars).
+
+make_static_rule(TypeSignature, HoldingHead-BodyPredicates) :-
+    make_rule(TypeSignature, Head-BodyPredicates),
+    HoldingHead =.. [holds, Head].
+
+maybe_add_static_rule(_, _, RulePairs, RulePairs).
+maybe_add_static_rule(Template, _, RulePairs, RulePairs) :-
+    rules_at_limits(RulePairs, Template.limits), !.
+
+maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
+    make_static_rule(Template.type_signature, Head-BodyPredicates),
+    valid_static_rule(Head-BodyPredicates, StaticConstraints),
+    valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+
+valid_static_rule(Head-Body, StaticConstraints)  :-
+    \+ recursive_static_rule(Head-Body),
+    \+ too_many_relations(StaticConstraints, Body).
+
+recursive_static_rule(HoldingHead-BodyPredicates) :-
+    HoldingHead =.. [holds, Head],
     copy_term_nat(Head, CopiedHead),
     member(BodyPredicate, BodyPredicates),
     copy_term_nat(BodyPredicate, CopiedBodyPredicate),
@@ -238,21 +257,11 @@ valid_static_rules(RulePairs, StaticConstraints) :-
     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     \+ repeated_rules(RulePairsWithNumberVars),
     % No two rules that contradict one another
-    \+ contradicting_rules(RulePairsWithNumberVars),
+    \+ contradicting_static_rules(RulePairsWithNumberVars),
     % No rule contradicts a static constraint
     \+ contradicted_static_contraint(RulePairsWithNumberVars, StaticConstraints),
     % use un-numerized pairs b/c testing is based on unify-ability
-    \+ recursion_in_rules(RulePairs).
-
-% An idempotent causal rule is is one where the head is found in the body -> nothing changes
-idempotent_causal_rule(Head-BodyPredicates) :-
-    memberchk_equal(Head, BodyPredicates), !.
-
-% Checking nextified rules
-valid_causal_rules(RulePairs) :-
-     numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
-    % No repeated rules
-    \+ repeated_rules(RulePairsWithNumberVars).
+    \+ recursion_in_static_rules(RulePairs).
 
 rules_at_limits(RulePairs, Limits) :-
     length(RulePairs, NumberOfRules),
@@ -329,27 +338,57 @@ subsumed_conjunctions([Predicate | Rest], OtherPredicates) :-
     member(OtherPredicate, OtherPredicates),
     (equivalent_predicates(Predicate, OtherPredicate) -> subsumed_conjunctions(Rest, OtherPredicates)).
 
-% A recusion exists when the head of a rule can unify with a predicate in the body of another rule.
-recursion_in_rules(RulePairs) :-
-    select(Head-_, RulePairs, OtherRulePairs),
+% A recusion exists when the head of a static rule can unify with a predicate in the body of another static rule.
+recursion_in_static_rules(RulePairs) :-
+    select(HoldingHead-_, RulePairs, OtherRulePairs),
+    HoldingHead =.. [holds, Head],
     member(_-OtherBody, OtherRulePairs),
     member(OtherBodyPredicate, OtherBody),
     Head =@= OtherBodyPredicate,
-    log(debug, theory_engine, 'Recursion in rule!').
+    log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [HoldingHead, RulePairs]).
 
 % Reset visited initial conditions to empty
 reset_visited_initial_conditions :-
     set_global(apperception, theory_engine/visited_initial_conditions, []).
 
+% Ensure the initial conditions trigger one of the causal rules
+satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions) :-
+    member(_-BodyPredicates, CausalRules),
+    copy_term(BodyPredicates, CopiedBodyPredicates),
+    satisfy_causal_rule_(CopiedBodyPredicates, TypeSignature, [], CausedConditions).
+
+satisfy_causal_rule_([], _, CausedConditions, CausedConditions).
+satisfy_causal_rule_([BodyPredicate | BodyPredicates], TypeSignature, Acc, CausedConditions) :-
+    (ground(BodyPredicate) ; do_ground_predicate(BodyPredicate, TypeSignature)),
+    satisfy_causal_rule_(BodyPredicates, TypeSignature, [BodyPredicate | Acc], CausedConditions).
+
+do_ground_predicate(BodyPredicate, TypeSignature) :-
+    BodyPredicate =.. [PredicateName | Args],
+    do_ground_args(Args, 1, PredicateName, TypeSignature).
+
+do_ground_args([], _, _, _).
+do_ground_args([Arg | OtherArgs], Index, PredicateName, TypeSignature) :-
+    do_ground_arg(Arg, Index, PredicateName, TypeSignature),
+    NextIndex is Index + 1,
+    do_ground_args(OtherArgs, NextIndex, PredicateName, TypeSignature).
+
+do_ground_arg(Arg, _, _, _) :- ground(Arg), !.
+
+do_ground_arg(Arg, Index, PredicateName, TypeSignature) :-
+    member(predicate(PredicateName, ArgTypes), TypeSignature.predicate_types),
+    nth1(Index, ArgTypes, object_type(ObjectType)),
+    member(object(ObjectType, ObjectName), TypeSignature.objects),
+    Arg = ObjectName.
+
 % For each object, for each applicable property, make one with some domain value.
-make_initial_properties(Objects, PredicateTypes, Properties) :-
-    make_initial_properties_(Objects, PredicateTypes, [], Properties).
+add_initial_properties(Objects, PredicateTypes, CausedConditions, WithProperties) :-
+    add_initial_properties_(Objects, PredicateTypes, CausedConditions, WithProperties).
 
-make_initial_properties_([], _, Properties, Properties).
+add_initial_properties_([], _, WithProperties, WithProperties).
 
-make_initial_properties_([Object | OtherObjects], PredicateTypes, Acc, Properties) :-
+add_initial_properties_([Object | OtherObjects], PredicateTypes, Acc, WithProperties) :-
     add_object_properties(Object, PredicateTypes, Acc, Acc1),
-    make_initial_properties_(OtherObjects, PredicateTypes, Acc1, Properties).
+    add_initial_properties_(OtherObjects, PredicateTypes, Acc1, WithProperties).
 
 add_object_properties(_, [], Properties, Properties).
 
@@ -357,10 +396,12 @@ add_object_properties(object(ObjectType, ObjectName),
                        [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes],
                        Acc,
                        Properties) :-
-    !,
     domain_is(Domain, Values),
     member(Value, Values),
     Property =.. [PredicateName, ObjectName, Value],
+    \+ memberchk(Property, Acc),
+    \+ (member(Fact, Acc), factual_contradiction(Property, Fact)),
+    !,
     add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, [Property | Acc], Properties).
 
 add_object_properties(Object, [_ | OtherPredicateTypes], Acc, Properties) :-
@@ -447,12 +488,15 @@ maybe_add_object_pair_relations(ObjectPair, [_ | OtherPredicateTypes], StaticCon
 
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.
-valid_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules) :-
- check_deadline,
+% Unify intial conditions by applying static rules to closure, without creating inconsistencies or breaking static rules
+unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedConditions) :-
+  check_deadline,
+  get_global(apperception, uuid, Module),
   \+ unrepresented_object(InitialConditions, TypeSignature.objects),
-  \+ breaks_static_constraints(InitialConditions, StaticConstraints, TypeSignature),
   spatial_unity(InitialConditions, TypeSignature),
-  static_unity(InitialConditions, StaticRules, StaticConstraints, TypeSignature).
+  static_closure(InitialConditions, StaticRules, TypeSignature, Module, UnifiedConditions),
+  \+ breaks_static_constraints(UnifiedConditions, StaticConstraints, TypeSignature),
+  !.
 
 % One object in the type signature does not appear in a condition
 unrepresented_object(Round, Objects) :-
@@ -484,8 +528,8 @@ equivalent_args([Arg | Rest], [Arg | OtherRest]) :-
     equivalent_args(Rest, OtherRest).
 
 
-% There exists two rules that contradict one another
-contradicting_rules([Head-Body | OtherRulePairs]) :- 
+% There exists two static rules that contradict one another
+contradicting_static_rules([Head-Body | OtherRulePairs]) :- 
     member(OtherHead-OtherBody, OtherRulePairs),
     (contradicting_heads(Head-Body, OtherHead-OtherBody) -> 
         log(debug, theory_engine, 'Contradicting rules!'),
@@ -494,7 +538,9 @@ contradicting_rules([Head-Body | OtherRulePairs]) :-
     ).
 
 % Two rules contradict "at the head" one another if they have contradicting heads and equivalent bodies
-contradicting_heads(Head-Body, OtherHead-OtherBody) :-
+contradicting_heads(HoldingHead-Body, OtherHoldingHead-OtherBody) :-
+    HoldingHead =.. [holds, Head],
+    OtherHoldingHead =.. [holds, OtherHead],
     contradicts(Head, OtherHead),
     equivalent_bodies(Body, OtherBody).
 

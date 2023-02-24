@@ -86,17 +86,17 @@ reset_logging :-
 
 log(Level, Topic, Message, Params, sleep(Secs)) :-
     log(Level, Topic, Message, Params),
-    sleep(Secs).
+    sleep(Secs), !.
 
 log(Level, Topic, Message, sleep(Secs)) :-
     log(Level, Topic, Message),
-    sleep(Secs).
+    sleep(Secs), !.
 
 log(Level, Topic, Message, Params) :-
     level_covered(Level),
     topic_covered(Topic),
     add_meta(Level, Topic, Message, Params, Line, ParamsPlus),
-    format(Line, ParamsPlus).
+    format(Line, ParamsPlus), !.
 
 log(_, _, _, _).
 
@@ -111,18 +111,18 @@ log(_, _, _).
 add_meta(Level, Topic, Message, Params, Line, [Time, Level, Topic | Params]) :-
     string_concat(Message, '~n', Message1),
     time_now(Time),
-    string_concat('~p ~p [~p] ', Message1, Line).
+    string_concat('~p ~p [~p] ', Message1, Line), !.
 
 level_covered(Level) :-
     levels(Levels),
     level(MinLevel),
     nth1(Index, Levels, Level, _),
     nth1(MinIndex, Levels, MinLevel, _),
-    Index >= MinIndex.
+    Index >= MinIndex, !.
 
 topic_covered(Topic) :-
     ignored(IgnoredTopics),
-    \+ memberchk(Topic, IgnoredTopics).
+    \+ memberchk(Topic, IgnoredTopics), !.
 
 time_now(Time) :-
     get_time(Timestamp),

@@ -1,4 +1,4 @@
-:- module(trace, [make_trace/4]).
+:- module(trace, [make_trace/4, sequence_as_trace/2]).
 
 :- use_module(logger).
 :- use_module(unity).
@@ -12,8 +12,7 @@ cd('sandbox/prototypes/apperception').
 % Starting from initial conditions as round(0) of the trace, apply the theory to construct round(1), etc. until a round repeats a prior round.
 make_trace(Theory, TypeSignature, Trace, Module) :-
     log(info, trace, 'Making trace applying ~p from initial conditions ~p', [Module, Theory.initial_conditions]),
-    save_module(Module),
-    setup_call_cleanup(
+     setup_call_cleanup(
         clear_facts_and_rules(Module, TypeSignature.predicate_types),
         (expand_trace([Theory.initial_conditions], Theory, TypeSignature, Module, ReverseTrace),
          reverse(ReverseTrace, Trace)
@@ -26,6 +25,7 @@ make_trace(Theory, TypeSignature, Trace, Module) :-
 expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
     [Round | _] = Trace,
     next_round(Round, Theory, TypeSignature, Module, NextRound),
+    !,
     (round_in_trace(NextRound, Trace) ->
         log(debug, trace, 'Next round ~p is already in the trace ~p', [NextRound, Trace]),
         ExpandedTrace = Trace
@@ -33,24 +33,22 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
         expand_trace([NextRound | Trace], Theory, TypeSignature, Module, ExpandedTrace)
     ).
 
-next_round(Round, Theory, TypeSignature, Module, NextRound) :-
-    log(debug, trace, 'Making next round'),
-    make_round(Round, Theory, TypeSignature, Module, NextRound), !,
-    spatial_unity(NextRound, TypeSignature),
-    log(debug, trace, 'Next round ~p', [NextRound]).
-
 % Apply causal rules to a round to produce a caused facts.
 % Apply static rules to the new round to add implied facts.
 % Carry over all facts from current round that do not introduce contradictions 
-% or break and static constraints.
-make_round(Round, Theory, TypeSignature, Module, NextRound) :-
+% Verify that the new round does not break static constraints and is spatially unified.
+next_round(Round, Theory, TypeSignature, Module, NextRound) :-
+    log(debug, trace, 'Making next round'),
     apply_causal_rules_on_facts(Theory.causal_rules, Round, TypeSignature.predicate_types, Module, CausedFacts),
-    apply_rules_on_facts(Theory.static_rules, CausedFacts, TypeSignature.predicate_types, Module, FullCausedFacts),
-    carry_over_composable(Round, FullCausedFacts, Theory, TypeSignature, NextRound).
+    static_closure(CausedFacts, Theory.static_rules, TypeSignature, Module, ClosedFacts),
+    carry_over_composable(Round, ClosedFacts, Theory, TypeSignature, NextRound),
+    \+ breaks_static_constraints(NextRound, Theory.static_constraints, TypeSignature),
+    spatial_unity(NextRound, TypeSignature),
+    log(debug, trace, 'Next round ~p', [NextRound]).
 
 apply_causal_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Answers),
-    denextify_facts(Answers, Caused).
+    unwrap_facts(Answers, next, Caused).
 
 apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     clear_facts_and_rules(Module, PredicateTypes),
@@ -58,11 +56,6 @@ apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     assert_facts(Module, Facts),
     save_module(Module),
     apply_rules(Module, Rules, Caused).
-
-denextify_facts([], []).
-denextify_facts([NextFact | Rest], [Fact | OtherFacts]) :-
-    NextFact =.. [next, Fact],
-    denextify_facts(Rest, OtherFacts).
 
 % Add as many prior facts into caused facts without introducing a property contradiction or breaking a too-many-relations static constraint.
 carry_over_composable([], ComposedFacts, _, _, ComposedFacts).
@@ -78,6 +71,49 @@ carry_over_composable([_ | OtherPriorFacts], CausedFacts, Theory, TypeSignature,
     carry_over_composable(OtherPriorFacts, CausedFacts, Theory, TypeSignature, ComposedFacts).
 
 % Succeeds if can find another round in the trace that's a permutation of it.
-round_in_trace(Round, Trace) :-
-    findnsols(1, OtherRound, (member(OtherRound, Trace), permutation(Round, OtherRound)), _), !.
- 
+round_in_trace(Round, [TraceRound | OtherTraceRounds]) :- 
+    permutation(Round, TraceRound)
+    ;
+    round_in_trace(Round, OtherTraceRounds).
+
+% Covert a sequence to a trace so they can be compared
+sequence_as_trace(Sequence, Trace) :-
+    sequence_as_trace_(Sequence, [], Trace).
+
+sequence_as_trace_([], ReversedTrace, Trace) :-
+    reverse(ReversedTrace, Trace).
+
+sequence_as_trace_([State | OtherStates], Acc, Trace) :-
+    state_as_round(State, Round),
+    sequence_as_trace_(OtherStates, [Round | Acc], Trace).
+
+% Convert a trace round to a state in a sequence of observations
+state_as_round(State, Round) :-
+    state_as_round_(State, [], Round).
+
+state_as_round_([], Round, Round).
+
+state_as_round_([Observation | OtherObservations], Acc, Round) :-
+    Observation =.. [sensed, PredicateName, ObservationArgs, _],
+    !,
+    convert_observation_args(ObservationArgs, Args),
+    Fact =.. [PredicateName | Args],
+    state_as_round_(OtherObservations, [Fact | Acc], Round).
+
+state_as_round_([_ | OtherObservations], Acc, Round) :-
+    state_as_round_(OtherObservations, Acc, Round).
+
+convert_observation_args(ObservationArgs, Args) :-
+    convert_observation_args_(ObservationArgs, [], Args).
+
+ convert_observation_args_([], ReversedArgs, Args) :-
+    reverse(ReversedArgs, Args).
+
+convert_observation_args_([ObservationArg | OtherObservationArgs], Acc, Args) :-
+    convert_observation_arg(ObservationArg, Arg),
+    convert_observation_args_(OtherObservationArgs, [Arg | Acc], Args).
+
+convert_observation_arg(ObservationArg, ObjectName) :-
+    ObservationArg =.. [object, _, ObjectName], !.
+
+convert_observation_arg(Arg, Arg).

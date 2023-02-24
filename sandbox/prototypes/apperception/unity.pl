@@ -1,7 +1,7 @@
 :- module(unity, [
         conceptual_unity/2, 
         spatial_unity/2, 
-        static_unity/4, 
+        static_closure/5, 
         breaks_static_constraints/3,
         too_many_relations/2,
         facts_repeat/2,
@@ -25,16 +25,14 @@ spatial_unity(Facts, TypeSignature) :-
     log(debug, unity, 'Checking spatial unity'),
     \+ unrelated_objects(Facts, TypeSignature).
 
-% Verify that facts consistent with the static rules and constraints,
-% i.e. compute the closure of the facts under the static rules
-% without causing a contradiction or breaking a static constraint.
-static_unity([], _, _, _) :- fail,!.
-static_unity(Facts, StaticRules, StaticConstraints, TypeSignature) :-
-    log(debug, unity, 'Checking static unity'),
-    get_global(apperception, uuid, Module),
+% The facts can be closed under the static rules without causing a contradiction.
+static_closure([], _, _, _, []).
+static_closure(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
+    length(Facts) \== 0,
+    log(debug, unity, 'Checking static unity of ~p', [Facts]),
     setup_call_cleanup(
             clear_facts_and_rules(Module, TypeSignature.predicate_types), 
-            static_unity_(Facts, StaticRules, StaticConstraints, TypeSignature, Module),
+            static_closure_(Facts, StaticRules, TypeSignature, Module, ClosedFacts),
             clear_facts_and_rules(Module, TypeSignature.predicate_types)
     ),!.
 
@@ -88,30 +86,32 @@ related(ObjectName1, ObjectName2, TypeSignature, Facts) :-
     select(ObjectName1, ObjectNames, [OtherObjectName]),
     related(OtherObjectName, ObjectName2, OtherFacts).
 
-static_unity_(Facts, StaticRules, StaticConstraints, TypeSignature, Module) :-
+% Check that facts closed under the static rules satisfy all constraints
+static_closure_(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
      clear_facts_and_rules(Module, TypeSignature.predicate_types),
      assert_facts(Module, Facts),
      assert_rules(Module, StaticRules),
      save_module(Module),
      apply_rules(Module, StaticRules, Answers),
-     merge_consistent(Facts, Answers, AugmentedFacts),
+     unwrap_facts(Answers, holds, InferredFacts),
+     merged_consistent(Facts, InferredFacts, AugmentedFacts),
      !,
     (  (length(Facts, L),
         length(AugmentedFacts, L)
        ) ->
-        \+ breaks_static_constraints(AugmentedFacts, StaticConstraints, TypeSignature)
+        ClosedFacts = AugmentedFacts
         ;
-        static_unity_(AugmentedFacts, StaticRules, StaticConstraints, TypeSignature, Module)
+        static_closure_(AugmentedFacts, StaticRules, TypeSignature, Module, ClosedFacts)
     ).
 
-% Merge removing duplicates. Fail if attempting to merge contradictory facts.    
-merge_consistent(Facts, [], Facts).
-merge_consistent(Facts, [Answer | OtherAnswers], MergedFacts) :-
+% Merged without inconsistencies, removing duplicates. Fail if attempting to merge contradictory facts.    
+merged_consistent(Facts, [], Facts).
+merged_consistent(Facts, [Answer | OtherAnswers], MergedFacts) :-
     \+ (member(Fact, Facts), factual_contradiction(Fact, Answer)),
     (memberchk(Answer, Facts) ->
-        merge_consistent(Facts, OtherAnswers, MergedFacts)
+        merged_consistent(Facts, OtherAnswers, MergedFacts)
         ;
-        merge_consistent([Answer | Facts], OtherAnswers, MergedFacts)
+        merged_consistent([Answer | Facts], OtherAnswers, MergedFacts)
     ).
 
 factual_contradiction(Condition, Fact) :-

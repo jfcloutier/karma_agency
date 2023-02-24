@@ -1,4 +1,4 @@
-:- module(rules_engine, [clear_facts_and_rules/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3]).
+:- module(rules_engine, [clear_facts_and_rules/2, assert_rules/2, assert_facts/2, save_module/1, apply_rules/3, unwrap_facts/3]).
 
 :- use_module(logger).
 
@@ -70,7 +70,8 @@ apply_rules_(_, [], Results, Results).
 apply_rules_(Module, [Head-_ | OtherRules], Acc, Results) :-
     answer_query(Module, Head, Facts),
     append(Facts, Acc, Acc1),
-    apply_rules_(Module, OtherRules, Acc1, Results).
+    list_to_set(Acc1, Set),
+    apply_rules_(Module, OtherRules, Set, Results).
 
 answer_query(Module, Query, Answers) :-
     copy_term(Query, CopiedQuery),
@@ -107,3 +108,9 @@ and([Goal], Goal) :- !.
 and([Goal | Rest], Anded) :-
     and(Rest, Others),
     Anded =..  [(','), Goal, Others].
+
+unwrap_facts([], _, []).
+unwrap_facts([NextFact | Rest], Wrapper, [Fact | OtherFacts]) :-
+    NextFact =.. [Wrapper, Fact],
+    unwrap_facts(Rest, Wrapper, OtherFacts).
+
