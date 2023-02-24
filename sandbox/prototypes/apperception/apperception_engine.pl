@@ -49,7 +49,7 @@ find_best_theories(ApperceptionLimits, Search, Sequence, Theories) :-
     log(info, apperception_engine, 'Found theory ~p from template ~p', [Theory, Search.template]),
     % Making a trace can fail
     (make_trace(Theory, UpdatedSearch.template.type_signature, Trace, UpdatedSearch.module) ->
-        log(warn, apperception_engine, 'Created trace ~p', [Trace]),
+        log(info, apperception_engine, 'Created trace ~p', [Trace]),
         rate_theory(Theory, Sequence, Trace, RatedTheory),
         maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch)
         ;
@@ -146,7 +146,7 @@ rate_theory(Theory, Sequence, Trace, RatedTheory) :-
     rate_coverage(Trace, SequenceAsTrace, CoverageRating),
     rate_theory_simplicity(Theory, SimplicityRating),
     Rating is CoverageRating + (CoverageRating * SimplicityRating),
-    log(info, apperception_engine, 'Theory rated ~p (coverage ~p, simplicity ~p)', [Rating, CoverageRating, SimplicityRating]),
+    log(warn, apperception_engine, 'Theory rated ~p (coverage ~p, simplicity ~p)', [Rating, CoverageRating, SimplicityRating]),
     put_dict(rating, Theory, Rating, RatedTheory).
 
 
@@ -207,16 +207,18 @@ rate_theory_simplicity(Theory, SimplicityRating) :-
     count_elements(Theory.causal_rules, CausalRuleElements),
     count_elements(Theory.static_constraints, ConstraintElements),
     Count is StaticRuleElements + CausalRuleElements + ConstraintElements,
-    BaseCount is max(Count - 100, 1),
+    BaseCount is max(Count - 20, 1),
     SimplicityRating is max(0, 100 - (log( BaseCount ) * 10)).
 
-count_elements([], 0).
+count_elements(Var, 1) :-
+  var(Var), !.
+count_elements([], 0) :- !.
 count_elements([Head | Tail], Count) :-
     count_elements(Head, C1),
     count_elements(Tail, C2),
     Count is C1 + C2.
 count_elements(Term, Count) :-
-    Term =.. [_ , Args], !,
+    Term =.. [_ | Args], !,
     count_elements(Args, C1),
     Count is C1 + 1.
 count_elements(_, 1).
@@ -233,7 +235,7 @@ maybe_keep_theory(RatedTheory, KeepHowMany, Search, UpdatedSearch) :-
     BestTheories = Search.best_theories,
     length(BestTheories, L),
     L < KeepHowMany, !,
-    log(info, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
+    log(warn, apperception_engine, 'Keeping theory with rating ~p: ~p', [RatedTheory.rating, RatedTheory]),
     put_dict(best_theories, Search, [RatedTheory | BestTheories], UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
@@ -244,7 +246,7 @@ maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
 
 add_if_better(RatedTheory, SortedTheories, [RatedTheory | Others]) :-
     find_worse(SortedTheories, RatedTheory.rating, WorseTheory),!,
-    log(info, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
+    log(warn, apperception_engine, 'Keeping theory with rating ~p: ~p', [RatedTheory.rating, RatedTheory]),
     delete(SortedTheories, WorseTheory, Others).
 add_if_better(_, SortedTheories, SortedTheories).
 
