@@ -48,7 +48,9 @@ theory(Template, Theory) :-
     log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
     initial_conditions(Template.type_signature, StaticConstraints, CausalRules, StaticRules, InitialConditions),
     log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0},
+    valid_predictions(CausalRules, InitialConditions, Template.type_signature.predicate_types),
+    log(info, theory_engine, 'Valid predictions'),
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0},
     reset_deadline(Template.limits.max_theory_time).
 
 reset_deadline(MaxTime) :-
@@ -410,7 +412,8 @@ add_object_properties(Object, [_ | OtherPredicateTypes], Acc, Properties) :-
 % For each pairing of objects, add one or more relations without breaking static constraints
 add_initial_relations(TypeSignature, StaticConstraints, Acc, InitialConditions) :-
     object_pairs(TypeSignature.objects, ObjectPairs),
-    add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions).
+    add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions1),
+    list_to_set(InitialConditions1, InitialConditions).
 
 object_pairs(Objects, ObjectPairs) :-
     object_pairs_(Objects, [], ObjectPairs).
@@ -509,6 +512,19 @@ object_referenced(ObjectName, Round) :-
     member(Fact, Round),
     Fact =.. [_ | ObjectNames],
     member(ObjectName, ObjectNames).
+
+% Applying all causal rules to the initial conditions does not produce a contradiction 
+valid_predictions(CausalRules, InitialConditions, PredicateTypes) :-
+    get_global(apperception, uuid, Module),
+    valid_predictions_(CausalRules, InitialConditions, PredicateTypes, Module, []).
+
+valid_predictions_([], _, _,_, _).
+
+valid_predictions_([CausalRule |OtherCausalRules], InitialConditions, PredicateTypes, Module, CausedFacts) :-
+    apply_causal_rules_on_facts([CausalRule], InitialConditions, PredicateTypes, Module, OtherCausedFacts),
+    append(CausedFacts, OtherCausedFacts, MoreCausedFacts),
+    facts_consistent(MoreCausedFacts),
+    valid_predictions_(OtherCausalRules, InitialConditions, PredicateTypes, Module, MoreCausedFacts).
 
 %% Utilities
 

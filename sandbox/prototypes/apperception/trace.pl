@@ -1,4 +1,4 @@
-:- module(trace, [make_trace/4, sequence_as_trace/2]).
+:- module(trace, [make_trace/4, sequence_as_trace/2, apply_causal_rules_on_facts/5]).
 
 :- use_module(logger).
 :- use_module(unity).

@@ -5,7 +5,8 @@
         breaks_static_constraints/3,
         too_many_relations/2,
         facts_repeat/2,
-        factual_contradiction/2]).
+        factual_contradiction/2,
+        facts_consistent/1]).
 
 :- use_module(logger).
 :- use_module(global).
@@ -119,6 +120,16 @@ factual_contradiction(Condition, Fact) :-
     Fact =.. [PredicateName, ObjectName, Arg1],
     Arg \== Arg1,
     is_domain_value(_, Arg), !.
+
+% Are all facts mutually consistent (no contradiction can be found)?
+facts_consistent([]).
+
+facts_consistent([_]) :- !.
+
+facts_consistent([Fact | OtherFacts]) :-
+    \+ (member(OtherFact, OtherFacts), factual_contradiction(Fact, OtherFact)),
+    !,
+    facts_consistent(OtherFacts).
 
 % There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there, or more than one.
 broken_static_constraint(StaticConstraint, Facts, TypeSignature) :-

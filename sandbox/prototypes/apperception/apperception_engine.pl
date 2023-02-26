@@ -23,12 +23,14 @@ set_log_level(info).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theory_duds: 1000, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 300},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theory_duds: 10, max_theories_per_template: 100, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
 % Given a sequence and some limits, find winning theories.
 apperceive(Sequence, ApperceptionLimits, Theories) :-
+    get_time(Now),
+    set_global(apperception, start_time, Now),
     min_type_signature(Sequence, MinTypeSignature),
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TheoryTemplateEngine),
     init_search(TheoryTemplateEngine, Search),
@@ -136,38 +138,39 @@ handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine
     !,
     next_theory(Search1, Theory, UpdatedSearch).
 
-handle_theory_engine_reponse(exception(Exception), _, _, _) :-
+handle_theory_engine_reponse(exception(Exception), Theory, Search, UpdatedSearch) :-
     log(error, apperception_engine, '!!! EXCEPTION getting next theory: ~p', [Exception]),
-    fail.
+    next_theory_template(Search, Search1),
+    !,
+    next_theory(Search1, Theory, UpdatedSearch).
 
 % Rate how well the trace covers the sequence and how simple the theory is.
 rate_theory(Theory, Sequence, Trace, RatedTheory) :-
     sequence_as_trace(Sequence, SequenceAsTrace),
     rate_coverage(Trace, SequenceAsTrace, CoverageRating),
-    rate_theory_simplicity(Theory, SimplicityRating),
-    Rating is CoverageRating + (CoverageRating * SimplicityRating),
-    log(warn, apperception_engine, 'Theory rated ~p (coverage ~p, simplicity ~p)', [Rating, CoverageRating, SimplicityRating]),
+    rate_cost(Theory, Cost),
+    Rating = CoverageRating-Cost,
+    log(warn, apperception_engine, 'Theory coverage ~p, cost ~p', [CoverageRating, Cost]),
     put_dict(rating, Theory, Rating, RatedTheory).
-
 
 % Find the best coverage and rate it as a percentage.
 % Consider the Trace as circular.
 % Cover the Sequence from beginning with the Trace, starting in turn with each round in the Trace, and score.
 % Keep the maximum score
-rate_coverage(TraceSequence, Sequence, CoverageRating) :-
-    findall(CoverageRating, rate_shifted_coverage(TraceSequence, Sequence, CoverageRating), Ratings),
+rate_coverage(Trace, SequenceAsTrace, CoverageRating) :-
+    findall(CoverageRating, rate_shifted_coverage(Trace, SequenceAsTrace, CoverageRating), Ratings),
     max_member(CoverageRating, Ratings).
 
-rate_shifted_coverage(TraceSequence, Sequence, CoverageRating):-
-    length(TraceSequence, L),
+rate_shifted_coverage(Trace, SequenceAsTrace, CoverageRating):-
+    length(Trace, L),
     between(1, L, Start),
-    rate_coverage_starting_at(TraceSequence, Start, Sequence, CoverageRating).
+    rate_coverage_starting_at(Trace, Start, SequenceAsTrace, CoverageRating).
 
 % Match sequence rouns with trace rounds from a starting point in the trace.
 % Rate coverage per round pair
 % Average rating over all pairs
-rate_coverage_starting_at(TraceSequence, Start, Sequence, CoverageRating) :-
-    pair_rounds(TraceSequence, Start, Sequence, [], RoundPairs),
+rate_coverage_starting_at(Trace, Start, SequenceAsTrace, CoverageRating) :-
+    pair_rounds(Trace, Start, SequenceAsTrace, [], RoundPairs),
     findall(Rating, (member(TraceRound-SequenceRound, RoundPairs), rate_round_pair(TraceRound-SequenceRound, Rating)), Ratings),
     sum_list(Ratings, Sum),
     length(Ratings, L),
@@ -175,40 +178,37 @@ rate_coverage_starting_at(TraceSequence, Start, Sequence, CoverageRating) :-
 
 pair_rounds([], _, _, _ , []).
 pair_rounds(_, _, [], RoundPairs, RoundPairs).
-pair_rounds(TraceSequence, Index, [SequenceRound | OtherSequenceRounds], Acc, RoundPairs) :-
-    trace_round_at(TraceSequence, Index, NextIndex, TraceRound),
-    pair_rounds(TraceSequence, NextIndex, OtherSequenceRounds, [TraceRound-SequenceRound | Acc], RoundPairs).
+pair_rounds(Trace, Index, [SequenceRound | OtherSequenceRounds], Acc, RoundPairs) :-
+    trace_round_at(Trace, Index, NextIndex, TraceRound),
+    pair_rounds(Trace, NextIndex, OtherSequenceRounds, [TraceRound-SequenceRound | Acc], RoundPairs).
 
 % Consider the trace circular
-trace_round_at(TraceSequence, Index, NextIndex, TraceRound) :-
-    length(TraceSequence, L),
+trace_round_at(Trace, Index, NextIndex, TraceRound) :-
+    length(Trace, L),
     (Index =< L ->
-        nth1(Index, TraceSequence, TraceRound),
+        nth1(Index, Trace, TraceRound),
         NextIndex is Index + 1
         ;
-        nth1(1, TraceSequence, TraceRound),
+        nth1(1, Trace, TraceRound),
         NextIndex = 2
     ).
 
 % Rate percent coverage of a sequence round by a trace round
 rate_round_pair(TraceRound-SequenceRound, Rating) :-
     intersection(TraceRound, SequenceRound, CommonFacts),
-    length(CommonFacts, CommonLength),
     length(SequenceRound, ObservedLength),
-    (CommonLength == 0 -> Coverage = 0; Coverage is ObservedLength / CommonLength),
+    length(CommonFacts, CommonLength),
+    (ObservedLength == 0 -> Coverage = 1; Coverage is CommonLength / ObservedLength),
     Percent is Coverage * 100,
     round(Percent, Rating).
     
 
-% Rate simplicity of the theory as a percentage.
-% A logarithmic scale
-rate_theory_simplicity(Theory, SimplicityRating) :-
+% Rate cost of the theory
+rate_cost(Theory, Cost) :-
     count_elements(Theory.static_rules, StaticRuleElements),
     count_elements(Theory.causal_rules, CausalRuleElements),
     count_elements(Theory.static_constraints, ConstraintElements),
-    Count is StaticRuleElements + CausalRuleElements + ConstraintElements,
-    BaseCount is max(Count - 20, 1),
-    SimplicityRating is max(0, 100 - (log( BaseCount ) * 10)).
+    Cost is StaticRuleElements + CausalRuleElements + ConstraintElements.
 
 count_elements(Var, 1) :-
   var(Var), !.
@@ -227,7 +227,8 @@ count_elements(_, 1).
 % If there are already the max number of kept theories, replace the lowest rated one
 % the theory has higher rating.
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
-    RatedTheory.rating == 0.0, !,
+    Coverage-_ = RatedTheory.rating,
+    Coverage == 0.0, !,
     TheoryDuds is Search.theory_duds + 1,
     put_dict(theory_duds, Search, TheoryDuds, UpdatedSearch).
 
@@ -236,21 +237,38 @@ maybe_keep_theory(RatedTheory, KeepHowMany, Search, UpdatedSearch) :-
     length(BestTheories, L),
     L < KeepHowMany, !,
     log(warn, apperception_engine, 'Keeping theory with rating ~p: ~p', [RatedTheory.rating, RatedTheory]),
-    put_dict(best_theories, Search, [RatedTheory | BestTheories], UpdatedSearch).
+    timestamp_theory(RatedTheory, RatedTheoryTS),
+    put_dict(best_theories, Search, [RatedTheoryTS | BestTheories], UpdatedSearch).
 
 maybe_keep_theory(RatedTheory, _, Search, UpdatedSearch) :-
-    BestTheories = Search.best_theories,
-    sort(rating, @=<, BestTheories, SortedTheories),
-    add_if_better(RatedTheory, SortedTheories, BetterTheories),
+    BestTheoriesSoFar = Search.best_theories,
+    add_if_better(RatedTheory, BestTheoriesSoFar, BetterTheories),
     put_dict(best_theories, Search, BetterTheories, UpdatedSearch).
 
-add_if_better(RatedTheory, SortedTheories, [RatedTheory | Others]) :-
-    find_worse(SortedTheories, RatedTheory.rating, WorseTheory),!,
+add_if_better(RatedTheory, BestTheoriesSoFar, [RatedTheoryTS | Others]) :-
+    find_worse(BestTheoriesSoFar, RatedTheory.rating, WorseTheory),!,
     log(warn, apperception_engine, 'Keeping theory with rating ~p: ~p', [RatedTheory.rating, RatedTheory]),
-    delete(SortedTheories, WorseTheory, Others).
+    delete(BestTheoriesSoFar, WorseTheory, Others),
+    timestamp_theory(RatedTheory, RatedTheoryTS).
+
 add_if_better(_, SortedTheories, SortedTheories).
 
-find_worse([WorseTheory | _], Rating, WorseTheory) :-
-    WorseTheory.rating < Rating, !.
-find_worse([_ | Others], Rating, WorseTheory) :-
-    find_worse(Others, Rating, WorseTheory).
+% Worse coverage
+find_worse([KeptTheory | _], Coverage-_, KeptTheory) :-
+    KeptCoverage-_ = KeptTheory.rating,
+    KeptCoverage < Coverage, !.
+
+% Or same coverage but costlier
+find_worse([KeptTheory | _], Coverage-Cost, KeptTheory) :-
+    KeptCoverage-KeptCost = KeptTheory.rating,
+    KeptCoverage == Coverage,
+    KeptCost > Cost, !.
+
+find_worse([_ | Others], Rating, KeptTheory) :-
+    find_worse(Others, Rating, KeptTheory).
+
+timestamp_theory(Theory, TheoryTS) :-
+    get_global(apperception, start_time, StartTime),
+    get_time(Now),
+    FoundTime is Now - StartTime,
+    put_dict(found_time, Theory, FoundTime, TheoryTS).
