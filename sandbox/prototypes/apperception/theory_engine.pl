@@ -29,13 +29,13 @@ engine_next(TheoryEngine, Theory2),
 engine_destroy(TheoryEngine).
 */
 
-% Create an engine that produces theories.
+% Create an engine that produces theories with their traces.
 create_theory_engine(Template, TheoryEngine) :-
-    engine_create(Theory, theory(Template, Theory), TheoryEngine), !.
+    engine_create(Theory-Trace, theory(Template, Theory, Trace), TheoryEngine), !.
 
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
-theory(Template, Theory) :-
+theory(Template, Theory, Trace) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
     reset_deadline(Template.limits.max_theory_time),
@@ -45,12 +45,19 @@ theory(Template, Theory) :-
     static_rules(Template, StaticConstraints, StaticRules),
     log(info, theory_engine, 'Static rules ~p', [StaticRules]),
     causal_rules(Template, StaticConstraints, CausalRules),
-    log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
-    initial_conditions(Template.type_signature, StaticConstraints, CausalRules, StaticRules, InitialConditions),
-    log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
-    valid_predictions(CausalRules, InitialConditions, Template.type_signature.predicate_types),
-    log(info, theory_engine, 'Valid predictions'),
-    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0},
+    catch(
+        (
+        log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
+        initial_conditions(Template.type_signature, StaticConstraints, CausalRules, StaticRules, InitialConditions),
+        log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
+        valid_predictions(CausalRules, InitialConditions, Template.type_signature.predicate_types),
+        log(info, theory_engine, 'Valid predictions'),
+        Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0},
+        make_trace(Theory, Template.type_signature, Trace, UUID)
+        ),
+        error(invalid_causal_rules, _),
+        (log(warn, theory_engine, 'INVALID CAUSAL RULES!!!'), fail)
+    ),
     reset_deadline(Template.limits.max_theory_time).
 
 reset_deadline(MaxTime) :-
@@ -516,15 +523,7 @@ object_referenced(ObjectName, Round) :-
 % Applying all causal rules to the initial conditions does not produce a contradiction 
 valid_predictions(CausalRules, InitialConditions, PredicateTypes) :-
     get_global(apperception, uuid, Module),
-    valid_predictions_(CausalRules, InitialConditions, PredicateTypes, Module, []).
-
-valid_predictions_([], _, _,_, _).
-
-valid_predictions_([CausalRule |OtherCausalRules], InitialConditions, PredicateTypes, Module, CausedFacts) :-
-    apply_causal_rules_on_facts([CausalRule], InitialConditions, PredicateTypes, Module, OtherCausedFacts),
-    append(CausedFacts, OtherCausedFacts, MoreCausedFacts),
-    facts_consistent(MoreCausedFacts),
-    valid_predictions_(OtherCausalRules, InitialConditions, PredicateTypes, Module, MoreCausedFacts).
+    apply_causal_rules_on_facts(CausalRules, InitialConditions, PredicateTypes, Module, _).
 
 %% Utilities
 

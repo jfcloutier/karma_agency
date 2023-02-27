@@ -122,14 +122,18 @@ factual_contradiction(Condition, Fact) :-
     is_domain_value(_, Arg), !.
 
 % Are all facts mutually consistent (no contradiction can be found)?
-facts_consistent([]).
+facts_consistent([]) :- !.
 
 facts_consistent([_]) :- !.
 
 facts_consistent([Fact | OtherFacts]) :-
-    \+ (member(OtherFact, OtherFacts), factual_contradiction(Fact, OtherFact)),
-    !,
+    \+ (member(OtherFact, OtherFacts), factual_contradiction(Fact, OtherFact)), 
+     !,
     facts_consistent(OtherFacts).
+
+facts_consistent(Facts) :-
+    log(debug, trace, 'Inconsistent facts ~p', [Facts]),
+    fail.
 
 % There is a pair of objects to which the constraint applies and none of the "exactly one" relation is there, or more than one.
 broken_static_constraint(StaticConstraint, Facts, TypeSignature) :-

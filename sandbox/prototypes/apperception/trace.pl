@@ -46,9 +46,23 @@ next_round(Round, Theory, TypeSignature, Module, NextRound) :-
     spatial_unity(NextRound, TypeSignature),
     log(debug, trace, 'Next round ~p', [NextRound]).
 
+% Apply each causal rule in turn, accumulating caused facts.
+% Raises invalid_causal_rules if contradictory facts are produced.
 apply_causal_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
-    apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Answers),
-    unwrap_facts(Answers, next, Caused).
+    apply_causal_rules_on_facts_(Rules, Facts, PredicateTypes, Module, [], Caused).
+
+apply_causal_rules_on_facts_([], _, _, _, Caused, Caused) :- !.
+
+apply_causal_rules_on_facts_([Rule | OtherRules], Facts, PredicateTypes, Module, Acc, Caused) :-
+    apply_rules_on_facts([Rule], Facts, PredicateTypes, Module, Answers),
+    unwrap_facts(Answers, next, CausedByRule),
+    append(CausedByRule, Acc, Acc1),
+    list_to_set(Acc1, Acc2),
+    !,
+    (facts_consistent(Acc2) ->
+        apply_causal_rules_on_facts_(OtherRules, Facts, PredicateTypes, Module, Acc2, Caused)
+        ;
+        throw(error(invalid_causal_rules, context(trace, Acc2)))).
 
 apply_rules_on_facts(Rules, Facts, PredicateTypes, Module, Caused) :-
     clear_facts_and_rules(Module, PredicateTypes),
