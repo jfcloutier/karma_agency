@@ -199,5 +199,25 @@ too_many_relations(one_related(PredicateName), Facts) :-
     OtherFact =.. [PredicateName, ObjectName, _],
     log(debug, unity, 'Multiple one_related(~p) from ~p in facts ~p', [PredicateName, ObjectName, Facts]).
 
+% NOT USED
+mentions_all_objects(_, []).
+mentions_all_objects(RulePairs, [object(_, ObjectName) | OtherObjects]) :-
+    mentions_object(RulePairs, ObjectName),
+    mentions_all_objects(RulePairs, OtherObjects).
 
 
+mentions_object(Var, _) :-
+    var(Var), 
+    !, fail.
+mentions_object(ObjectName, ObjectName) :- !.
+mentions_object([], _) :- !, fail.
+mentions_object([Term| _], ObjectName) :-
+    mentions_object(Term, ObjectName), !.
+mentions_object([_ | OtherTerms], ObjectName) :-
+    !,
+    mentions_object(OtherTerms, ObjectName).
+mentions_object(Term, ObjectName) :-
+    compound(Term),
+    !,
+    Term =.. [_ | Args],
+    mentions_object(Args, ObjectName).

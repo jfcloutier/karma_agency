@@ -39,12 +39,31 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
 % Verify that the new round does not break static constraints and is spatially unified.
 next_round(Round, Theory, TypeSignature, Module, NextRound) :-
     log(debug, trace, 'Making next round'),
+    constant_facts(Round, Theory, ConstantFacts),
     apply_causal_rules_on_facts(Theory.causal_rules, Round, TypeSignature.predicate_types, Module, CausedFacts),
-    static_closure(CausedFacts, Theory.static_rules, TypeSignature, Module, ClosedFacts),
+    append(ConstantFacts, CausedFacts, FactsToClose),
+    static_closure(FactsToClose, Theory.static_rules, TypeSignature, Module, ClosedFacts),
     carry_over_composable(Round, ClosedFacts, Theory, TypeSignature, NextRound),
     \+ breaks_static_constraints(NextRound, Theory.static_constraints, TypeSignature),
     spatial_unity(NextRound, TypeSignature),
     log(debug, trace, 'Next round ~p', [NextRound]).
+
+constant_facts(Facts, Theory, ConstantFacts) :-
+    setof(Fact, (member(Fact, Facts), \+ inferrable(Fact, Theory)), ConstantFacts).
+
+inferrable(Fact, Theory) :-
+    inferrable_from(Fact, Theory.causal_rules).
+
+inferrable(Fact, Theory) :-
+    inferrable_from(Fact, Theory.static_rules).
+
+inferrable_from(Fact, [Head-_ | _]) :-
+    Head =.. [_, InferredFact],
+    Fact =.. [PredicateName | _],
+    InferredFact =.. [PredicateName | _].
+
+inferrable_from(Fact, [_ | OtherRulePairs]) :-
+    inferrable_from(Fact, OtherRulePairs).
 
 % Apply each causal rule in turn, accumulating caused facts.
 % Raises invalid_causal_rules if contradictory facts are produced.
