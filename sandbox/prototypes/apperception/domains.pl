@@ -1,6 +1,6 @@
 :- module(domains, [domain_is/2, is_domain_value/2]).
 
-domain_is(boolean, [true, false]).
+domain_is(boolean, [false, true]).
 domain_is(proximity, [very_close, close, far, very_far]).
 domain_is(color, [red, green, blue]).
 

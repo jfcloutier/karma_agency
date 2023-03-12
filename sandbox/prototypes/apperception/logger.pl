@@ -60,9 +60,9 @@ logger:ignored(AllIgnored).
 :- dynamic(level/1).
 :- dynamic(ignored/1).
 
-levels([debug, info, warn, error]).
+levels([debug, info, warn, note, error]).
 
-level(debug).
+level(note).
 ignored([]).
 
 log_level(Level) :-
@@ -81,7 +81,7 @@ ignore_log_topic(Topic) :-
 reset_logging :-
     retractall(level(_)),
     retractall(ignored(_)),
-    asserta(level(debug)),
+    asserta(level(note)),
     asserta(ignored([])).
 
 log(Level, Topic, Message, Params, sleep(Secs)) :-

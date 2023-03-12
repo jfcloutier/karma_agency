@@ -1,4 +1,4 @@
-:- module(theory_engine, [create_theory_engine/2]).
+:- module(theory_engine, [create_theory_engine/3]).
 
 :- use_module(library(lists)).
 :- use_module(logger).
@@ -22,41 +22,48 @@ TypedVariables = [variables(led, 2)],
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
 Limits = limits{max_rules:8, max_elements:60, max_theory_time: 1000},
 Template = template{type_signature:TypeSignature, limits:Limits},
-
-create_theory_engine(Template, TheoryEngine),
+sequence(leds_observations, Sequence), 
+sequence_as_trace(Sequence, SequenceAsTrace),
+create_theory_engine(Template, SequenceAsTrace, TheoryEngine),
 engine_next(TheoryEngine, Theory1),
 engine_next(TheoryEngine, Theory2),
 engine_destroy(TheoryEngine).
 */
 
 % Create an engine that produces theories with their traces.
-create_theory_engine(Template, TheoryEngine) :-
-    engine_create(Theory-Trace, theory(Template, Theory, Trace), TheoryEngine), !.
+create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
+    engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
 
 % template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
 % type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
-theory(Template, Theory, Trace) :-
+theory(Template, SequenceAsTrace, Theory, Trace) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
+    LimitsMaxRules = Template.limits.max_rules,
+    between(1, LimitsMaxRules, MaxRules),
+    log(info, theory_engine,'Max rules set to ~p', [MaxRules]),
     reset_deadline(Template.limits.max_theory_time),
     reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
     log(info, theory_engine, 'Static constraints ~p', [StaticConstraints]),
-    static_rules(Template, StaticConstraints, StaticRules),
+    static_rules(Template, MaxRules, StaticConstraints, StaticRules),
     log(info, theory_engine, 'Static rules ~p', [StaticRules]),
-    causal_rules(Template, StaticConstraints, CausalRules),
+    causal_rules(Template, MaxRules, StaticConstraints, CausalRules),
+    log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
     catch(
         (
-        log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
-        initial_conditions(Template.type_signature, StaticConstraints, CausalRules, StaticRules, InitialConditions),
+        initial_conditions(Template.type_signature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, InitialConditions),
         log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
         valid_predictions(CausalRules, InitialConditions, Template.type_signature.predicate_types),
-        log(info, theory_engine, 'Valid predictions'),
+        log(info, theory_engine, 'Valid predictions on initial conditions'),
         Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0},
         make_trace(Theory, Template.type_signature, Trace, UUID)
         ),
         error(invalid_causal_rules, _),
-        (log(warn, theory_engine, 'INVALID CAUSAL RULES!!!'), fail)
+        (
+            log(warn, theory_engine, 'INVALID CAUSAL RULES!!!'),
+            fail
+        )
     ),
     reset_deadline(Template.limits.max_theory_time).
 
@@ -101,40 +108,43 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * No rule contradicts another
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
-static_rules(Template, StaticConstraints, RulePairs) :-
+static_rules(Template, MaxRules, StaticConstraints, RulePairs) :-
     log(debug, theory_engine, 'Making static rules'),
     check_deadline,
     make_static_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates], StaticConstraints),
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
+    maybe_add_static_rule(Template, MaxRules, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
-causal_rules(Template, StaticConstraints, RulePairs) :-  
+causal_rules(Template, MaxRules, StaticConstraints, RulePairs) :-  
     log(debug, theory_engine, 'Making causal rules'),
     check_deadline,
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rule(Head-BodyPredicates, StaticConstraints),
     valid_causal_rules([Head-BodyPredicates]),
     NextifiedHead =.. [next, Head],
-    maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
+    maybe_add_causal_rule(Template, MaxRules, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
 
-%% CONSTRUCTING VALID INITIAL CONDITIONS
-initial_conditions(TypeSignature, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
+%% Finding valid initial conditions
+initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
     log(debug, theory_engine, 'Making initial conditions'),
     check_deadline,
     reset_visited_initial_conditions,
     !,
     satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions),
-    % For every object, give a value to every applicable property
-    add_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, CausedConditions, WithInitialProperties),
     % For each pairing of objects, add one or more relations without breaking static constraints
-    add_initial_relations(TypeSignature, StaticConstraints, WithInitialProperties, InitialConditions),
+    add_initial_relations(StaticConstraints, TypeSignature, CausedConditions, WithInitialRelations),
+    % For every object, give a value to every applicable property
+    add_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, WithInitialRelations, InitialConditions),
     % Make sure we have not produced these initial conditions already
     new_initial_conditions(InitialConditions),
-    % Verify these new initial conditions are valid
+    % Must match at least one observed state
+    matches_observations(InitialConditions, SequenceAsTrace),
+    log(debug, theory_engine, 'Initial conditions match observations'),
+    % Verify these new initial conditions are unified
     unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions).
 
 new_initial_conditions(InitialConditions) :-
@@ -208,17 +218,17 @@ make_rule(TypeSignature, Head-BodyPredicates) :-
     make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
     
 
-maybe_add_causal_rule(_, _, RulePairs, RulePairs).
-maybe_add_causal_rule(Template, _, RulePairs, RulePairs) :-
-    rules_at_limits(RulePairs, Template.limits), !.
+maybe_add_causal_rule(_, _, _, RulePairs, RulePairs).
+maybe_add_causal_rule(Template, MaxRules, _, RulePairs, RulePairs) :-
+    rules_at_limits(RulePairs, Template.limits, MaxRules), !.
 
-maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
+maybe_add_causal_rule(Template, MaxRules, StaticConstraints, Acc, RulePairs) :-
     make_rule(Template.type_signature, Head-BodyPredicates),
     valid_causal_rule(Head-BodyPredicates, StaticConstraints),
     % Nextifying the rule
     NextifiedHead =.. [next, Head],
     valid_causal_rules([NextifiedHead-BodyPredicates | Acc]),!,
-    maybe_add_causal_rule(Template, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
+    maybe_add_causal_rule(Template, MaxRules, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
 
 % Checking rule before it is nextified
 valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
@@ -239,15 +249,15 @@ make_static_rule(TypeSignature, HoldingHead-BodyPredicates) :-
     make_rule(TypeSignature, Head-BodyPredicates),
     HoldingHead =.. [holds, Head].
 
-maybe_add_static_rule(_, _, RulePairs, RulePairs).
-maybe_add_static_rule(Template, _, RulePairs, RulePairs) :-
-    rules_at_limits(RulePairs, Template.limits), !.
+maybe_add_static_rule(_, _, _, RulePairs, RulePairs).
+maybe_add_static_rule(Template, MaxRules, _, RulePairs, RulePairs) :-
+    rules_at_limits(RulePairs, Template.limits, MaxRules), !.
 
-maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
+maybe_add_static_rule(Template, MaxRules, StaticConstraints, Acc, RulePairs) :-
     make_static_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+    maybe_add_static_rule(Template, MaxRules, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
 
 valid_static_rule(Head-Body, StaticConstraints)  :-
     \+ recursive_static_rule(Head-Body),
@@ -272,13 +282,13 @@ valid_static_rules(RulePairs, StaticConstraints) :-
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_static_rules(RulePairs).
 
-rules_at_limits(RulePairs, Limits) :-
+rules_at_limits(RulePairs, _, MaxRules) :-
     length(RulePairs, NumberOfRules),
-    NumberOfRules >= Limits.max_rules,
+    NumberOfRules >= MaxRules,
     log(info, theory_engine, 'Exceeding max rules of ~p: ~p', [NumberOfRules, RulePairs]),
     !.
 
-rules_at_limits(RulePairs, Limits) :-
+rules_at_limits(RulePairs, Limits, _) :-
     count_atoms(RulePairs, NumberOfAtoms),
     NumberOfAtoms >= Limits.max_elements, 
     log(info, theory_engine, 'Exceeding atoms limit of ~p: ~p', [NumberOfAtoms, RulePairs]),
@@ -360,7 +370,7 @@ recursion_in_static_rules(RulePairs) :-
 reset_visited_initial_conditions :-
     set_global(apperception, theory_engine/visited_initial_conditions, []).
 
-% Ensure the initial conditions trigger one of the causal rules
+% Find some initial conditions that would trigger causal rules
 satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions) :-
     member(_-BodyPredicates, CausalRules),
     copy_term(BodyPredicates, CopiedBodyPredicates),
@@ -402,99 +412,101 @@ add_initial_properties_([Object | OtherObjects], PredicateTypes, Acc, WithProper
 add_object_properties(_, [], Properties, Properties).
 
 add_object_properties(object(ObjectType, ObjectName), 
+                       [predicate(PredicateName, [object_type(ObjectType), value_type(_)]) | OtherPredicateTypes],
+                       Acc,
+                       Properties) :-
+    member(Property, Acc),
+    Property =.. [PredicateName, ObjectName, _],
+    add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, Acc, Properties).
+
+add_object_properties(object(ObjectType, ObjectName), 
                        [predicate(PredicateName, [object_type(ObjectType), value_type(Domain)]) | OtherPredicateTypes],
                        Acc,
                        Properties) :-
+    \+ (member(Property, Acc),
+    Property =.. [PredicateName, ObjectName, _]),
     domain_is(Domain, Values),
     member(Value, Values),
     Property =.. [PredicateName, ObjectName, Value],
-    \+ memberchk(Property, Acc),
-    \+ (member(Fact, Acc), factual_contradiction(Property, Fact)),
-    !,
     add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, [Property | Acc], Properties).
 
-add_object_properties(Object, [_ | OtherPredicateTypes], Acc, Properties) :-
-    add_object_properties(Object, OtherPredicateTypes, Acc, Properties).
+add_object_properties(object(ObjectType, ObjectName), 
+                       [predicate(_, [object_type(ObjectType1), _]) | OtherPredicateTypes],
+                       Acc,
+                       Properties) :-
+    ObjectType \== ObjectType1,
+    add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, Acc, Properties).
 
-% For each pairing of objects, add one or more relations without breaking static constraints
-add_initial_relations(TypeSignature, StaticConstraints, Acc, InitialConditions) :-
-    object_pairs(TypeSignature.objects, ObjectPairs),
-    add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions1),
-    list_to_set(InitialConditions1, InitialConditions).
+add_object_properties(object(ObjectType, ObjectName), 
+                       [predicate(_, [_, object_type(_)]) | OtherPredicateTypes],
+                       Acc,
+                       Properties) :-
+    add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, Acc, Properties).
 
-object_pairs(Objects, ObjectPairs) :-
-    object_pairs_(Objects, [], ObjectPairs).
-    
-object_pairs_([], ObjectPairs, ObjectPairs).
-object_pairs_([_], ObjectPairs, ObjectPairs).
-object_pairs_([Object | OtherObjects], Acc, ObjectPairs) :-
-    findall([Object-OtherObject, OtherObject-Object], member(OtherObject, OtherObjects), PairsList),
-    flatten([PairsList, Acc], Acc1),
-    object_pairs_(OtherObjects, Acc1, ObjectPairs), 
+% For each static constraint, add satisfying relation(s)
+add_initial_relations([], _, InitialConditions1, InitialConditions) :-
+    flatten(InitialConditions1, InitialConditions2),
+    list_to_set(InitialConditions2, InitialConditions).
+
+% Given predicate p, if applicable to object1, there is exactly one other object2 such that p(object1, object2)
+add_initial_relations([one_related(PredicateName) | OtherStaticConstraints], TypeSignature, Acc, InitialConditions) :-
+    add_one_related_relations(PredicateName, TypeSignature, Relations),
+    add_initial_relations(OtherStaticConstraints, TypeSignature, [Relations | Acc], InitialConditions).
+
+% For each relatable object1-object2 pair, there is exactly one p_n in [p_1, p_2, ...]] such that p_n(object1, object2)
+add_initial_relations([one_relation(PredicateNames) | OtherStaticConstraints], TypeSignature, Acc, InitialConditions) :-
+    add_one_relation_relations(PredicateNames, TypeSignature, Relations),
+    add_initial_relations(OtherStaticConstraints, TypeSignature, [Relations | Acc], InitialConditions).
+
+add_one_related_relations(PredicateName, TypeSignature, Relations) :-
+    add_one_related_relations_(TypeSignature.objects, TypeSignature.objects, PredicateName, TypeSignature.predicate_types, [], Relations).
+
+add_one_related_relations_([], _, _, _, Relations, Relations).
+
+add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc, Relations) :-
+    relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, Relation),
+    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, [Relation | Acc], Relations).
+
+add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc, Relations) :-
+    \+ relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, _),
+    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, Acc, Relations).
+
+relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, Relation) :-
+    object(FromObjectType, FromObjectName) = FromObject,
+    member(predicate(PredicateName, [object_type(FromObjectType), object_type(ToObjectType)]), PredicateTypes),
+    member(object(ToObjectType, ToObjectName), ToObjects),
+    FromObjectName \== ToObjectName,
+    Relation =.. [PredicateName, FromObjectName, ToObjectName].
+
+add_one_relation_relations(PredicateNames, TypeSignature, Relations) :-
+    add_one_relation_relations_(TypeSignature.objects, TypeSignature.objects, PredicateNames, TypeSignature.predicate_types, [], Relations).
+
+add_one_relation_relations_([], _, _, _, Relations, Relations).
+
+add_one_relation_relations_([FromObject | OtherFromObjects], ToObjects, PredicateNames, PredicateTypes, Acc, Relations) :-
+    relations_to_objects(FromObject, PredicateNames, ToObjects, PredicateTypes, [], Relations1),
+    add_one_relation_relations_(OtherFromObjects, ToObjects, PredicateNames, PredicateTypes, [Relations1 | Acc], Relations).
+
+relations_to_objects(_, _, [], _, Relations, Relations).
+
+relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc, Relations) :-
+    member(PredicateName, PredicateNames),
+    relation_to_object(FromObject, PredicateName, [ToObject], PredicateTypes, Relation),
+    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, [Relation | Acc], Relations).
+
+relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc, Relations) :-
+    \+ (
+    member(PredicateName, PredicateNames),
+    relation_to_object(FromObject, PredicateName, [ToObject], PredicateTypes, _)
+    ),
+    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, Acc, Relations).
+
+% The initial conditions match at least one observed sequence
+matches_observations(InitialConditions, SequenceAsTrace) :-
+    member(ObservedFacts, SequenceAsTrace),
+    [_ | _] = ObservedFacts,
+    forall(member(ObservedFact, ObservedFacts), memberchk(ObservedFact, InitialConditions)),
     !.
-
-add_object_relations([], _, _, InitialConditions, InitialConditions).
-add_object_relations(ObjectPairs, TypeSignature, StaticConstraints, Acc, InitialConditions) :-
-    select(ObjectPair, ObjectPairs, OtherObjectPairs),
-    add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, Acc1),
-    add_object_relations(OtherObjectPairs, TypeSignature, StaticConstraints, Acc1, InitialConditions).
-
-add_object_pair_relations(ObjectPair, TypeSignature, StaticConstraints, Acc, InitialConditions) :-
-    add_required_pair_relations(ObjectPair, StaticConstraints, TypeSignature.predicate_types, Acc, Acc1),
-    maybe_add_object_pair_relations(ObjectPair, TypeSignature.predicate_types, StaticConstraints, TypeSignature, Acc1, InitialConditions).
-
-add_required_pair_relations(_, [], _, Acc, Acc).
-
-% Add one relation of the mutually exclusive relations per object pair 
-add_required_pair_relations(ObjectPair, 
-                           [one_relation(ConstrainedPredicateNames) | OtherStaticConstraints], 
-                           PredicateTypes, 
-                           Acc, 
-                           Acc1) :-
-    member(PredicateName, ConstrainedPredicateNames),
-    make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation),
-    add_required_pair_relations(ObjectPair, 
-                           OtherStaticConstraints, 
-                           PredicateTypes, 
-                           [Relation | Acc],
-                           Acc1).
-
-% Make sure that the first paired object has the unique relation with only one other object.
-add_required_pair_relations(ObjectPair, 
-                                [one_related(PredicateName) | OtherStaticConstraints], 
-                                PredicateTypes, 
-                                Acc, 
-                                Acc1) :-
-    object(_, ObjectName1)-_ = ObjectPair,
-    PriorRelation =.. [PredicateName, ObjectName1, _],
-    (member(PriorRelation, Acc) ->
-        add_required_pair_relations(ObjectPair, OtherStaticConstraints, PredicateTypes, Acc, Acc1)
-        ;
-        make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation),
-        add_required_pair_relations(ObjectPair, OtherStaticConstraints, PredicateTypes, [Relation | Acc], Acc1)
-    ).
-
-make_pair_relation(ObjectPair, PredicateName, PredicateTypes, Relation) :-
-    object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2) = ObjectPair,
-    member(predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]), PredicateTypes),
-    Relation =.. [PredicateName, ObjectName1, ObjectName2].
-
-maybe_add_object_pair_relations(_, [], _, _, InitialConditions, InitialConditions).
-
-maybe_add_object_pair_relations(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), 
-                       [predicate(PredicateName, [object_type(ObjectType1), object_type(ObjectType2)]) | OtherPredicateTypes], 
-                       StaticConstraints,
-                       TypeSignature,
-                       Acc, 
-                       InitialConditions) :-
-                       Relation =.. [PredicateName, ObjectName1, ObjectName2],
-                       \+ memberchk(Relation, Acc),
-                       % Don't break the at-most-one aspect of a one-relation or one-related constraint by adding the new relation
-                       \+ too_many_relations(StaticConstraints, [Relation | Acc]),
-                       maybe_add_object_pair_relations(object(ObjectType1, ObjectName1)-object(ObjectType2, ObjectName2), OtherPredicateTypes, StaticConstraints, TypeSignature, [Relation | Acc], InitialConditions).
-
-maybe_add_object_pair_relations(ObjectPair, [_ | OtherPredicateTypes], StaticConstraints, TypeSignature, Acc, InitialConditions) :-
-    maybe_add_object_pair_relations(ObjectPair, OtherPredicateTypes, StaticConstraints, TypeSignature, Acc, InitialConditions).
 
 % Check that no static constraint is broken.
 % Check that all objects are represented and spatial unity is achieved.
@@ -748,18 +760,22 @@ all_vars_related(Predicates) :-
     collect_vars(Predicates, Vars),
     \+ unrelated_vars(Vars, Predicates).
 
+% There exists two distinct vars from within predicates such that they are not related through these predicates
 unrelated_vars(Vars, Predicates) :-
-    member(Var1, Vars),
-    member(Var2, Vars),
-    Var1 \== Var2,
+    select(Var1, Vars, OtherVars),
+    member(Var2, OtherVars),
     \+ vars_related(Var1, Var2, Predicates).
 
-% Two different vars are directly related within a single predicate
+% Two different vars are directly related when within a single predicate, or indirectly over the other predicates
 vars_related(Var1, Var2, Predicates) :-
-    member(Predicate, Predicates),
+    select(Predicate, Predicates, OtherPredicates),
     Predicate =.. [_ | Args],
     select_vars(Args, VarArgs),
-    (directly_related_vars(Var1, Var2, VarArgs) -> true; indirectly_related_vars(Var1, Var2, VarArgs, Predicates)).
+    length(VarArgs, 2),
+    (directly_related_vars(Var1, Var2, VarArgs) 
+    -> true
+    ; indirectly_related_vars(Var1, Var2, VarArgs, OtherPredicates)
+    ).
 
 directly_related_vars(Var1, Var2, VarArgs) :-
     memberchk_equal(Var1, VarArgs),
@@ -767,7 +783,6 @@ directly_related_vars(Var1, Var2, VarArgs) :-
 
 % Two different vars are indirectly related across multiple predicates
 indirectly_related_vars(Var1, Var2, VarArgs, Predicates) :-
-    length(VarArgs, 2),
     memberchk_equal(Var1, VarArgs),
     member(OtherVar, VarArgs),
     OtherVar \== Var1,

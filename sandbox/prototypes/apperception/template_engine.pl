@@ -41,17 +41,21 @@ init_template_counter :-
     set_global(apperception, template_engine/max_templates, 0),
     set_global(apperception, template_engine/template_count, 0).
 
-theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
-    scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
-    % generated
-    signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
-    reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
-    % generated
-    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
-    % implied
-    theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-    Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
-    increment_template_count.
+%% TODO - UNDO THIS
+theory_template(_, _, Template) :-
+    Template = template{limits:limits{max_elements:360,max_rules:1,max_theory_time:3000},type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]}}.
+
+% theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
+%     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
+%     % generated
+%     signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
+%     reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
+%     % generated
+%     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
+%     % implied
+%     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
+%     Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
+%     increment_template_count.
 
 reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
