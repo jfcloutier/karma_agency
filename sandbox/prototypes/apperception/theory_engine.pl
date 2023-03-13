@@ -208,6 +208,7 @@ sublist(Sub, [_| Rest]) :-
 sublist([X | Others], [X | Rest]) :-
     sublist(Others, Rest).
 
+% TODO - Don't make a rule on bactracking with the same meaning as one that was made before
 
 % Make a rule made from predicates, objects and variables
 % TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
@@ -590,7 +591,6 @@ make_body_predicates(PredicateTypes, DistinctVars, Head, BodyPredicates) :-
     maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate], BodyPredicates),
     valid_body_predicates(BodyPredicates, Head).
 
-% TODO - the var in the head and its use in the body must be consistently typed
 make_body_predicate(PredicateTypes, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
     member(PredicateType, PredicateTypes),
     make_rule_predicate(PredicateType, DistinctVars, BodyPredicate),
