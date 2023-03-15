@@ -14,13 +14,13 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[logger, type_signature, domains, global, unity, rules_engine, theory_engine].
+[logger, type_signature, domains, global, unity, rules_engine, rating, theory_engine].
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ], 
 Objects = [object(led, light1), object(led, light2)],
 TypedVariables = [variables(led, 2)], 
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
-Limits = limits{max_rules:8, max_elements:60, max_theory_time: 1000},
+Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 300},
 Template = template{type_signature:TypeSignature, limits:Limits},
 sequence(leds_observations, Sequence), 
 sequence_as_trace(Sequence, SequenceAsTrace),
@@ -34,22 +34,17 @@ engine_destroy(TheoryEngine).
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
 
-% template(type_signature: TypeSignature, max_rules: MaxRules, max_elements: MaxElements)
-% type_signature(objects: Objects, predicate_types: PredicateTypes, typed_variables: TypedVariables)
 theory(Template, SequenceAsTrace, Theory, Trace) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
-    LimitsMaxRules = Template.limits.max_rules,
-    between(1, LimitsMaxRules, MaxRules),
-    log(info, theory_engine,'Max rules set to ~p', [MaxRules]),
     reset_deadline(Template.limits.max_theory_time),
     reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
     log(info, theory_engine, 'Static constraints ~p', [StaticConstraints]),
-    static_rules(Template, MaxRules, StaticConstraints, StaticRules),
+    static_rules(Template, StaticConstraints, StaticRules),
     log(info, theory_engine, 'Static rules ~p', [StaticRules]),
-    causal_rules(Template, MaxRules, StaticConstraints, CausalRules),
-    log(info, theory_engine, 'Causal rules ~p', [CausalRules]),
+    % Do iterative deepening on rule size
+    causal_rules(Template, StaticConstraints, CausalRules),
     catch(
         (
         initial_conditions(Template.type_signature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, InitialConditions),
@@ -108,25 +103,23 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * No rule contradicts another
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
-static_rules(Template, MaxRules, StaticConstraints, RulePairs) :-
+static_rules(Template, StaticConstraints, RulePairs) :-
     log(debug, theory_engine, 'Making static rules'),
     check_deadline,
-    make_static_rule(Template.type_signature, Head-BodyPredicates),
+    make_static_rule(Template, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates], StaticConstraints),
-    maybe_add_static_rule(Template, MaxRules, StaticConstraints, [Head-BodyPredicates], RulePairs).
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
-causal_rules(Template, MaxRules, StaticConstraints, RulePairs) :-  
+causal_rules(Template, StaticConstraints, RulePairs) :-  
     log(debug, theory_engine, 'Making causal rules'),
     check_deadline,
-    make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rule(Head-BodyPredicates, StaticConstraints),
+    make_causal_rule(Template, StaticConstraints, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates]),
-    NextifiedHead =.. [next, Head],
-    maybe_add_causal_rule(Template, MaxRules, StaticConstraints, [NextifiedHead-BodyPredicates], RulePairs).
+    maybe_add_causal_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
 
 %% Finding valid initial conditions
 initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
@@ -145,7 +138,7 @@ initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRule
     matches_observations(InitialConditions, SequenceAsTrace),
     log(debug, theory_engine, 'Initial conditions match observations'),
     % Verify these new initial conditions are unified
-    unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions).
+    unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions), !.
 
 new_initial_conditions(InitialConditions) :-
     not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
@@ -213,23 +206,23 @@ sublist([X | Others], [X | Rest]) :-
 % Make a rule made from predicates, objects and variables
 % TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
 % TypeSignature.typed_variables = [variables(led, 2), variables(object1, 1), ...]
-make_rule(TypeSignature, Head-BodyPredicates) :-
+make_rule(Template, Head-BodyPredicates) :-
+    TypeSignature = Template.type_signature,
     make_distinct_variables(TypeSignature.typed_variables, DistinctVars),
     make_head(TypeSignature.predicate_types, DistinctVars, Head),
-    make_body_predicates(TypeSignature.predicate_types, DistinctVars, Head, BodyPredicates).
+    between(1, 3, MaxPredicates),
+    make_body_predicates(Template, MaxPredicates, DistinctVars, Head, BodyPredicates).
     
 
-maybe_add_causal_rule(_, _, _, RulePairs, RulePairs).
-maybe_add_causal_rule(Template, MaxRules, _, RulePairs, RulePairs) :-
-    rules_at_limits(RulePairs, Template.limits, MaxRules), !.
+maybe_add_causal_rule(Template, _, RulePairs, RulePairs) :-
+    rules_at_limit(RulePairs, Template.limits.max_causal_rules), !.
 
-maybe_add_causal_rule(Template, MaxRules, StaticConstraints, Acc, RulePairs) :-
-    make_rule(Template.type_signature, Head-BodyPredicates),
-    valid_causal_rule(Head-BodyPredicates, StaticConstraints),
-    % Nextifying the rule
-    NextifiedHead =.. [next, Head],
-    valid_causal_rules([NextifiedHead-BodyPredicates | Acc]),!,
-    maybe_add_causal_rule(Template, MaxRules, StaticConstraints, [NextifiedHead-BodyPredicates | Acc], RulePairs).
+maybe_add_causal_rule(_, _, RulePairs, RulePairs).
+
+maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
+    make_causal_rule(Template,StaticConstraints, Head-BodyPredicates),
+    valid_causal_rules([Head-BodyPredicates | Acc]),!,
+    maybe_add_causal_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
 
 % Checking rule before it is nextified
 valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
@@ -246,19 +239,27 @@ valid_causal_rules(RulePairs) :-
     % No repeated rules
     \+ repeated_rules(RulePairsWithNumberVars).
 
-make_static_rule(TypeSignature, HoldingHead-BodyPredicates) :-
-    make_rule(TypeSignature, Head-BodyPredicates),
+make_causal_rule(Template, StaticConstraints, NextifiedHead-BodyPredicates) :-
+    make_rule(Template, Head-BodyPredicates),
+    valid_causal_rule(Head-BodyPredicates, StaticConstraints),
+    % Nextifying the rule
+    NextifiedHead =.. [next, Head].
+
+make_static_rule(Template, HoldingHead-BodyPredicates) :-
+    make_rule(Template, Head-BodyPredicates),
     HoldingHead =.. [holds, Head].
 
-maybe_add_static_rule(_, _, _, RulePairs, RulePairs).
-maybe_add_static_rule(Template, MaxRules, _, RulePairs, RulePairs) :-
-    rules_at_limits(RulePairs, Template.limits, MaxRules), !.
+maybe_add_static_rule(Template,  _, RulePairs, RulePairs) :-
+    % Max rule size same as max elements for static rules
+    rules_at_limit(RulePairs, Template.limits.max_static_rules), !.
 
-maybe_add_static_rule(Template, MaxRules, StaticConstraints, Acc, RulePairs) :-
+maybe_add_static_rule(_, _, RulePairs, RulePairs).
+
+maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
     make_static_rule(Template.type_signature, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
-    maybe_add_static_rule(Template, MaxRules, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
 
 valid_static_rule(Head-Body, StaticConstraints)  :-
     \+ recursive_static_rule(Head-Body),
@@ -266,10 +267,8 @@ valid_static_rule(Head-Body, StaticConstraints)  :-
 
 recursive_static_rule(HoldingHead-BodyPredicates) :-
     HoldingHead =.. [holds, Head],
-    copy_term_nat(Head, CopiedHead),
     member(BodyPredicate, BodyPredicates),
-    copy_term_nat(BodyPredicate, CopiedBodyPredicate),
-    CopiedHead =@= CopiedBodyPredicate.
+    Head =@= BodyPredicate.
 
 valid_static_rules(RulePairs, StaticConstraints) :-
     % numerize vars in each copied rule pair before comparing them to one another
@@ -283,17 +282,22 @@ valid_static_rules(RulePairs, StaticConstraints) :-
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_static_rules(RulePairs).
 
-rules_at_limits(RulePairs, _, MaxRules) :-
-    length(RulePairs, NumberOfRules),
-    NumberOfRules >= MaxRules,
-    log(info, theory_engine, 'Exceeding max rules of ~p: ~p', [NumberOfRules, RulePairs]),
-    !.
+rules_at_limit(RulePairs, MaxRules) :-
+    length(RulePairs, RulesCount),
+    RulesCount == MaxRules,
+    log(info, theory_engine, 'At max number of rules ~p: ~p', [MaxRules, RulePairs]).
 
-rules_at_limits(RulePairs, Limits, _) :-
-    count_atoms(RulePairs, NumberOfAtoms),
-    NumberOfAtoms >= Limits.max_elements, 
-    log(info, theory_engine, 'Exceeding atoms limit of ~p: ~p', [NumberOfAtoms, RulePairs]),
-    !.
+rule_at_limit(BodyPredicates, MaxPredicates, _) :-
+    length(BodyPredicates, Count),
+    Count == MaxPredicates,
+    log(debug, theory_engine, 'Rule body at max predicates limit ~p >= ~p: ~p', [Count, MaxPredicates, BodyPredicates]),!.
+
+rule_at_limit(BodyPredicates, _, MaxElements) :-
+    count_elements(BodyPredicates, Count),
+    % Assuming the rule head count is 3 (could be 4)
+    RuleCount is Count + 3,
+    RuleCount >= MaxElements,
+    log(debug, theory_engine, 'Rule body at max elements limit ~p >= ~p: ~p', [RuleCount, MaxElements, BodyPredicates]),!.
 
 contradicted_static_contraint(RulePairs, StaticConstraints) :-
     member(Rule, RulePairs),
@@ -312,22 +316,6 @@ static_rule_contradicts_constraint(Head-BodyPredicates, one_relation(PredicateNa
     subset([PredName1, PredName2], PredicateNames),
     log(debug, theory_engine, 'Static rule ~p contradicts static constraint ~p', [Head-BodyPredicates, one_relation(PredicateNames)]).
 
-
-% An atom, here, is a singular, non-compound term.
-count_atoms(Var, 1) :-
-    var(Var), !.
-count_atoms([], 0) :- !.
-count_atoms([Term | OtherTerms], Count) :-
-    !,
-    count_atoms(Term, N1),
-    count_atoms(OtherTerms, N2),
-    Count is N1 + N2.
-count_atoms(Term, Count) :-
-    compound(Term),
-    !,
-    Term =.. SubTerms,
-    count_atoms(SubTerms, Count).
-count_atoms(_, 1).
 
 % numbervar variables in each rule pair so that they can be compared by the order in which they appear.
 numerize_vars_in_rule_pairs([], []).
@@ -586,15 +574,39 @@ make_head(PredicateTypes, DistinctVars, Head) :-
     make_rule_predicate(PredicateType, DistinctVars, Head).
 
 % Make a list of at least one mutually valid body predicates
-make_body_predicates(PredicateTypes, DistinctVars, Head, BodyPredicates) :-
-    make_body_predicate(PredicateTypes, DistinctVars, Head, [], BodyPredicate),
-    maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate], BodyPredicates),
+make_body_predicates(Template, MaxPredicates, DistinctVars, Head, BodyPredicates) :-
+    make_body_predicate(Template.type_signature.predicate_types, DistinctVars, Head, [], BodyPredicate),
+    maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, [BodyPredicate], BodyPredicates),
     valid_body_predicates(BodyPredicates, Head).
 
 make_body_predicate(PredicateTypes, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
-    member(PredicateType, PredicateTypes),
+    choose_predicate_type(PredicateType, PredicateTypes, BodyPredicates),
     make_rule_predicate(PredicateType, DistinctVars, BodyPredicate),
     valid_body_predicate(BodyPredicate, Head, BodyPredicates).
+
+maybe_add_body_predicates(Template, MaxPredicates, _, _, BodyPredicates, BodyPredicates) :-
+    rule_at_limit(BodyPredicates, MaxPredicates, Template.limits.max_elements),
+    !.
+
+maybe_add_body_predicates(_, _, _, _, BodyPredicates, BodyPredicates).
+
+maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
+    PredicateTypes = Template.type_signature.predicate_types,
+    make_body_predicate(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
+    valid_body_predicates([BodyPredicate | CurrentBodyPredicates], Head),
+    maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
+
+% Choose a predicate type that is not alphabetically brefore those already chosen
+% This reduces permutations of body predicates
+choose_predicate_type(PredicateType, PredicateTypes, BodyPredicates) :-
+    member(PredicateType, PredicateTypes),
+    \+ out_of_order(PredicateType, BodyPredicates).
+
+out_of_order(predicate(PredicateTypeName, _), Predicates) :-
+    member(Predicate, Predicates),
+    Predicate =.. [PredicateName | _],
+    compare((<), PredicateTypeName, PredicateName).
+
 
 % Don't repeat the head predicate in the body or any body predicate
 % Don't contradict other predicates
@@ -703,13 +715,6 @@ different_arg(Arg, OtherArg) :-
     !,
     \+ equivalent_vars(Arg, OtherArg).
 different_arg(_, _).
-
-maybe_add_body_predicates(_, _, _, CurrentBodyPredicates, CurrentBodyPredicates).
-
-maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
-    make_body_predicate(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
-    valid_body_predicates([BodyPredicate | CurrentBodyPredicates], Head),
-    maybe_add_body_predicates(PredicateTypes, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
 
 % Don't repeat a var in the args of a predicate
 make_rule_predicate(predicate(Name, TypedArgs), TypedVars, RulePredicate) :-

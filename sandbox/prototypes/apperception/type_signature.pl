@@ -26,7 +26,10 @@ extended_type_signature(TypeSignature,
     extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, ExtendedObjects),
     extended_predicate_types(TypeSignature.predicate_types, ExtendedObjectTypes, NumPredicateTypes, ExtendedPredicateTypes),
     typed_variables(ExtendedObjects, ExtendedObjectTypes, TypedVariables),
-    ExtendedTypeSignature = type_signature{object_types:ExtendedObjectTypes, objects:ExtendedObjects, predicate_types:ExtendedPredicateTypes, typed_variables:TypedVariables}.
+    sort(ExtendedObjectTypes, ObjectTypes),
+    sort(ExtendedPredicateTypes, PredicateTypes),
+    sort(ExtendedObjects, Objects),
+    ExtendedTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes, typed_variables:TypedVariables}.
 
 
 % All relations in a type signature

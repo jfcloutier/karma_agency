@@ -49,7 +49,10 @@ next_round(Round, Theory, TypeSignature, Module, NextRound) :-
     log(debug, trace, 'Next round ~p', [NextRound]).
 
 constant_facts(Facts, Theory, ConstantFacts) :-
-    setof(Fact, (member(Fact, Facts), \+ inferrable(Fact, Theory)), ConstantFacts).
+    setof(Fact, (member(Fact, Facts), \+ inferrable(Fact, Theory)), ConstantFacts),
+    !.
+
+constant_facts(_, _, []).
 
 inferrable(Fact, Theory) :-
     inferrable_from(Fact, Theory.causal_rules).

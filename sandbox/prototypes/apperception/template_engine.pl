@@ -43,7 +43,7 @@ init_template_counter :-
 
 %% TODO - UNDO THIS
 theory_template(_, _, Template) :-
-    Template = template{limits:limits{max_elements:360,max_rules:1,max_theory_time:3000},type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]}}.
+    Template = template{limits:limits{max_elements:15,max_causal_rules:1,max_static_rules:1, max_theory_time:300},type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]}}.
 
 % theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
 %     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
@@ -54,7 +54,7 @@ theory_template(_, _, Template) :-
 %     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
 %     % implied
 %     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-%     Template = template{type_signature:ExtendedTypeSignature, limits:TheoryLimits},
+%     Template = template{type_signature:SortedTypeSignature, limits:TheoryLimits},
 %     increment_template_count.
 
 reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
@@ -109,12 +109,12 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
     RandomOrder is Random * Frugality.
 
 theory_complexity_bounds(TypeSignature, Limits) :-
-    length(TypeSignature.object_types, ObjectTypesCount),
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
-    Count is ObjectTypesCount + ObjectsCount + PredicateTypesCount,
-    MaxRules is Count,
-    MaxElements is 10 * Count * Count,
+    UpperMaxRules is ObjectsCount * PredicateTypesCount,
+    MaxElements is 2 * ObjectsCount * PredicateTypesCount,
+    between(1, UpperMaxRules, MaxCausalRules),
+    between(1, UpperMaxRules, MaxStaticRules),
     MaxTheoryTime is MaxElements * 0.01,
-    Limits = limits{max_rules: MaxRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
     log(info, template_engine, 'Template limits ~p', [Limits]).

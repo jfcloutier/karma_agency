@@ -27,7 +27,7 @@ spatial_unity(Facts, TypeSignature) :-
     \+ unrelated_objects(Facts, TypeSignature).
 
 % The facts can be closed under the static rules without causing a contradiction.
-static_closure([], _, _, _, []).
+static_closure([], _, _, _, []) :- !.
 static_closure(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
     length(Facts) \== 0,
     log(debug, unity, 'Checking static unity of ~p', [Facts]),
@@ -35,7 +35,12 @@ static_closure(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
             clear_facts_and_rules(Module, TypeSignature.predicate_types), 
             static_closure_(Facts, StaticRules, TypeSignature, Module, ClosedFacts),
             clear_facts_and_rules(Module, TypeSignature.predicate_types)
-    ),!.
+    ),
+    !.
+static_closure(Facts, StaticRules, _, _, _) :-
+    log(debug, unity, 'NOT statically closed ~p under ~p', [Facts, StaticRules]),
+    fail,
+    !.
 
 % The facts breaks static constraints given a type signature.
 % Only one constraint need to be broken.
@@ -100,10 +105,11 @@ static_closure_(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
     (  (length(Facts, L),
         length(AugmentedFacts, L)
        ) ->
-        ClosedFacts = AugmentedFacts
+        ClosedFacts = AugmentedFacts,
+        log(debug, unity, 'Statically closed ~p under ~p', [Facts, StaticRules])
         ;
         static_closure_(AugmentedFacts, StaticRules, TypeSignature, Module, ClosedFacts)
-    ).
+    ). 
 
 % Merged without inconsistencies, removing duplicates. Fail if attempting to merge contradictory facts.    
 merged_consistent(Facts, [], Facts).
