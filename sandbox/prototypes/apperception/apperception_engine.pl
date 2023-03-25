@@ -20,7 +20,7 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, unity, rules_engine, rating, apperception_engine].
-set_log_level(info).
+set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},

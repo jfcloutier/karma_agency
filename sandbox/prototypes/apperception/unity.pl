@@ -24,7 +24,12 @@ conceptual_unity(StaticConstraints, TypeSignature) :-
 spatial_unity([], _) :- fail, !.
 spatial_unity(Facts, TypeSignature) :-
     log(debug, unity, 'Checking spatial unity'),
-    \+ unrelated_objects(Facts, TypeSignature).
+    \+ unrelated_objects(Facts, TypeSignature),
+    !.
+
+spatial_unity(Facts, _) :-
+    log(info, unity, 'Facts NOT spatially unified ~p', [Facts]),
+    fail.
 
 % The facts can be closed under the static rules without causing a contradiction.
 static_closure([], _, _, _, []) :- !.
@@ -38,7 +43,7 @@ static_closure(Facts, StaticRules, TypeSignature, Module, ClosedFacts) :-
     ),
     !.
 static_closure(Facts, StaticRules, _, _, _) :-
-    log(debug, unity, 'NOT statically closed ~p under ~p', [Facts, StaticRules]),
+    log(info, unity, 'NOT statically closed ~p under ~p', [Facts, StaticRules]),
     fail,
     !.
 

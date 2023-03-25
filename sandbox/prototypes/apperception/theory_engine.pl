@@ -38,17 +38,19 @@ theory(Template, SequenceAsTrace, Theory, Trace) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
     reset_deadline(Template.limits.max_theory_time),
-    reset_visited_constraints,
+    % reset_visited_constraints,
     static_constraints(Template.type_signature, StaticConstraints),
-    log(info, theory_engine, 'Static constraints ~p', [StaticConstraints]),
-    static_rules(Template, StaticConstraints, StaticRules),
-    log(info, theory_engine, 'Static rules ~p', [StaticRules]),
+    log(note, theory_engine, 'Static constraints ~p', [StaticConstraints]),
+    max_rule_body_sizes(Template, MaxStaticRuleBodySize, MaxCausalRuleBodySize),
+    static_rules(Template, StaticConstraints, MaxStaticRuleBodySize, StaticRules),
+    log(note, theory_engine, 'Static rules ~p', [StaticRules]),
     % Do iterative deepening on rule size
-    causal_rules(Template, StaticConstraints, CausalRules),
+    causal_rules(Template, StaticConstraints, MaxCausalRuleBodySize, CausalRules),
+    log(note, theory_engine, 'Causal rules ~p', [CausalRules]),
     catch(
         (
         initial_conditions(Template.type_signature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, InitialConditions),
-        log(info, theory_engine, 'Initial conditions ~p', [InitialConditions]),
+        log(note, theory_engine, 'Initial conditions ~p', [InitialConditions]),
         valid_predictions(CausalRules, InitialConditions, Template.type_signature.predicate_types),
         log(info, theory_engine, 'Valid predictions on initial conditions'),
         Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0},
@@ -60,6 +62,7 @@ theory(Template, SequenceAsTrace, Theory, Trace) :-
             fail
         )
     ),
+    log(note, theory_engine, 'Trace ~p', [Trace]),
     reset_deadline(Template.limits.max_theory_time).
 
 reset_deadline(MaxTime) :-
@@ -95,6 +98,15 @@ static_constraints(TypeSignature, StaticConstraints) :-
     maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
     valid_static_constraints(StaticConstraints, TypeSignature).
 
+% A number between 1 and the greatest possible number of predicates in any rule
+max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
+    aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
+    % "Worst case" is all unary predicates
+    UpperLimit is div(Template.limits.max_elements, 2),
+    UpperLimit1 is min(UpperLimit, Total),
+    between(1, UpperLimit1, MaxStaticBodySize),
+    between(1, MaxStaticBodySize, MaxCausalBodySize).
+
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
 % * There is at least one rule
@@ -103,31 +115,32 @@ static_constraints(TypeSignature, StaticConstraints) :-
 % * No rule contradicts another
 % * Rules can not contradict static constraints.
 % Rules are constructed and compared as rule pairs, i.e., Head-Body pairs.
-static_rules(Template, StaticConstraints, RulePairs) :-
+static_rules(Template, StaticConstraints, MaxBodySize, RulePairs) :-
     log(debug, theory_engine, 'Making static rules'),
     check_deadline,
-    make_static_rule(Template, Head-BodyPredicates),
+    make_static_rule(Template, MaxBodySize, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates], StaticConstraints),
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
+    maybe_add_static_rule(Template, StaticConstraints, MaxBodySize, [Head-BodyPredicates], RulePairs).
 
 % Rules that produce the changes in the next state from the current one (frame axiom)
 % A predicate in head describes state at time t+1, the body describes state at time t.
 % Rules must not exceed limits nor repeat themselves nor define non-change
-causal_rules(Template, StaticConstraints, RulePairs) :-  
+causal_rules(Template, StaticConstraints, MaxBodySize, RulePairs) :-  
     log(debug, theory_engine, 'Making causal rules'),
     check_deadline,
-    make_causal_rule(Template, StaticConstraints, Head-BodyPredicates),
+    make_causal_rule(Template, StaticConstraints, MaxBodySize, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates]),
-    maybe_add_causal_rule(Template, StaticConstraints, [Head-BodyPredicates], RulePairs).
+    maybe_add_causal_rule(Template, StaticConstraints, MaxBodySize, [Head-BodyPredicates], RulePairs).
 
 %% Finding valid initial conditions
 initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
-    log(debug, theory_engine, 'Making initial conditions'),
+    log(info, theory_engine, 'Making initial conditions'),
     check_deadline,
     reset_visited_initial_conditions,
     !,
     satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions),
+    log(info, theory_engine, 'Initial conditions satisfy causal rules'),
     % For each pairing of objects, add one or more relations without breaking static constraints
     add_initial_relations(StaticConstraints, TypeSignature, CausedConditions, WithInitialRelations),
     % For every object, give a value to every applicable property
@@ -136,9 +149,11 @@ initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRule
     new_initial_conditions(InitialConditions),
     % Must match at least one observed state
     matches_observations(InitialConditions, SequenceAsTrace),
-    log(debug, theory_engine, 'Initial conditions match observations'),
+    log(info, theory_engine, 'Initial conditions match observations'),
     % Verify these new initial conditions are unified
-    unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions), !.
+    unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions), 
+    log(info, theory_engine, 'Initial conditions are unified'),
+    !.
 
 new_initial_conditions(InitialConditions) :-
     not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
@@ -201,28 +216,41 @@ sublist(Sub, [_| Rest]) :-
 sublist([X | Others], [X | Rest]) :-
     sublist(Others, Rest).
 
-% TODO - Don't make a rule on bactracking with the same meaning as one that was made before
-
 % Make a rule made from predicates, objects and variables
 % TypeSignature.predicate_types = [predicate(on, [object_type(led), value_type(boolean), ...]
 % TypeSignature.typed_variables = [variables(led, 2), variables(object1, 1), ...]
-make_rule(Template, Head-BodyPredicates) :-
+make_rule(Template, MaxBodySize, Head-BodyPredicates) :-
     TypeSignature = Template.type_signature,
-    make_distinct_variables(TypeSignature.typed_variables, DistinctVars),
+    make_distinct_variables(TypeSignature, MaxBodySize, DistinctVars),
     make_head(TypeSignature.predicate_types, DistinctVars, Head),
-    between(1, 3, MaxPredicates),
-    make_body_predicates(Template, MaxPredicates, DistinctVars, Head, BodyPredicates).
-    
+    make_body_predicates(Template, MaxBodySize, DistinctVars, Head, BodyPredicates).
 
-maybe_add_causal_rule(Template, _, RulePairs, RulePairs) :-
+predicate_instance_count(PredicateType, Template, Count) :-
+    member(PredicateType, Template.type_signature.predicate_types),
+    PredicateType = predicate(_, ArgTypes),
+    args_unification_count(ArgTypes, Template.type_signature.typed_variables, 0, 1, Count).
+
+args_unification_count([], _, _, Acc, Acc).
+
+args_unification_count([value_type(_) | OtherArgTypes], TypedVariables, NthArg, Acc, Count) :-
+    args_unification_count(OtherArgTypes, TypedVariables, NthArg, Acc, Count).
+
+args_unification_count([object_type(ObjectType) | OtherArgTypes], TypedVariables, NthArg, Acc, Count) :-
+    member(variables(ObjectType, VarCount), TypedVariables),
+    VarCount1 is VarCount - NthArg,
+    Acc1 is Acc * VarCount1,
+    NthArg1 is NthArg + 1,
+    args_unification_count(OtherArgTypes, TypedVariables, NthArg1, Acc1, Count).
+
+maybe_add_causal_rule(Template, _, _, RulePairs, RulePairs) :-
     rules_at_limit(RulePairs, Template.limits.max_causal_rules), !.
 
-maybe_add_causal_rule(_, _, RulePairs, RulePairs).
+% maybe_add_causal_rule(_, _, _, RulePairs, RulePairs).
 
-maybe_add_causal_rule(Template, StaticConstraints, Acc, RulePairs) :-
-    make_causal_rule(Template,StaticConstraints, Head-BodyPredicates),
+maybe_add_causal_rule(Template, StaticConstraints, MaxBodySize, Acc, RulePairs) :-
+    make_causal_rule(Template, StaticConstraints, MaxBodySize, Head-BodyPredicates),
     valid_causal_rules([Head-BodyPredicates | Acc]),!,
-    maybe_add_causal_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+    maybe_add_causal_rule(Template, StaticConstraints, MaxBodySize, [Head-BodyPredicates | Acc], RulePairs).
 
 % Checking rule before it is nextified
 valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
@@ -239,27 +267,27 @@ valid_causal_rules(RulePairs) :-
     % No repeated rules
     \+ repeated_rules(RulePairsWithNumberVars).
 
-make_causal_rule(Template, StaticConstraints, NextifiedHead-BodyPredicates) :-
-    make_rule(Template, Head-BodyPredicates),
+make_causal_rule(Template, StaticConstraints, MaxBodySize, NextifiedHead-BodyPredicates) :-
+    make_rule(Template, MaxBodySize, Head-BodyPredicates),
     valid_causal_rule(Head-BodyPredicates, StaticConstraints),
     % Nextifying the rule
     NextifiedHead =.. [next, Head].
 
-make_static_rule(Template, HoldingHead-BodyPredicates) :-
-    make_rule(Template, Head-BodyPredicates),
+make_static_rule(Template, MaxBodySize, HoldingHead-BodyPredicates) :-
+    make_rule(Template, MaxBodySize, Head-BodyPredicates),
     HoldingHead =.. [holds, Head].
 
-maybe_add_static_rule(Template,  _, RulePairs, RulePairs) :-
+maybe_add_static_rule(Template,  _, _, RulePairs, RulePairs) :-
     % Max rule size same as max elements for static rules
     rules_at_limit(RulePairs, Template.limits.max_static_rules), !.
 
-maybe_add_static_rule(_, _, RulePairs, RulePairs).
+% maybe_add_static_rule(_, _, _, RulePairs, RulePairs).
 
-maybe_add_static_rule(Template, StaticConstraints, Acc, RulePairs) :-
-    make_static_rule(Template.type_signature, Head-BodyPredicates),
+maybe_add_static_rule(Template, StaticConstraints, MaxBodySize, Acc, RulePairs) :-
+    make_static_rule(Template, MaxBodySize, Head-BodyPredicates),
     valid_static_rule(Head-BodyPredicates, StaticConstraints),
     valid_static_rules([Head-BodyPredicates | Acc], StaticConstraints),!,
-    maybe_add_static_rule(Template, StaticConstraints, [Head-BodyPredicates | Acc], RulePairs).
+    maybe_add_static_rule(Template, StaticConstraints, MaxBodySize, [Head-BodyPredicates | Acc], RulePairs).
 
 valid_static_rule(Head-Body, StaticConstraints)  :-
     \+ recursive_static_rule(Head-Body),
@@ -282,15 +310,36 @@ valid_static_rules(RulePairs, StaticConstraints) :-
     % use un-numerized pairs b/c testing is based on unify-ability
     \+ recursion_in_static_rules(RulePairs).
 
+out_of_order_same_name_predicates([Predicate, NextPredicate | _]) :-
+    Predicate =.. [PredicateName | _],
+    NextPredicate =.. [PredicateName | _],
+    collect_vars([Predicate], Args),
+    collect_vars([NextPredicate], NextArgs),
+    out_of_order_args(Args, NextArgs), 
+    !.
+
+out_of_order_same_name_predicates([_, NextPredicate | OtherPredicates]) :-
+    out_of_order_same_name_predicates([NextPredicate | OtherPredicates]).
+
+out_of_order_args([Arg1, Arg2], [NextArg1, NextArg2]) :-
+    var_number(Arg1, Arg1Number),
+    var_number(NextArg1, NextArg1Number),
+    var_number(Arg2, Arg2Number),
+    var_number(NextArg2, NextArg2Number),
+    (NextArg1Number < Arg1Number
+    ;
+    NextArg1Number == Arg1Number,
+    NextArg2Number < Arg2Number).
+
 rules_at_limit(RulePairs, MaxRules) :-
     length(RulePairs, RulesCount),
     RulesCount == MaxRules,
-    log(info, theory_engine, 'At max number of rules ~p: ~p', [MaxRules, RulePairs]).
+    log(debug, theory_engine, 'At max number of rules ~p: ~p', [MaxRules, RulePairs]).
 
-rule_at_limit(BodyPredicates, MaxPredicates, _) :-
+rule_at_limit(BodyPredicates, MaxBodySize, _) :-
     length(BodyPredicates, Count),
-    Count == MaxPredicates,
-    log(debug, theory_engine, 'Rule body at max predicates limit ~p >= ~p: ~p', [Count, MaxPredicates, BodyPredicates]),!.
+    Count == MaxBodySize,
+    log(debug, theory_engine, 'Rule body at max predicates limit ~p >= ~p: ~p', [Count, MaxBodySize, BodyPredicates]),!.
 
 rule_at_limit(BodyPredicates, _, MaxElements) :-
     count_elements(BodyPredicates, Count),
@@ -433,62 +482,69 @@ add_object_properties(object(ObjectType, ObjectName),
     add_object_properties(object(ObjectType, ObjectName), OtherPredicateTypes, Acc, Properties).
 
 % For each static constraint, add satisfying relation(s)
-add_initial_relations([], _, InitialConditions1, InitialConditions) :-
-    flatten(InitialConditions1, InitialConditions2),
-    list_to_set(InitialConditions2, InitialConditions).
+add_initial_relations([], _, InitialConditions, InitialConditions).
 
 % Given predicate p, if applicable to object1, there is exactly one other object2 such that p(object1, object2)
 add_initial_relations([one_related(PredicateName) | OtherStaticConstraints], TypeSignature, Acc, InitialConditions) :-
-    add_one_related_relations(PredicateName, TypeSignature, Relations),
-    add_initial_relations(OtherStaticConstraints, TypeSignature, [Relations | Acc], InitialConditions).
+    add_one_related_relations(PredicateName, TypeSignature, Acc, Acc1),
+    add_initial_relations(OtherStaticConstraints, TypeSignature, Acc1, InitialConditions).
 
 % For each relatable object1-object2 pair, there is exactly one p_n in [p_1, p_2, ...]] such that p_n(object1, object2)
 add_initial_relations([one_relation(PredicateNames) | OtherStaticConstraints], TypeSignature, Acc, InitialConditions) :-
-    add_one_relation_relations(PredicateNames, TypeSignature, Relations),
-    add_initial_relations(OtherStaticConstraints, TypeSignature, [Relations | Acc], InitialConditions).
+    add_one_relation_relations(PredicateNames, TypeSignature, Acc, Acc1),
+    add_initial_relations(OtherStaticConstraints, TypeSignature, Acc1, InitialConditions).
 
-add_one_related_relations(PredicateName, TypeSignature, Relations) :-
-    add_one_related_relations_(TypeSignature.objects, TypeSignature.objects, PredicateName, TypeSignature.predicate_types, [], Relations).
+add_one_related_relations(PredicateName, TypeSignature, Acc1, Acc) :-
+    add_one_related_relations_(TypeSignature.objects, TypeSignature.objects, PredicateName, TypeSignature.predicate_types, Acc1, Acc).
 
-add_one_related_relations_([], _, _, _, Relations, Relations).
+add_one_related_relations_([], _, _, _, Acc, Acc).
 
-add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc, Relations) :-
+add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc1, Acc) :-
     relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, Relation),
-    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, [Relation | Acc], Relations).
+    object(_, FromObjectName) = FromObject,
+    OtherRelated =.. [PredicateName, FromObjectName, _],
+    (member(OtherRelated, Acc1) -> Acc2 = Acc1; Acc2 = [Relation | Acc1]),
+    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, Acc2, Acc).
 
-add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc, Relations) :-
+add_one_related_relations_([FromObject | OtherFromObjects], ToObjects, PredicateName, PredicateTypes, Acc1, Acc) :-
     \+ relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, _),
-    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, Acc, Relations).
+    add_one_related_relations_(OtherFromObjects, ToObjects, PredicateName, PredicateTypes, Acc1, Acc).
 
 relation_to_object(FromObject, PredicateName, ToObjects, PredicateTypes, Relation) :-
     object(FromObjectType, FromObjectName) = FromObject,
-    member(predicate(PredicateName, [object_type(FromObjectType), object_type(ToObjectType)]), PredicateTypes),
     member(object(ToObjectType, ToObjectName), ToObjects),
+    member(predicate(PredicateName, [object_type(FromObjectType), object_type(ToObjectType)]), PredicateTypes),
     FromObjectName \== ToObjectName,
     Relation =.. [PredicateName, FromObjectName, ToObjectName].
 
-add_one_relation_relations(PredicateNames, TypeSignature, Relations) :-
-    add_one_relation_relations_(TypeSignature.objects, TypeSignature.objects, PredicateNames, TypeSignature.predicate_types, [], Relations).
+% TODO - NOT TESTED
+add_one_relation_relations(PredicateNames, TypeSignature, Acc1, Acc) :-
+    add_one_relation_relations_(TypeSignature.objects, TypeSignature.objects, PredicateNames, TypeSignature.predicate_types, Acc1, Acc).
 
-add_one_relation_relations_([], _, _, _, Relations, Relations).
+add_one_relation_relations_([], _, _, _, Acc, Acc).
 
-add_one_relation_relations_([FromObject | OtherFromObjects], ToObjects, PredicateNames, PredicateTypes, Acc, Relations) :-
-    relations_to_objects(FromObject, PredicateNames, ToObjects, PredicateTypes, [], Relations1),
-    add_one_relation_relations_(OtherFromObjects, ToObjects, PredicateNames, PredicateTypes, [Relations1 | Acc], Relations).
+add_one_relation_relations_([FromObject | OtherFromObjects], ToObjects, PredicateNames, PredicateTypes, Acc1, Acc) :-
+    relations_to_objects(FromObject, PredicateNames, ToObjects, PredicateTypes, Acc1, Acc2),
+    add_one_relation_relations_(OtherFromObjects, ToObjects, PredicateNames, PredicateTypes, Acc2, Acc).
 
-relations_to_objects(_, _, [], _, Relations, Relations).
+relations_to_objects(_, _, [], _, Acc, Acc).
 
-relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc, Relations) :-
+relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc1, Acc) :-
     member(PredicateName, PredicateNames),
     relation_to_object(FromObject, PredicateName, [ToObject], PredicateTypes, Relation),
-    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, [Relation | Acc], Relations).
+    object(_, ToObjectName) = ToObject,
+    object(_, FromObjectName) = FromObject,
+    ((member(OtherRelation, Acc1), OtherRelation =.. [OtherPredicateName, FromObjectName, ToObjectName], member(OtherPredicateName, PredicateNames)) 
+        -> Acc2 = Acc1
+        ; Acc2 = [Relation | Acc1]),
+    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, Acc2, Acc).
 
-relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc, Relations) :-
+relations_to_objects(FromObject, PredicateNames, [ToObject | OtherToObjects], PredicateTypes, Acc1, Acc) :-
     \+ (
     member(PredicateName, PredicateNames),
     relation_to_object(FromObject, PredicateName, [ToObject], PredicateTypes, _)
     ),
-    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, Acc, Relations).
+    relations_to_objects(FromObject, PredicateNames, OtherToObjects, PredicateTypes, Acc1, Acc).
 
 % The initial conditions match at least one observed sequence
 matches_observations(InitialConditions, SequenceAsTrace) :-
@@ -501,19 +557,23 @@ matches_observations(InitialConditions, SequenceAsTrace) :-
 % Check that all objects are represented and spatial unity is achieved.
 % Unify intial conditions by applying static rules to closure, without creating inconsistencies or breaking static rules
 unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedConditions) :-
-  check_deadline,
-  get_global(apperception, uuid, Module),
-  \+ unrepresented_object(InitialConditions, TypeSignature.objects),
-  spatial_unity(InitialConditions, TypeSignature),
-  static_closure(InitialConditions, StaticRules, TypeSignature, Module, UnifiedConditions),
-  \+ breaks_static_constraints(UnifiedConditions, StaticConstraints, TypeSignature),
-  !.
+    check_deadline,
+    get_global(apperception, uuid, Module),
+    \+ unrepresented_object(InitialConditions, TypeSignature.objects),
+    spatial_unity(InitialConditions, TypeSignature),
+    static_closure(InitialConditions, StaticRules, TypeSignature, Module, UnifiedConditions),
+    \+ breaks_static_constraints(UnifiedConditions, StaticConstraints, TypeSignature),
+    !.
+
+unified_initial_conditions(InitialConditions, _, _, _, _) :-
+    log(info, theory_engine, 'Initial conditions are NOT unified ~p', [InitialConditions]),
+    fail.
 
 % One object in the type signature does not appear in a condition
 unrepresented_object(Round, Objects) :-
     member(object(_, ObjectName), Objects),
     \+ object_referenced(ObjectName, Round),
-    log(debug, theory_engine, 'Unrepresented object ~p in round ~p', [ObjectName, Round]).
+    log(info, theory_engine, 'Unrepresented object ~p in round ~p', [ObjectName, Round]).
     
 % An object is referenced by name somewhere in the initial conditions
 object_referenced(ObjectName, Round) :-
@@ -571,32 +631,31 @@ contradicting_predicates([Predicate | Rest], OtherPredicates) :-
 
 make_head(PredicateTypes, DistinctVars, Head) :-
     member(PredicateType, PredicateTypes),
-    make_rule_predicate(PredicateType, DistinctVars, Head).
+    make_head_predicate(PredicateType, DistinctVars, Head).
 
 % Make a list of at least one mutually valid body predicates
-make_body_predicates(Template, MaxPredicates, DistinctVars, Head, BodyPredicates) :-
-    make_body_predicate(Template.type_signature.predicate_types, DistinctVars, Head, [], BodyPredicate),
-    maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, [BodyPredicate], BodyPredicates),
+make_body_predicates(Template, MaxBodySize, DistinctVars, Head, BodyPredicates) :-
+%    make_body_predicate(Template.type_signature.predicate_types, DistinctVars, Head, [], BodyPredicate),
+    maybe_add_body_predicates(Template, MaxBodySize, DistinctVars, Head, [], BodyPredicates).
+
+maybe_add_body_predicates(Template, MaxBodySize, _, Head, BodyPredicates, BodyPredicates) :-
+    rule_at_limit(BodyPredicates, MaxBodySize, Template.limits.max_elements),
+    !,
     valid_body_predicates(BodyPredicates, Head).
+
+% maybe_add_body_predicates(_, _, _, _, BodyPredicates, BodyPredicates).
+
+maybe_add_body_predicates(Template, MaxBodySize, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
+    PredicateTypes = Template.type_signature.predicate_types,
+    make_body_predicate(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
+    maybe_add_body_predicates(Template, MaxBodySize, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
 
 make_body_predicate(PredicateTypes, DistinctVars, Head, BodyPredicates, BodyPredicate) :-
     choose_predicate_type(PredicateType, PredicateTypes, BodyPredicates),
-    make_rule_predicate(PredicateType, DistinctVars, BodyPredicate),
+    make_body_predicate(PredicateType, DistinctVars, BodyPredicate),
     valid_body_predicate(BodyPredicate, Head, BodyPredicates).
 
-maybe_add_body_predicates(Template, MaxPredicates, _, _, BodyPredicates, BodyPredicates) :-
-    rule_at_limit(BodyPredicates, MaxPredicates, Template.limits.max_elements),
-    !.
-
-maybe_add_body_predicates(_, _, _, _, BodyPredicates, BodyPredicates).
-
-maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
-    PredicateTypes = Template.type_signature.predicate_types,
-    make_body_predicate(PredicateTypes, DistinctVars, Head, CurrentBodyPredicates, BodyPredicate),
-    valid_body_predicates([BodyPredicate | CurrentBodyPredicates], Head),
-    maybe_add_body_predicates(Template, MaxPredicates, DistinctVars, Head, [BodyPredicate | CurrentBodyPredicates], BodyPredicates).
-
-% Choose a predicate type that is not alphabetically brefore those already chosen
+% Choose a predicate type that is not alphabetically before those already chosen
 % This reduces permutations of body predicates
 choose_predicate_type(PredicateType, PredicateTypes, BodyPredicates) :-
     member(PredicateType, PredicateTypes),
@@ -649,6 +708,8 @@ equivalent_vars(Var1, Var2) :-
 % Together, the body predicates cover all variables in the head.
 % All variables are related in the head OR body
 valid_body_predicates(BodyPredicates, Head) :-
+   numerize_vars([Head | BodyPredicates], [_ | NumerizedBodyPredicates]),
+    \+ out_of_order_same_name_predicates(NumerizedBodyPredicates),
     \+ singleton_var_exists([Head | BodyPredicates]),
     all_vars_related([Head | BodyPredicates]).
 
@@ -687,7 +748,7 @@ collate([Term | Rest], List, [Term | Others]) :-
 % Select without duplicates
 select_vars([], []).
 select_vars([Term | Rest], [Term | Vars]) :-
-    var(Term),
+    (var(Term); var_number(Term, _)),
     \+ memberchk_equal(Term, Rest),
     !,
     select_vars(Rest, Vars).
@@ -717,34 +778,50 @@ different_arg(Arg, OtherArg) :-
 different_arg(_, _).
 
 % Don't repeat a var in the args of a predicate
-make_rule_predicate(predicate(Name, TypedArgs), TypedVars, RulePredicate) :-
-    make_args(TypedArgs, TypedVars, Args),
+make_body_predicate(predicate(Name, TypedArgs), DistinctVars, RulePredicate) :-
+    make_args(TypedArgs, DistinctVars, Args),
     RulePredicate =.. [Name | Args].
+
+make_head_predicate(predicate(Name, TypedArgs), DistinctVars, HeadPredicate) :-
+    make_args(TypedArgs, DistinctVars, Args), 
+    HeadPredicate =.. [Name | Args].
 
 make_args([], _, []).
 
-make_args([TypedArg | OtherTypedArgs], TypedVars, [Arg | OtherArgs]) :-
-    make_arg(TypedArg, TypedVars, UnusedTypedVars, Arg),
-    make_args(OtherTypedArgs, UnusedTypedVars, OtherArgs).
+make_args([TypedArg | OtherTypedArgs], DistinctVars, [Arg | OtherArgs]) :-
+    make_arg(TypedArg, DistinctVars, UnusedDistinctVars, Arg),
+    make_args(OtherTypedArgs, UnusedDistinctVars, OtherArgs).
 
-make_arg(object_type(Type), TypedVars, UnusedTypedVars, Arg) :-
-    take_typed_var(Type, TypedVars, UnusedTypedVars, Arg).
+make_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
+    take_typed_var(Type, DistinctVars, UnusedDistinctVars, Arg).
 
-make_arg(value_type(Domain), TypedVars, TypedVars, Arg) :-
+make_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     domain_is(Domain,Values),
     member(Arg, Values).
     
 take_typed_var(Type, [vars(Type, Vars) | OtherTypedVars], [vars(Type, UnusedVars) | OtherTypedVars], Arg) :-
     select(Arg, Vars, UnusedVars).
 
-take_typed_var(Type, [TypedVars | OtherTypedVars], [TypedVars | UnusedVars], Arg) :-
-    take_typed_var(Type, OtherTypedVars, UnusedVars, Arg).
+take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], Arg) :-
+    TypedVar = vars(OtherType, _),
+    Type \== OtherType,
+    take_typed_var(Type, OtherTypedVars, UnusedTypedVars, Arg).
 
 % count each type.
 % Create a list of count variables for each type
 % Return pairs count-variables
-make_distinct_variables(TypedVariables, DistinctVars) :-
-    bagof(vars(Type, Vars), N^(member(variables(Type, N), TypedVariables), distinct_vars(N, Vars)), DistinctVars).
+make_distinct_variables(TypeSignature, MaxBodySize, DistinctVars) :-
+    bagof(vars(Type, Vars), 
+          N^(member(variables(Type, Count), TypeSignature.typed_variables), 
+             adjusted_typed_variables_count(Type, Count, TypeSignature.predicate_types, MaxBodySize, N), 
+             distinct_vars(N, Vars)), 
+          DistinctVars).
+
+% adjusted_typed_variables_count(_, Count, _, _, Count).
+% Keep the number of typed variables small
+adjusted_typed_variables_count(Type, Count, PredicateTypes, MaxBodySize, AdjustedCount) :-
+    (member(predicate(_, [object_type(Type), object_type(Type)]), PredicateTypes), Order = 2; Order = 1), !,
+    AdjustedCount is min(Count, MaxBodySize * Order).
 
 distinct_vars(N, Vars) :-
     length(Vars, N),
