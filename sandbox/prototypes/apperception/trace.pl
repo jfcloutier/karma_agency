@@ -28,6 +28,7 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
     !,
     (round_in_trace(NextRound, Trace) ->
         log(debug, trace, 'Next round ~p is already in the trace ~p', [NextRound, Trace]),
+        set_global(trace, completed, true),
         ExpandedTrace = Trace
         ;
         expand_trace([NextRound | Trace], Theory, TypeSignature, Module, ExpandedTrace)
@@ -38,7 +39,7 @@ expand_trace(Trace, Theory, TypeSignature, Module, ExpandedTrace) :-
 % Carry over all facts from current round that do not introduce contradictions 
 % Verify that the new round does not break static constraints and is spatially unified.
 next_round(Round, Theory, TypeSignature, Module, NextRound) :-
-    log(debug, trace, 'Making next round'),
+    log(debug, trace, 'Making next round'), 
     constant_facts(Round, Theory, ConstantFacts),
     apply_causal_rules_on_facts(Theory.causal_rules, Round, TypeSignature.predicate_types, Module, CausedFacts),
     append(ConstantFacts, CausedFacts, FactsToClose),

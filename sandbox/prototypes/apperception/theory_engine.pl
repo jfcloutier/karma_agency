@@ -38,14 +38,21 @@ theory(Template, SequenceAsTrace, Theory, Trace) :-
     uuid(UUID),
     set_global(apperception, uuid, UUID),
     reset_deadline(Template.limits.max_theory_time),
-    % reset_visited_constraints,
+    reset_visited(theory_engine/visited_constraints),
     static_constraints(Template.type_signature, StaticConstraints),
+    not_already_visited(StaticConstraints, theory_engine/visited_constraints),
     log(note, theory_engine, 'Static constraints ~p', [StaticConstraints]),
-    max_rule_body_sizes(Template, MaxStaticRuleBodySize, MaxCausalRuleBodySize),
-    static_rules(Template, StaticConstraints, MaxStaticRuleBodySize, StaticRules),
-    log(note, theory_engine, 'Static rules ~p', [StaticRules]),
     % Do iterative deepening on rule size
+    max_rule_body_sizes(Template, MaxStaticRuleBodySize, MaxCausalRuleBodySize),
+    reset_visited(theory_engine/visited_static_rules),
+    static_rules(Template, StaticConstraints, MaxStaticRuleBodySize, StaticRules),
+    % Hack to prevent backtracking to effectively repeated rules (b/c multiple distinct vars)
+    rules_not_already_visited(StaticRules, theory_engine/visited_static_rules),
+    log(note, theory_engine, '@@@ Static rules ~p', [StaticRules]),
+    reset_visited(theory_engine/visited_causal_rules),
     causal_rules(Template, StaticConstraints, MaxCausalRuleBodySize, CausalRules),
+    log(info, theory_engine, 'Causal rules valid'),
+    rules_not_already_visited(CausalRules, theory_engine/visited_causal_rules),
     log(note, theory_engine, 'Causal rules ~p', [CausalRules]),
     catch(
         (
@@ -80,9 +87,9 @@ check_deadline :-
     ; 
     true.
 
-% Reset visited constraints to empty
-reset_visited_constraints :-
-    set_global(apperception, theory_engine/visited_constraints, []).
+% Reset visited solutions to empty
+reset_visited(Path) :-
+    set_global(apperception, Path, []).
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
 % A binary constraint defines a set of predicates on objects X and Y, such that exactly one of a set of binary relations Relation(X,Y) must be true at any time.
@@ -93,7 +100,6 @@ static_constraints(TypeSignature, StaticConstraints) :-
     log(debug, theory_engine, 'Making static constraints'),
     check_deadline,
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    reset_visited_constraints,
     maybe_add_static_constraint(one_related, AllBinaryPredicateNames, [], StaticConstraints1),
     maybe_add_static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraints1, StaticConstraints),
     valid_static_constraints(StaticConstraints, TypeSignature).
@@ -102,10 +108,17 @@ static_constraints(TypeSignature, StaticConstraints) :-
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
     % "Worst case" is all unary predicates
-    UpperLimit is div(Template.limits.max_elements, 2),
+    UpperLimit is div(Template.limits.max_elements, 6),
     UpperLimit1 is min(UpperLimit, Total),
     between(1, UpperLimit1, MaxStaticBodySize),
-    between(1, MaxStaticBodySize, MaxCausalBodySize).
+    between(1, UpperLimit1, MaxCausalBodySize),
+    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
+    % between_down(MaxStaticBodySize, 1, MaxCausalBodySize).
+
+% between_down(High, Low, _) :- Low > High, !, fail.
+% between_down(Low, Low, Low) :- !.
+% between_down(High, Low, High) :- High > Low.
+% between_down(High, Low, X) :- High1 is High -1, between_down(High1, Low, X).
 
 % Static rules
 % Grow a set of static rules given a set of typed predicates and of typed variables such that
@@ -137,38 +150,42 @@ causal_rules(Template, StaticConstraints, MaxBodySize, RulePairs) :-
 initial_conditions(TypeSignature, SequenceAsTrace, StaticConstraints, CausalRules, StaticRules, UnifiedInitialConditions) :-
     log(info, theory_engine, 'Making initial conditions'),
     check_deadline,
-    reset_visited_initial_conditions,
-    !,
-    satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions),
-    log(info, theory_engine, 'Initial conditions satisfy causal rules'),
+    reset_visited(theory_engine/visited_initial_conditions),
+    causative_initial_conditions(CausalRules, TypeSignature, CausativeConditions),
+    log(info, theory_engine, 'Initial conditions will trigger a causal rule'),
     % For each pairing of objects, add one or more relations without breaking static constraints
-    add_initial_relations(StaticConstraints, TypeSignature, CausedConditions, WithInitialRelations),
+    add_initial_relations(StaticConstraints, TypeSignature, CausativeConditions, WithInitialRelations),
     % For every object, give a value to every applicable property
     add_initial_properties(TypeSignature.objects, TypeSignature.predicate_types, WithInitialRelations, InitialConditions),
-    % Make sure we have not produced these initial conditions already
-    new_initial_conditions(InitialConditions),
-    % Must match at least one observed state
-    matches_observations(InitialConditions, SequenceAsTrace),
-    log(info, theory_engine, 'Initial conditions match observations'),
-    % Verify these new initial conditions are unified
+    % Verify these new initial conditions can be unified (closed under static rules without breaking static constraints)
     unified_initial_conditions(InitialConditions, TypeSignature, StaticConstraints, StaticRules, UnifiedInitialConditions), 
     log(info, theory_engine, 'Initial conditions are unified'),
-    !.
-
-new_initial_conditions(InitialConditions) :-
-    not_already_visited(InitialConditions, theory_engine/visited_initial_conditions).
+    % Make sure we have not produced these initial conditions already
+    not_already_visited(UnifiedInitialConditions, theory_engine/visited_initial_conditions),
+    % Must match at least one observed state
+    matches_observations(UnifiedInitialConditions, SequenceAsTrace),
+    log(info, theory_engine, 'Unified initial conditions match observations'), !.
 
 % Conceptual unity: Each (binary) predicate appears in a static constraint
 % Do not repeat previously visited static constraints
 valid_static_constraints(StaticConstraints, TypeSignature) :-
-    conceptual_unity(StaticConstraints, TypeSignature),
-    not_already_visited(StaticConstraints, theory_engine/visited_constraints).
+    conceptual_unity(StaticConstraints, TypeSignature).
+
+% TODO: Until a way is found to avoid effectively duplicate rules (b/c of multiple distinct vars) on backtrack...
+rules_not_already_visited(Rules, Path) :-
+    numerize_vars_in_rule_pairs(Rules, NumerizedRules),
+    not_already_visited(NumerizedRules, Path).
 
 not_already_visited(Solution, Path) :-
     get_global(apperception, Path, AllVisited),
     \+ repeats_visited(Solution, AllVisited),
-    set_global(apperception, Path, [Solution | AllVisited]).
+    set_global(apperception, Path, [Solution | AllVisited]), !.
 
+not_already_visited(Solution, Path) :-
+    log(info, theory_engine, 'Already visited ~p: ~p', [Path, Solution]),
+    fail.
+
+% A list of rules/constraints etc. is already visited in some permutation
 repeats_visited(Solution, AllVisited) :-
     member(VisitedSolution, AllVisited),
     length(Solution, L),
@@ -261,7 +278,7 @@ valid_causal_rule(Head-BodyPredicates, StaticConstraints) :-
 idempotent_causal_rule(Head-BodyPredicates) :-
     memberchk_equal(Head, BodyPredicates), !.
 
-% Checking nextified rules
+% Checking whether causal rules are valid
 valid_causal_rules(RulePairs) :-
      numerize_vars_in_rule_pairs(RulePairs, RulePairsWithNumberVars),
     % No repeated rules
@@ -404,42 +421,38 @@ recursion_in_static_rules(RulePairs) :-
     Head =@= OtherBodyPredicate,
     log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [HoldingHead, RulePairs]).
 
-% Reset visited initial conditions to empty
-reset_visited_initial_conditions :-
-    set_global(apperception, theory_engine/visited_initial_conditions, []).
-
-% Find some initial conditions that would trigger causal rules
-satisfy_causal_rule(CausalRules, TypeSignature, CausedConditions) :-
+% Find some initial conditions that would trigger one of the causal rules
+causative_initial_conditions(CausalRules, TypeSignature, CausativeConditions) :-
     member(_-BodyPredicates, CausalRules),
     copy_term(BodyPredicates, CopiedBodyPredicates),
-    satisfy_causal_rule_(CopiedBodyPredicates, TypeSignature, [], CausedConditions).
+    causative_initial_conditions_(CopiedBodyPredicates, TypeSignature, [], CausativeConditions).
 
-satisfy_causal_rule_([], _, CausedConditions, CausedConditions).
-satisfy_causal_rule_([BodyPredicate | BodyPredicates], TypeSignature, Acc, CausedConditions) :-
-    (ground(BodyPredicate) ; do_ground_predicate(BodyPredicate, TypeSignature)),
-    satisfy_causal_rule_(BodyPredicates, TypeSignature, [BodyPredicate | Acc], CausedConditions).
+causative_initial_conditions_([], _, CausativeConditions, CausativeConditions).
+causative_initial_conditions_([BodyPredicate | BodyPredicates], TypeSignature, Acc, CausativeConditions) :-
+    ground_predicate(BodyPredicate, TypeSignature),
+    causative_initial_conditions_(BodyPredicates, TypeSignature, [BodyPredicate | Acc], CausativeConditions).
 
-do_ground_predicate(BodyPredicate, TypeSignature) :-
+ground_predicate(BodyPredicate, TypeSignature) :-
     BodyPredicate =.. [PredicateName | Args],
-    do_ground_args(Args, 1, PredicateName, TypeSignature).
+    ground_predicate_args(Args, 1, PredicateName, TypeSignature).
 
-do_ground_args([], _, _, _).
-do_ground_args([Arg | OtherArgs], Index, PredicateName, TypeSignature) :-
-    do_ground_arg(Arg, Index, PredicateName, TypeSignature),
+ground_predicate_args([], _, _, _).
+ground_predicate_args([Arg | OtherArgs], Index, PredicateName, TypeSignature) :-
+    ground_predicate_arg(Arg, Index, PredicateName, TypeSignature),
     NextIndex is Index + 1,
-    do_ground_args(OtherArgs, NextIndex, PredicateName, TypeSignature).
+    ground_predicate_args(OtherArgs, NextIndex, PredicateName, TypeSignature).
 
-do_ground_arg(Arg, _, _, _) :- ground(Arg), !.
+ground_predicate_arg(Arg, _, _, _) :- ground(Arg), !.
 
-do_ground_arg(Arg, Index, PredicateName, TypeSignature) :-
+ground_predicate_arg(Arg, Index, PredicateName, TypeSignature) :-
     member(predicate(PredicateName, ArgTypes), TypeSignature.predicate_types),
     nth1(Index, ArgTypes, object_type(ObjectType)),
     member(object(ObjectType, ObjectName), TypeSignature.objects),
     Arg = ObjectName.
 
 % For each object, for each applicable property, make one with some domain value.
-add_initial_properties(Objects, PredicateTypes, CausedConditions, WithProperties) :-
-    add_initial_properties_(Objects, PredicateTypes, CausedConditions, WithProperties).
+add_initial_properties(Objects, PredicateTypes, CausativeConditions, WithProperties) :-
+    add_initial_properties_(Objects, PredicateTypes, CausativeConditions, WithProperties).
 
 add_initial_properties_([], _, WithProperties, WithProperties).
 

@@ -13,7 +13,7 @@
 :- use_module(rules_engine).
 :- use_module(type_signature).
 
-% Check that the static constraints achiev conceptual unity over relation predicates.
+% Check that the static constraints achieve conceptual unity over relation predicates.
 % Property predicates are implicitly unified via domain exclusion.
 conceptual_unity(StaticConstraints, TypeSignature) :-
     log(debug, unity, 'Checking conceptual unity'),

@@ -43,7 +43,7 @@ init_template_counter :-
 
 %% TODO - UNDO THIS
 theory_template(_, _, Template) :-
-    Template = template{limits:limits{max_elements:15,max_causal_rules:1,max_static_rules:1, max_theory_time:300},type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]}}.
+    Template = template{limits:limits{max_elements:32,max_causal_rules:1,max_static_rules:1, max_theory_time:300},type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]}}.
 
 % theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
 %     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
@@ -111,10 +111,13 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
 theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
+    MaxConstraintElements is PredicateTypesCount * 2,
     UpperMaxRules is ObjectsCount * PredicateTypesCount,
-    MaxElements is 2 * ObjectsCount * PredicateTypesCount,
     between(1, UpperMaxRules, MaxCausalRules),
     between(1, UpperMaxRules, MaxStaticRules),
+    MaxStaticElements is MaxStaticRules * ObjectsCount * PredicateTypesCount,
+    MaxCausalElements is MaxCausalRules * ObjectsCount * PredicateTypesCount,
+    MaxElements is 2 * (MaxConstraintElements + MaxStaticElements + MaxCausalElements),
     MaxTheoryTime is MaxElements * 0.01,
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
     log(info, template_engine, 'Template limits ~p', [Limits]).
