@@ -33,14 +33,25 @@ theory_engine_chr:theory(Template).
 
 :- chr_constraint model_module(+), 
                   deadline(+),
+                  max_static_rules(+),
+                  max_causal_rules(+),
+                  max_elements(+),
+                  static_rules_count(+),
+                  causal_rules_count(+),
+                  elements_count(+),
                   model_static_constraint(+), 
                   model_static_constraint_covers(+),
-                  model_static_rule(+), 
+                  model_static_rule(+),
+                  enough_static_rules/0, 
                   model_causal_rule(+), 
                   model_initial_condition(+).
 
 % Keep the latest deadline
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
+% Complexity limits are singletons
+max_static_rules(_) \ max_static_rules(_)#passive <=> true. 
+max_causal_rules(_) \ max_causal_rules(_)#passive <=> true. 
+max_elements(_) \ max_elements(_)#passive <=> true. 
 % Model static constraints
 'adding static constraint fails after deadline' @ deadline(Deadline)#passive \ model_static_constraint(_)  <=> 
     after_deadline(Deadline) | fail.
@@ -53,31 +64,46 @@ theory_engine_chr:theory(Template).
     static_constraint_about(C, BinaryPredicateName) | true.
 'no static constraint covers predicate' @ model_static_constraint_covers(_) <=> fail.
 % Model static rules
-'adding static rule fails after deadline' @ deadline(Deadline)#passive \ model_static_rule(_)  <=> 
+'adding static rule after deadline' @ deadline(Deadline)#passive \ model_static_rule(_)  <=> 
     after_deadline(Deadline) | fail.
-'repeated static rule fails' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=>
+'too many static rules' @ max_static_rules(Max), static_rules_count(Count) ==> Count > Max | fail.
+'enough static rules' @ max_static_rules(Max), static_rules_count(Count) \ true <=> Count == Max.
+'repeated static rule' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=>
     same_rules(SR1, SR2) | fail.
-'recursive static rule fails' @ model_static_rule(SR) \ true <=> recursive_static_rule(SR) | fail.
-'too many relations in rule fails' @ model_static_rule(_-BodyPredicates), model_static_constraint(SC)#passive \ true <=>
+'recursive static rule' @ model_static_rule(SR) <=> recursive_static_rule(SR) | fail.
+'too many relations in static rule' @ model_static_constraint(SC)#passive \ model_static_rule(_-BodyPredicates) <=>
     too_many_relations(SC, BodyPredicates) | fail.
-% TODO - constraints for contradicting_static_rules(RulePairsWithNumberVars), contradicted_static_contraint(RulePairsWithNumberVars, StaticConstraints), recursion_in_static_rules(RulePairs)
-
+'contradicting static rules' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
+'static rules contradict a static constraint' @ model_static_constraint(SC)#passive \ model_static_rule(SR) <=> 
+    static_rule_contradicts_constraint(SR, SC) | fail.
+'static rules recurse' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
+'keep static rule, count it' @ model_static_rule(_) \ static_rules_count(Count) <=> Count1 is Count + 1, static_rules_count(Count1).
+'keep static rule, start count' @ model_static_rule(_) ==> static_rules_count(1).
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
 
 theory(Template) :-
-    uuid(UUID),
-    model_module(UUID),
-    set_deadline(Template.limits.max_theory_time),
+    theory_limits(Template),
+    named_model_module,
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule size
-    max_rule_body_sizes(Template, MaxStaticRuleBodySize, MaxCausalRuleBodySize),
+    max_rule_body_sizes(Template, MaxStaticRuleBodySize, _MaxCausalRuleBodySize),
     static_rules(Template, MaxStaticRuleBodySize).
+    % TODO - Causal rules and initial conditions
 
- 
-set_deadline(MaxTime) :-
+theory_limits(Template) :-
+    theory_deadline(Template.limits.max_theory_time),
+    max_static_rules(Template.limits.max_static_rules),
+    max_causal_rules(Template.limits.max_causal_rules),
+    max_elements(Template.limits.max_elements).
+
+named_model_module :-
+    uuid(UUID),
+    model_module(UUID).
+
+theory_deadline(MaxTime) :-
     get_time(Now),
     Deadline is Now + MaxTime,
     deadline(Deadline).
@@ -85,6 +111,17 @@ set_deadline(MaxTime) :-
 after_deadline(Deadline) :-
     get_time(Now),
     Now > Deadline.
+
+% A number between 1 and the greatest possible number of predicates in any rule
+max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
+    aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
+    % "Worst case" is all unary predicates
+    UpperLimit is div(Template.limits.max_elements, 6),
+    UpperLimit1 is min(UpperLimit, Total),
+    between(1, UpperLimit1, MaxStaticBodySize),
+    between(1, UpperLimit1, MaxCausalBodySize),
+    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
+
 
 %%% STATIC CONSTRAINTS
 
@@ -120,6 +157,7 @@ static_constraint(one_relation, AllBinaryPredicateNames, StaticConstraint) :-
     Length > 1,
     StaticConstraint =.. [one_relation, BinaryPredicateNames].
 
+% Validating static constraints
 
 subsumed_static_constraint(one_relation(PredicateNames), one_relation(OtherPredicateNames)) :-
     subset(PredicateNames, OtherPredicateNames) ; subset(OtherPredicateNames, PredicateNames).
@@ -133,23 +171,66 @@ static_constraint_about(one_related(PredicateName), PredicateName).
 static_constraint_about(one_relation(PredicateNames), PredicateName) :-
     memberchk(PredicateName, PredicateNames).
 
-% Sublist of a list (order is preserved)
-sublist([], []).
-sublist(Sub, [_| Rest]) :-
-    sublist(Sub, Rest).
-sublist([X | Others], [X | Rest]) :-
-    sublist(Others, Rest).
-
 %%% STATIC RULES
 
 static_rules(Template, MaxBodySize) :-
-    make_static_rule(Template, MaxBodySize),
-    maybe_add_static_rule(Template, MaxBodySize).
-
-make_static_rule(Template, MaxBodySize) :-
     make_rule(Template, MaxBodySize, Head-BodyPredicates),
     HoldingHead =.. [holds, Head],
-    model_static_rule(HoldingHead-BodyPredicates).
+    model_static_rule(HoldingHead-BodyPredicates),
+    static_rules(Template, MaxBodySize).
+    
+static_rules(_, _) :-
+    enough_static_rules.
+
+%%% VALIDATING STATIC RULES
+
+contradicting_static_rules(Head-Body, OtherHead-OtherBody) :-
+    (contradicting_heads(Head-Body, OtherHead-OtherBody) -> 
+        log(debug, theory_engine, 'Contradicting rules!'),
+        true; 
+        contradicting_bodies(Head-Body, OtherHead-OtherBody)
+    ).
+
+% Two rules contradict "at the head" one another if they have contradicting heads and equivalent bodies
+contradicting_heads(HoldingHead-Body, OtherHoldingHead-OtherBody) :-
+    HoldingHead =.. [holds, Head],
+    OtherHoldingHead =.. [holds, OtherHead],
+    contradicts(Head, OtherHead),
+    equivalent_bodies(Body, OtherBody).
+
+% Two rules contradict "at the body" one another if they have equivalent heads and contradicting bodies
+contradicting_bodies(Head-Body, OtherHead-OtherBody) :-
+    equivalent_predicates(Head, OtherHead),
+    contradicting_predicates(Body, OtherBody).
+
+% There exists two predicates in a list of predicates that contradict one another
+contradicting_predicates([Predicate | Rest], OtherPredicates) :-
+    contradiction_in([Predicate | OtherPredicates]) -> true ; contradicting_predicates(Rest, OtherPredicates).
+
+% There are at least two binary predicates in the body with names in PredicateNames and relating the same vars
+static_rule_contradicts_constraint(Head-BodyPredicates, one_relation(PredicateNames)) :-
+    select(Pred1, BodyPredicates, OtherBodyPredicates),
+    Pred1 =.. [PredName1, Var1, Var2],
+    var_number(Var1, _),
+    var_number(Var2 , _),
+    member(Pred2, OtherBodyPredicates),
+    Pred2 =.. [PredName2, Var1, Var2],
+    subset([PredName1, PredName2], PredicateNames),
+    log(debug, theory_engine, 'Static rule ~p contradicts static constraint ~p', [Head-BodyPredicates, one_relation(PredicateNames)]).
+
+recursive_static_rule(HoldingHead-BodyPredicates) :-
+    HoldingHead =.. [holds, Head],
+    member(BodyPredicate, BodyPredicates),
+    Head =@= BodyPredicate.
+
+% A recusion exists when the head of a static rule can unify with a predicate in the body of another static rule.
+recursion_in_static_rules(RulePairs) :-
+    select(HoldingHead-_, RulePairs, OtherRulePairs),
+    HoldingHead =.. [holds, Head],
+    member(_-OtherBody, OtherRulePairs),
+    member(OtherBodyPredicate, OtherBody),
+    Head =@= OtherBodyPredicate,
+    log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [HoldingHead, RulePairs]).
 
 %%% MAKING RULES
 
@@ -219,17 +300,22 @@ take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], 
     Type \== OtherType,
     take_typed_var(Type, OtherTypedVars, UnusedTypedVars, Arg).
 
+% TODO - USE CHR TO MAKE A VALID RULE BODY
+
 % Make a list of at least one mutually valid body predicates
 make_body_predicates(Template, MaxBodySize, DistinctVars, Head, BodyPredicates) :-
 %    make_body_predicate(Template.type_signature.predicate_types, DistinctVars, Head, [], BodyPredicate),
     maybe_add_body_predicates(Template, MaxBodySize, DistinctVars, Head, [], BodyPredicates).
 
 maybe_add_body_predicates(Template, MaxBodySize, _, Head, BodyPredicates, BodyPredicates) :-
-    rule_at_limit(BodyPredicates, MaxBodySize, Template.limits.max_elements),
+    rule_at_limit(BodyPredicates, MaxBodySize),
     !,
     valid_body_predicates(BodyPredicates, Head).
 
-% maybe_add_body_predicates(_, _, _, _, BodyPredicates, BodyPredicates).
+rule_at_limit(BodyPredicates, MaxBodySize) :-
+    length(BodyPredicates, Count),
+    Count == MaxBodySize,
+    log(debug, theory_engine, 'Rule body at max predicates limit ~p >= ~p: ~p', [Count, MaxBodySize, BodyPredicates]),!.
 
 maybe_add_body_predicates(Template, MaxBodySize, DistinctVars, Head, CurrentBodyPredicates, BodyPredicates) :-
     PredicateTypes = Template.type_signature.predicate_types,
@@ -252,6 +338,7 @@ out_of_order(predicate(PredicateTypeName, _), Predicates) :-
     Predicate =.. [PredicateName | _],
     compare((<), PredicateTypeName, PredicateName).
 
+%%% Utilities
 
 % Don't repeat the head predicate in the body or any body predicate
 % Don't contradict other predicates
@@ -293,7 +380,7 @@ equivalent_vars(Var1, Var2) :-
 
 same_rules(Rule, OtherRule) :-
     numerize_vars_in_rule_pair(Rule, NumerizedRule),
-    numerize_vars_in_rule_pair(Rule, NumerizedOtherRule),
+    numerize_vars_in_rule_pair(OtherRule, NumerizedOtherRule),
     rule_repeats(NumerizedRule, NumerizedOtherRule).
 
 numerize_vars_in_rule_pair(HeadPredicate-BodyPredicates, HeadPredicate1-BodyPredicates1) :-
@@ -316,3 +403,27 @@ subsumed_conjunctions([], _).
 subsumed_conjunctions([Predicate | Rest], OtherPredicates) :-
     member(OtherPredicate, OtherPredicates),
     (equivalent_predicates(Predicate, OtherPredicate) -> subsumed_conjunctions(Rest, OtherPredicates)).
+
+predicate_instance_count(PredicateType, Template, Count) :-
+    member(PredicateType, Template.type_signature.predicate_types),
+    PredicateType = predicate(_, ArgTypes),
+    args_unification_count(ArgTypes, Template.type_signature.typed_variables, 0, 1, Count).
+
+args_unification_count([], _, _, Acc, Acc).
+
+args_unification_count([value_type(_) | OtherArgTypes], TypedVariables, NthArg, Acc, Count) :-
+    args_unification_count(OtherArgTypes, TypedVariables, NthArg, Acc, Count).
+
+args_unification_count([object_type(ObjectType) | OtherArgTypes], TypedVariables, NthArg, Acc, Count) :-
+    member(variables(ObjectType, VarCount), TypedVariables),
+    VarCount1 is VarCount - NthArg,
+    Acc1 is Acc * VarCount1,
+    NthArg1 is NthArg + 1,
+    args_unification_count(OtherArgTypes, TypedVariables, NthArg1, Acc1, Count).
+
+% Sublist of a list (order is preserved)
+sublist([], []).
+sublist(Sub, [_| Rest]) :-
+    sublist(Sub, Rest).
+sublist([X | Others], [X | Rest]) :-
+    sublist(Others, Rest).
