@@ -1,7 +1,8 @@
 :- module(theory_engine_chr, [create_theory_engine/3]).
 
-% An engine that generates valid theories on demand,
-% given a minimal type signature (from the sequence) and a template (which sets the scope of the search space).
+% An engine that generates valid causal theories on demand,
+% given a minimal type signature (implied by the sequence of observations) 
+% and a template (which sets the scope of the search space).
 
 /*
 cd('sandbox/prototypes/apperception').
@@ -41,63 +42,69 @@ theory_engine_chr:theory(Template).
                   elements_count(+),
                   max_body_predicates(+),
                   enough_body_predicates/0,
-                  head_predicate(+),
+                  posited_head_predicate(+),
+                  posited_body_predicate(+),
                   body_predicate_count(+),
-                  model_static_constraint(+), 
-                  model_static_constraint_covers(+),
-                  model_static_rule(+),
+                  collected_body_predicate(-),
+                  posited_static_constraint(+), 
+                  static_constraint_covers(+),
+                  posited_static_rule(+),
                   enough_static_rules/0, 
-                  model_causal_rule(+), 
-                  model_initial_condition(+).
+                  posited_causal_rule(+), 
+                  posited_initial_condition(+).
 
-% Keep the latest deadline
+% Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
-
-% Complexity limits are singletons
 max_static_rules(_) \ max_static_rules(_)#passive <=> true. 
 max_causal_rules(_) \ max_causal_rules(_)#passive <=> true. 
 max_elements(_) \ max_elements(_)#passive <=> true. 
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
-% Model static constraints
-'adding static constraint fails after deadline' @ deadline(Deadline)#passive \ model_static_constraint(_)  <=> 
+% Positing static constraints
+'adding static constraint fails after deadline' @ deadline(Deadline)#passive \ posited_static_constraint(_)  <=> 
     after_deadline(Deadline) | fail.
-'Add constraints in alpahbetical order' @ model_static_constraint(one_related(P1))#passive \ model_static_constraint(one_related(P2)) <=> 
+'Add constraints in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
     P2 @< P1 | fail.
-'fail on repeated static constraint' @ model_static_constraint(C1)#passive \ model_static_constraint(C2) <=> 
+'fail on repeated static constraint' @ posited_static_constraint(C1)#passive \ posited_static_constraint(C2) <=> 
     subsumed_static_constraint(C1 , C2) | fail.
 
 % Static constraints conceptually unified?
-'static constraint covers predicate' @ model_static_constraint(C)#passive \ model_static_constraint_covers(BinaryPredicateName) <=> 
+'static constraint covers predicate' @ posited_static_constraint(C)#passive \ static_constraint_covers(BinaryPredicateName) <=> 
     static_constraint_about(C, BinaryPredicateName) | true.
-'no static constraint covers predicate' @ model_static_constraint_covers(_) <=> fail.
+'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
 
-% Rule making
-head_predicate(_) \ head_predicate(_)#passive <=> true.
-'too many rule body predicates' @ body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
-% TODO
-% no predicate out of alphabetical order
+% Positing rule head and body predicates
+posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
+'enough body predicates' @ max_body_predicates(Max)#passive \ body_predicate_count(Count)#passive, enough_body_predicates <=> Count == Max | true.
+'not enough body predicates' @ enough_body_predicates <=> fail.
+'too many rule body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
+'body predicates in alphabetical order' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> predicates_out_of_order(P1, P2) | fail.
 % all different
+'repeated body predicate' @  posited_body_predicate(P)#passive \ posited_body_predicate(P) <=> fail.
 % no contradiction
-'enough rule body predicates' @ max_body_predicates(Max), body_predicate_count(Count) \ enough_body_predicates <=> Count == Max.
-% TODO - collecting body predicates
+'contradiction among body predicates' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> contradicts(P1, P2) | fail.
+'valid body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
+'first valid body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
+'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P)#passive <=> Collected = P.
+'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
-% Model static rules
-'adding static rule after deadline' @ deadline(Deadline)#passive \ model_static_rule(_)  <=> 
+% Positing static rules
+'adding static rule after deadline' @ deadline(Deadline)#passive \ posited_static_rule(_)  <=> 
     after_deadline(Deadline) | fail.
-'too many static rules' @ max_static_rules(Max), static_rules_count(Count) ==> Count > Max | fail.
-'enough static rules' @ max_static_rules(Max), static_rules_count(Count) \ enough_static_rules <=> Count == Max.
-'repeated static rule' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=>
+'enough static rules' @ max_static_rules(Max)#passive, static_rules_count(Count)#passive \ enough_static_rules <=> Count == Max | true.
+'not enough static rules' @ enough_static_rules <=> fail.
+'repeated static rule' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=>
     same_rules(SR1, SR2) | fail.
-'recursive static rule' @ model_static_rule(SR) <=> recursive_static_rule(SR) | fail.
-'too many relations in static rule' @ model_static_constraint(SC)#passive \ model_static_rule(_-BodyPredicates) <=>
+'static rule head contradicted in body' @ posited_static_rule(holds(Head)-Body) <=> contradicted_head(Head, Body) | fail.
+'recursive static rule' @ posited_static_rule(SR) <=> recursive_static_rule(SR) | fail.
+'too many relations in static rule' @ posited_static_constraint(SC)#passive \ posited_static_rule(_-BodyPredicates) <=>
     too_many_relations(SC, BodyPredicates) | fail.
-'contradicting static rules' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
-'static rules contradict a static constraint' @ model_static_constraint(SC)#passive \ model_static_rule(SR) <=> 
+'contradicting static rules' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
+'static rules contradict a static constraint' @ posited_static_constraint(SC)#passive \ posited_static_rule(SR) <=> 
     static_rule_contradicts_constraint(SR, SC) | fail.
-'static rules recurse' @ model_static_rule(SR1)#passive \ model_static_rule(SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
-'keep static rule, count it' @ model_static_rule(_) \ static_rules_count(Count) <=> Count1 is Count + 1, static_rules_count(Count1).
-'keep static rule, start count' @ model_static_rule(_) ==> static_rules_count(1).
+'static rules recurse' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
+'keep static rule, count it' @ posited_static_rule(_) \ static_rules_count(Count)#passive <=> Count1 is Count + 1, static_rules_count(Count1).
+'keep static rule, start count' @ posited_static_rule(_)  ==> static_rules_count(1).
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -108,7 +115,7 @@ theory(Template) :-
     named_model_module,
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule size
-    max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
+    max_rule_body_sizes(Template, MaxStaticBodySize, _MaxCausalBodySize),
     static_rules(Template, MaxStaticBodySize).
     % TODO - Causal rules and initial conditions
 
@@ -152,17 +159,17 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
 static_constraints(TypeSignature) :-
     log(note, theory_engine, 'Making static constraints'),
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    maybe_add_static_constraint(one_related, AllBinaryPredicateNames),
-    maybe_add_static_constraint(one_relation, AllBinaryPredicateNames),
+    maybe_posit_static_constraint(one_related, AllBinaryPredicateNames),
+    maybe_posit_static_constraint(one_relation, AllBinaryPredicateNames),
     static_constraints_conceptually_unified(AllBinaryPredicateNames),
     log(note, theory_engine, 'Done making static constraints').
 
-maybe_add_static_constraint(_, _).
+maybe_posit_static_constraint(_, _).
 
-maybe_add_static_constraint(Kind, AllBinaryPredicateNames) :-
+maybe_posit_static_constraint(Kind, AllBinaryPredicateNames) :-
     static_constraint(Kind, AllBinaryPredicateNames, StaticConstraint),
-    model_static_constraint(StaticConstraint),
-    maybe_add_static_constraint(Kind, AllBinaryPredicateNames).
+    posited_static_constraint(StaticConstraint),
+    maybe_posit_static_constraint(Kind, AllBinaryPredicateNames).
 
 % Uniqueness constraint:  For any X, there is one and only one Y such that r(X, Y).
 static_constraint(one_related, AllBinaryPredicateNames, StaticConstraint) :-
@@ -184,7 +191,7 @@ subsumed_static_constraint(one_relation(PredicateNames), one_relation(OtherPredi
 subsumed_static_constraint(one_related(PredicateName), one_related(PredicateName)).
 
 static_constraints_conceptually_unified(AllBinaryPredicateNames) :-
-    foreach(member(BinaryPredicateName, AllBinaryPredicateNames), model_static_constraint_covers(BinaryPredicateName)).
+    foreach(member(BinaryPredicateName, AllBinaryPredicateNames), static_constraint_covers(BinaryPredicateName)).
 
 static_constraint_about(one_related(PredicateName), PredicateName).
 static_constraint_about(one_relation(PredicateNames), PredicateName) :-
@@ -192,30 +199,20 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 
 %%% STATIC RULES
 
-static_rules(Template, MaxStaticBodySize) :-
-    max_body_predicates(MaxStaticBodySize),
-    static_rules(Template).
+static_rules(Template, MaxBodySize) :-
+    max_body_predicates(MaxBodySize),
+    distinct_variables_from_types(Template.type_signature, MaxBodySize, DistinctVars),
+    posit_static_rules(Template, DistinctVars).
 
-static_rules(Template) :-
-    make_static_rule(Template, Head-BodyPredicates),
-    model_static_rule(HoldingHead-BodyPredicates),
-    static_rules(Template).
-    
-static_rules(_) :-
-    enough_static_rules.
+posit_static_rules(_, _) :-
+    enough_static_rules, !.
 
-make_static_rule(Template, HoldingHead-BodyPredicates) :-
-    TypeSignature = Template.type_signature,
-    make_distinct_variables(TypeSignature, MaxBodySize, DistinctVars),
-    make_head(TypeSignature.predicate_types, DistinctVars, Head),
-    static_head_predicate(Head),
+posit_static_rules(Template, DistinctVars) :-
+    rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     HoldingHead =.. [holds, Head],
-    make_body_predicates(Template, DistinctVars),
-    collect_static_body_predicates(BodyPredicates).
-
-% TODO
-collect_static_body_predicates(BodyPredicates).
-
+    posited_static_rule(HoldingHead-BodyPredicates),
+    posit_static_rules(Template, DistinctVars).
+    
 %%% VALIDATING STATIC RULES
 
 contradicting_static_rules(Head-Body, OtherHead-OtherBody) :-
@@ -245,8 +242,6 @@ contradicting_predicates([Predicate | Rest], OtherPredicates) :-
 static_rule_contradicts_constraint(Head-BodyPredicates, one_relation(PredicateNames)) :-
     select(Pred1, BodyPredicates, OtherBodyPredicates),
     Pred1 =.. [PredName1, Var1, Var2],
-    var_number(Var1, _),
-    var_number(Var2 , _),
     member(Pred2, OtherBodyPredicates),
     Pred2 =.. [PredName2, Var1, Var2],
     subset([PredName1, PredName2], PredicateNames),
@@ -266,12 +261,31 @@ recursion_in_static_rules(RulePairs) :-
     Head =@= OtherBodyPredicate,
     log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [HoldingHead, RulePairs]).
 
+% One of the body predicates contradicts the head predicate
+contradicted_head(HeadPredicate, BodyPredicates) :-
+    member(BodyPredicate, BodyPredicates),
+    contradicts(BodyPredicate, HeadPredicate).
+
 %%% MAKING RULES
+
+rule_from_template(Template, DistinctVars, Head-BodyPredicates) :-
+    TypeSignature = Template.type_signature,
+    rule_head(TypeSignature.predicate_types, DistinctVars, Head),
+    posited_head_predicate(Head),
+    posit_body_predicates(Template, DistinctVars),
+    collect_body_predicates(BodyPredicates).
+
+collect_body_predicates([BodyPredicate | OtherBodyPredicates]) :-
+    collected_body_predicate(BodyPredicate), 
+    nonvar(BodyPredicate), !,
+    collect_body_predicates(OtherBodyPredicates).
+
+collect_body_predicates([]).
 
 % count each type.
 % Create a list of count variables for each type
 % Return pairs count-variables
-make_distinct_variables(TypeSignature, MaxBodySize, DistinctVars) :-
+distinct_variables_from_types(TypeSignature, MaxBodySize, DistinctVars) :-
     bagof(vars(Type, Vars), 
           N^(member(variables(Type, Count), TypeSignature.typed_variables), 
              adjusted_typed_variables_count(Type, Count, TypeSignature.predicate_types, MaxBodySize, N), 
@@ -299,7 +313,7 @@ distinguish_from(Var, [Other | Rest]) :-
     dif(Var, Other),
     distinguish_from(Var, Rest).
 
-make_head(PredicateTypes, DistinctVars, Head) :-
+rule_head(PredicateTypes, DistinctVars, Head) :-
     member(PredicateType, PredicateTypes),
     make_head_predicate(PredicateType, DistinctVars, Head).
 
@@ -330,33 +344,27 @@ take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], 
 
 
 % Make a list of at least one mutually valid body predicates
-make_body_predicates(Template, DistinctVars) :-
+posit_body_predicates(_, _) :-
+    enough_body_predicates, !.
+
+posit_body_predicates(Template, DistinctVars) :-
     PredicateTypes = Template.type_signature.predicate_types,
-    make_body_predicate(PredicateTypes, DistinctVars, BodyPredicate),
-    make_body_predicates(Template, DistinctVars).   
+    posit_body_predicate(PredicateTypes, DistinctVars),
+    posit_body_predicates(Template, DistinctVars).   
 
-make_body_predicates(Template, DistinctVars) :-
-    enough_body_predicates.
-
-make_body_predicate(PredicateTypes, DistinctVars) :-
+posit_body_predicate(PredicateTypes, DistinctVars) :-
     member(PredicateType, PredicateTypes),
     body_predicate(PredicateType, DistinctVars, BodyPredicate),
-    body_predicate(BodyPredicate).
+    posited_body_predicate(BodyPredicate).
 
 body_predicate(predicate(Name, TypedArgs), DistinctVars, RulePredicate) :-
     make_args(TypedArgs, DistinctVars, Args),
     RulePredicate =.. [Name | Args].
 
-% Validating rule body predicates
+%% Validating rule body predicates
 
-out_of_order(predicate(PredicateTypeName, _), Predicates) :-
-    member(Predicate, Predicates),
-    Predicate =.. [PredicateName | _],
-    compare((<), PredicateTypeName, PredicateName).
-
-
-
-
+predicates_out_of_order(predicate(PredicateTypeName1, _), predicate(PredicateTypeName2, _)) :-
+    compare((<), PredicateTypeName2, PredicateTypeName1).
 
 %%% Utilities
 
@@ -385,18 +393,15 @@ contradicts(BodyPredicate, Head) :-
     contradicting_args(Args1, Args2).
 
 contradicting_args([Arg1 | Rest1], [Arg2 | Rest2]) :-
-   var_number(Arg1, _),
-   var_number(Arg2, _),
-   !,
-   (equivalent_vars(Arg1, Arg2) -> contradicting_args(Rest1, Rest2) ; fail).
+   var(Arg1),
+   var(Arg2), !,
+   (Arg1 == Arg2 -> contradicting_args(Rest1, Rest2); fail).
 contradicting_args([Arg1 | _], [Arg2 | _]) :-
-   Arg1 \== Arg2, !.
+    nonvar(Arg1),
+    nonvar(Arg2),
+    Arg1 \== Arg2, !.
 contradicting_args([_ | Rest1], [_ | Rest2]) :-
     contradicting_args(Rest1, Rest2).
-
-equivalent_vars(Var1, Var2) :-
-    var_number(Var1, N),
-    var_number(Var2, N).
 
 same_rules(Rule, OtherRule) :-
     numerize_vars_in_rule_pair(Rule, NumerizedRule),
