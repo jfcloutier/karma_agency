@@ -74,7 +74,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
 
 % Positing rule head and body predicates
-posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
+
+'new rule head' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
 'enough body predicates' @ max_body_predicates(Max)#passive \ body_predicate_count(Count)#passive, enough_body_predicates <=> Count == Max | true.
 'not enough body predicates' @ enough_body_predicates <=> fail.
 'too many rule body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
@@ -94,7 +95,7 @@ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
 'enough static rules' @ max_static_rules(Max)#passive, static_rules_count(Count)#passive \ enough_static_rules <=> Count == Max | true.
 'not enough static rules' @ enough_static_rules <=> fail.
 'repeated static rule' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=>
-    same_rules(SR1, SR2) | fail.
+    rule_repeats(SR1, SR2) | fail.
 'static rule head contradicted in body' @ posited_static_rule(holds(Head)-Body) <=> contradicted_head(Head, Body) | fail.
 'recursive static rule' @ posited_static_rule(SR) <=> recursive_static_rule(SR) | fail.
 'too many relations in static rule' @ posited_static_constraint(SC)#passive \ posited_static_rule(_-BodyPredicates) <=>
@@ -117,7 +118,9 @@ theory(Template) :-
     % Do iterative deepening on rule size
     max_rule_body_sizes(Template, MaxStaticBodySize, _MaxCausalBodySize),
     static_rules(Template, MaxStaticBodySize).
-    % TODO - Causal rules and initial conditions
+    % TODO - Causal rules
+    % TODO - Initial conditions
+    % TODO - Collect theory
 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
@@ -201,7 +204,7 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 
 static_rules(Template, MaxBodySize) :-
     max_body_predicates(MaxBodySize),
-    distinct_variables_from_types(Template.type_signature, MaxBodySize, DistinctVars),
+    distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
     posit_static_rules(Template, DistinctVars).
 
 posit_static_rules(_, _) :-
@@ -282,21 +285,11 @@ collect_body_predicates([BodyPredicate | OtherBodyPredicates]) :-
 
 collect_body_predicates([]).
 
-% count each type.
-% Create a list of count variables for each type
-% Return pairs count-variables
-distinct_variables_from_types(TypeSignature, MaxBodySize, DistinctVars) :-
-    bagof(vars(Type, Vars), 
-          N^(member(variables(Type, Count), TypeSignature.typed_variables), 
-             adjusted_typed_variables_count(Type, Count, TypeSignature.predicate_types, MaxBodySize, N), 
-             distinct_vars(N, Vars)), 
-          DistinctVars).
-
-% adjusted_typed_variables_count(_, Count, _, _, Count).
-% Keep the number of typed variables small
-adjusted_typed_variables_count(Type, Count, PredicateTypes, MaxBodySize, AdjustedCount) :-
-    (member(predicate(_, [object_type(Type), object_type(Type)]), PredicateTypes), Order = 2; Order = 1), !,
-    AdjustedCount is min(Count, MaxBodySize * Order).
+distinct_typed_variables([], DistinctVars, DistinctVars).
+distinct_typed_variables(TypedVariables, Acc, DistinctVars) :-
+    select(variables(Type, Count), TypedVariables, Rest),
+    distinct_vars(Count, Vars),
+    distinct_typed_variables(Rest, [vars(Type, Vars) | Acc], DistinctVars).
 
 distinct_vars(N, Vars) :-
     length(Vars, N),
@@ -318,7 +311,7 @@ rule_head(PredicateTypes, DistinctVars, Head) :-
     make_head_predicate(PredicateType, DistinctVars, Head).
 
 make_head_predicate(predicate(Name, TypedArgs), DistinctVars, HeadPredicate) :-
-    make_args(TypedArgs, DistinctVars, Args), 
+    make_args(TypedArgs, DistinctVars, Args), !, 
     HeadPredicate =.. [Name | Args].
 
 make_args([], _, []).
@@ -403,11 +396,6 @@ contradicting_args([Arg1 | _], [Arg2 | _]) :-
 contradicting_args([_ | Rest1], [_ | Rest2]) :-
     contradicting_args(Rest1, Rest2).
 
-same_rules(Rule, OtherRule) :-
-    numerize_vars_in_rule_pair(Rule, NumerizedRule),
-    numerize_vars_in_rule_pair(OtherRule, NumerizedOtherRule),
-    rule_repeats(NumerizedRule, NumerizedOtherRule).
-
 numerize_vars_in_rule_pair(HeadPredicate-BodyPredicates, HeadPredicate1-BodyPredicates1) :-
     numerize_vars([HeadPredicate | BodyPredicates], [HeadPredicate1 |BodyPredicates1]).
 
@@ -445,6 +433,23 @@ args_unification_count([object_type(ObjectType) | OtherArgTypes], TypedVariables
     Acc1 is Acc * VarCount1,
     NthArg1 is NthArg + 1,
     args_unification_count(OtherArgTypes, TypedVariables, NthArg1, Acc1, Count).
+
+%% Utilities
+
+equivalent_predicates(Predicate, OtherPredicate) :- 
+    Predicate =.. [PredicateName | Args],
+    OtherPredicate =.. [PredicateName | OtherArgs],
+    equivalent_args(Args, OtherArgs).
+
+equivalent_args([], []).
+equivalent_args([Arg | Rest], [OtherArg | OtherRest]) :-
+    var(Arg),
+    var(OtherArg),
+    !,
+    equivalent_args(Rest, OtherRest).
+equivalent_args([Arg | Rest], [Arg | OtherRest]) :-
+    equivalent_args(Rest, OtherRest).
+
 
 % Sublist of a list (order is preserved)
 sublist([], []).
