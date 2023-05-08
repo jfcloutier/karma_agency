@@ -51,7 +51,8 @@ theory_engine_chr:theory(Template).
                   posited_static_rule(+),
                   enough_static_rules/0, 
                   posited_causal_rule(+), 
-                  posited_initial_condition(+).
+                  posited_initial_condition(+),
+                  enough_causal_rules/0.
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -89,6 +90,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P)#passive <=> Collected = P.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
+%%% TODO - posited_rule(static, Head-Body) etc.
+
 % Positing static rules
 'adding static rule after deadline' @ deadline(Deadline)#passive \ posited_static_rule(_)  <=> 
     after_deadline(Deadline) | fail.
@@ -107,6 +110,21 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'keep static rule, count it' @ posited_static_rule(_) \ static_rules_count(Count)#passive <=> Count1 is Count + 1, static_rules_count(Count1).
 'keep static rule, start count' @ posited_static_rule(_)  ==> static_rules_count(1).
 
+%Positing causal rules
+'adding causal rule after deadline' @ deadline(Deadline)#passive \ posited_causal_rule(_)  <=> 
+    after_deadline(Deadline) | fail.
+'keep causal rule, count it' @ posited_causal_rule(_) \ causal_rules_count(Count)#passive <=> Count1 is Count + 1, causal_rules_count(Count1).
+'keep causal rule, start count' @ posited_causal_rule(_)  ==> causal_rules_count(1).
+'enough causal rules' @ max_causal_rules(Max)#passive, causal_rules_count(Count)#passive \ enough_causal_rules <=> Count == Max | true.
+'not enough causal rules' @ enough_causal_rules <=> fail.
+'repeated causal rule' @ posited_causal_rule(CR1)#passive \ posited_causal_rule(CR2) <=>
+    rule_repeats(CR1, CR2) | fail.
+'not idempotent causal rule' @ posited_causal_rule(CR) <=> idempotetn_causal_rule(CR) | fail.
+'too many relations in causal rule' @ posited_static_constraint(SC)#passive \ posited_causal_rule(_-BodyPredicates) <=>
+    too_many_relations(SC, BodyPredicates) | fail.
+'keep causal rule, count it' @ posited_causal_rule(_) \ causal_rules_count(Count)#passive <=> Count1 is Count + 1, static_rules_count(Count1).
+'keep causal rule, start count' @ posited_causal_rule(_)  ==> causal_rules_count(1).
+
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
@@ -116,8 +134,9 @@ theory(Template) :-
     named_model_module,
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule size
-    max_rule_body_sizes(Template, MaxStaticBodySize, _MaxCausalBodySize),
-    static_rules(Template, MaxStaticBodySize).
+    max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
+    static_rules(Template, MaxStaticBodySize),
+    causal_rules(Template, MaxCausalBodySize).
     % TODO - Causal rules
     % TODO - Initial conditions
     % TODO - Collect theory
@@ -268,6 +287,27 @@ recursion_in_static_rules(RulePairs) :-
 contradicted_head(HeadPredicate, BodyPredicates) :-
     member(BodyPredicate, BodyPredicates),
     contradicts(BodyPredicate, HeadPredicate).
+
+%%% CAUSAL RULES
+
+causal_rules(Template, MaxBodySize) :-
+    max_body_predicates(MaxBodySize),
+    distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
+    posit_causal_rules(Template, DistinctVars).
+
+posit_causal_rules(_, _) :-
+    enough_causal_rules, !.
+
+posit_causal_rules(Template, DistinctVars) :-
+    rule_from_template(Template, DistinctVars, Head-BodyPredicates),
+    NextHead =.. [next, Head],
+    posited_causal_rule(NextHead-BodyPredicates),
+    posit_causal_rules(Template, DistinctVars).
+
+%%% VALIDATING CAUSAL RULES
+
+idempotent_causal_rule(next(Head)-BodyPredicates) :-
+    memberchk_equal(Head, BodyPredicates).
 
 %%% MAKING RULES
 
@@ -457,3 +497,8 @@ sublist(Sub, [_| Rest]) :-
     sublist(Sub, Rest).
 sublist([X | Others], [X | Rest]) :-
     sublist(Others, Rest).
+
+memberchk_equal(_, []) :- !, fail.
+memberchk_equal(_, List) :- var(List), !, fail.
+memberchk_equal(Term, [El | Rest]) :-
+    Term == El -> true ; memberchk_equal(Term, Rest).
