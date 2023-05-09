@@ -34,11 +34,9 @@ theory_engine_chr:theory(Template).
 
 :- chr_constraint model_module(+), 
                   deadline(+),
-                  max_static_rules(+),
-                  max_causal_rules(+),
+                  max_rules(+, +),
                   max_elements(+),
-                  static_rules_count(+),
-                  causal_rules_count(+),
+                  rules_count(+, +),
                   elements_count(+),
                   max_body_predicates(+),
                   enough_body_predicates/0,
@@ -48,16 +46,13 @@ theory_engine_chr:theory(Template).
                   collected_body_predicate(-),
                   posited_static_constraint(+), 
                   static_constraint_covers(+),
-                  posited_static_rule(+),
-                  enough_static_rules/0, 
-                  posited_causal_rule(+), 
-                  posited_initial_condition(+),
-                  enough_causal_rules/0.
+                  posited_rule(+, +),
+                  enough_rules(+),
+                  posited_initial_condition(+).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
-max_static_rules(_) \ max_static_rules(_)#passive <=> true. 
-max_causal_rules(_) \ max_causal_rules(_)#passive <=> true. 
+max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true. 
 max_elements(_) \ max_elements(_)#passive <=> true. 
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
@@ -69,61 +64,48 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'fail on repeated static constraint' @ posited_static_constraint(C1)#passive \ posited_static_constraint(C2) <=> 
     subsumed_static_constraint(C1 , C2) | fail.
 
-% Static constraints conceptually unified?
+% Validating static constraints
 'static constraint covers predicate' @ posited_static_constraint(C)#passive \ static_constraint_covers(BinaryPredicateName) <=> 
     static_constraint_about(C, BinaryPredicateName) | true.
 'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
 
 % Positing rule head and body predicates
-
 'new rule head' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
 'enough body predicates' @ max_body_predicates(Max)#passive \ body_predicate_count(Count)#passive, enough_body_predicates <=> Count == Max | true.
 'not enough body predicates' @ enough_body_predicates <=> fail.
 'too many rule body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
 'body predicates in alphabetical order' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> predicates_out_of_order(P1, P2) | fail.
-% all different
 'repeated body predicate' @  posited_body_predicate(P)#passive \ posited_body_predicate(P) <=> fail.
-% no contradiction
 'contradiction among body predicates' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> contradicts(P1, P2) | fail.
 'valid body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
 'first valid body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
 'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P)#passive <=> Collected = P.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
-%%% TODO - posited_rule(static, Head-Body) etc.
-
-% Positing static rules
-'adding static rule after deadline' @ deadline(Deadline)#passive \ posited_static_rule(_)  <=> 
+% Positing rules, static and causal
+'adding rule after deadline' @ deadline(Deadline)#passive \ posited_rule(_, _)  <=> 
     after_deadline(Deadline) | fail.
-'enough static rules' @ max_static_rules(Max)#passive, static_rules_count(Count)#passive \ enough_static_rules <=> Count == Max | true.
-'not enough static rules' @ enough_static_rules <=> fail.
-'repeated static rule' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=>
-    rule_repeats(SR1, SR2) | fail.
-'static rule head contradicted in body' @ posited_static_rule(holds(Head)-Body) <=> contradicted_head(Head, Body) | fail.
-'recursive static rule' @ posited_static_rule(SR) <=> recursive_static_rule(SR) | fail.
-'too many relations in static rule' @ posited_static_constraint(SC)#passive \ posited_static_rule(_-BodyPredicates) <=>
+'enough rules' @ max_rules(Kind, Max)#passive, rules_count(Kind, Count)#passive \ enough_rules(Kind) <=> Count == Max | true.
+'not enough rules' @ enough_rules(_) <=> fail.
+'keep rule, count it' @ posited_rule(Kind, _) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
+'keep rule, start count' @ posited_rule(Kind, _)  ==> rules_count(Kind, 1).
+
+% Validating rules, static and causal
+'repeated rule' @ posited_rule(Kind, R1)#passive \ posited_rule(Kind, R2) <=>
+    rule_repeats(R1, R2) | fail.
+'too many relations in rule' @ posited_static_constraint(SC)#passive \ posited_rule(_, _-BodyPredicates) <=>
     too_many_relations(SC, BodyPredicates) | fail.
-'contradicting static rules' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
-'static rules contradict a static constraint' @ posited_static_constraint(SC)#passive \ posited_static_rule(SR) <=> 
+
+% Validating static rules
+'static rule head contradicted in body' @ posited_rule(static, holds(Head)-Body) <=> contradicted_head(Head, Body) | fail.
+'recursive static rule' @ posited_rule(static, SR) <=> recursive_static_rule(SR) | fail.
+'contradicting static rules' @ posited_rule(static, SR1)#passive \ posited_rule(static, SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
+'static rules contradict a static constraint' @ posited_static_constraint(SC)#passive \ posited_rule(static, SR) <=> 
     static_rule_contradicts_constraint(SR, SC) | fail.
-'static rules recurse' @ posited_static_rule(SR1)#passive \ posited_static_rule(SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
-'keep static rule, count it' @ posited_static_rule(_) \ static_rules_count(Count)#passive <=> Count1 is Count + 1, static_rules_count(Count1).
-'keep static rule, start count' @ posited_static_rule(_)  ==> static_rules_count(1).
+'static rules recurse' @ posited_rule(static, SR1)#passive \ posited_rule(static, SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
 
-%Positing causal rules
-'adding causal rule after deadline' @ deadline(Deadline)#passive \ posited_causal_rule(_)  <=> 
-    after_deadline(Deadline) | fail.
-'keep causal rule, count it' @ posited_causal_rule(_) \ causal_rules_count(Count)#passive <=> Count1 is Count + 1, causal_rules_count(Count1).
-'keep causal rule, start count' @ posited_causal_rule(_)  ==> causal_rules_count(1).
-'enough causal rules' @ max_causal_rules(Max)#passive, causal_rules_count(Count)#passive \ enough_causal_rules <=> Count == Max | true.
-'not enough causal rules' @ enough_causal_rules <=> fail.
-'repeated causal rule' @ posited_causal_rule(CR1)#passive \ posited_causal_rule(CR2) <=>
-    rule_repeats(CR1, CR2) | fail.
-'not idempotent causal rule' @ posited_causal_rule(CR) <=> idempotetn_causal_rule(CR) | fail.
-'too many relations in causal rule' @ posited_static_constraint(SC)#passive \ posited_causal_rule(_-BodyPredicates) <=>
-    too_many_relations(SC, BodyPredicates) | fail.
-'keep causal rule, count it' @ posited_causal_rule(_) \ causal_rules_count(Count)#passive <=> Count1 is Count + 1, static_rules_count(Count1).
-'keep causal rule, start count' @ posited_causal_rule(_)  ==> causal_rules_count(1).
+%Validating causal rules
+'idempotent causal rule' @ posited_rule(causal, CR) <=> idempotent_causal_rule(CR) | fail.
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -137,14 +119,13 @@ theory(Template) :-
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     static_rules(Template, MaxStaticBodySize),
     causal_rules(Template, MaxCausalBodySize).
-    % TODO - Causal rules
     % TODO - Initial conditions
     % TODO - Collect theory
 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
-    max_static_rules(Template.limits.max_static_rules),
-    max_causal_rules(Template.limits.max_causal_rules),
+    max_rules(static, Template.limits.max_static_rules),
+    max_rules(causal, Template.limits.max_causal_rules),
     max_elements(Template.limits.max_elements).
 
 named_model_module :-
@@ -227,12 +208,12 @@ static_rules(Template, MaxBodySize) :-
     posit_static_rules(Template, DistinctVars).
 
 posit_static_rules(_, _) :-
-    enough_static_rules, !.
+    enough_rules(static), !.
 
 posit_static_rules(Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     HoldingHead =.. [holds, Head],
-    posited_static_rule(HoldingHead-BodyPredicates),
+    posited_rule(static, HoldingHead-BodyPredicates),
     posit_static_rules(Template, DistinctVars).
     
 %%% VALIDATING STATIC RULES
@@ -296,12 +277,12 @@ causal_rules(Template, MaxBodySize) :-
     posit_causal_rules(Template, DistinctVars).
 
 posit_causal_rules(_, _) :-
-    enough_causal_rules, !.
+    enough_rules(causal), !.
 
 posit_causal_rules(Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     NextHead =.. [next, Head],
-    posited_causal_rule(NextHead-BodyPredicates),
+    posited_rule(causal, NextHead-BodyPredicates),
     posit_causal_rules(Template, DistinctVars).
 
 %%% VALIDATING CAUSAL RULES
