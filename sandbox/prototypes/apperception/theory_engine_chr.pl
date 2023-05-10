@@ -48,7 +48,8 @@ theory_engine_chr:theory(Template).
                   static_constraint_covers(+),
                   posited_rule(+, +),
                   enough_rules(+),
-                  posited_initial_condition(+).
+                  posited_fact(+),
+                  facts_unified/0.
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -104,8 +105,14 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
     static_rule_contradicts_constraint(SR, SC) | fail.
 'static rules recurse' @ posited_rule(static, SR1)#passive \ posited_rule(static, SR2) <=> recursion_in_static_rules([SR1, SR2]) | fail.
 
-%Validating causal rules
+% Validating causal rules
 'idempotent causal rule' @ posited_rule(causal, CR) <=> idempotent_causal_rule(CR) | fail.
+
+% Initial conditions
+'repeated fact' @ posited_fact(F)#passive \ posited_fact(F) <=> fail.
+'reflexive relation' @ posited_fact(F) | reflexive(F) <=> fail.
+'contradictory facts' @ posited_fact(F)#passive \ posited_fact(F1) | factual_contradiction(F, F1) <=> fail.
+
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -118,8 +125,8 @@ theory(Template) :-
     % Do iterative deepening on rule size
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     static_rules(Template, MaxStaticBodySize),
-    causal_rules(Template, MaxCausalBodySize).
-    % TODO - Initial conditions
+    causal_rules(Template, MaxCausalBodySize),
+    initial_conditions(Template).
     % TODO - Collect theory
 
 theory_limits(Template) :-
@@ -379,6 +386,54 @@ body_predicate(predicate(Name, TypedArgs), DistinctVars, RulePredicate) :-
 
 predicates_out_of_order(predicate(PredicateTypeName1, _), predicate(PredicateTypeName2, _)) :-
     compare((<), PredicateTypeName2, PredicateTypeName1).
+
+%%% INITIAL CONDITIONS
+
+
+initial_conditions(Template) :-
+    log(info, theory_engine, 'Making initial conditions'),
+    posit_initial_conditions(Template).
+
+% Posit facts to the initial conditions until they are unified
+% TODO - conditions that fail the unified_facts assumption
+%      1. Transitively unrelated objects
+%      2. Contradictory facts under static closure
+%      
+posit_initial_conditions(Template) :-
+    facts_unified, !.
+
+posit_initial_conditions(Template) :-
+    posit_fact(Template),
+    posit_initial_conditions(Template).
+
+posit_fact(Template) :-
+   member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
+   ground_args(ArgTypes, Template.type_signature.objects, Args),
+   Fact =.. [PredicateName | Args],
+   posited_fact(Fact).
+
+ground_args([], _, []).
+ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
+    ground_arg(ArgType, Objects, Arg),
+    ground_args(OtherArgTypes, Objects, OtherArgs).
+
+ground_arg(object_type(ObjectType), Objects, Object) :-
+    member(object(ObjectType, ObjectName), Objects).
+
+ground_arg(value_type(Domain), _, Value) :-
+    domain_is(Domain, Values),
+    member(Value, Values).
+
+% Validating initial conditions
+
+reflexive(Fact) :-
+    Fact =.. [_, Arg, Arg].
+
+factual_contradiction(Fact, OtherFact) :-
+    Fact =.. [PredicateName, ObjectName, Arg],
+    OtherFact =.. [PredicateName, ObjectName, Arg1],
+    Arg \== Arg1,
+    is_domain_value(_, Arg), !.
 
 %%% Utilities
 
