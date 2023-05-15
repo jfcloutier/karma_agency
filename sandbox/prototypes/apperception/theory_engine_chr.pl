@@ -24,8 +24,7 @@ theory_engine_chr:theory(Template).
 :- use_module(type_signature).
 :- use_module(domains).
 :- use_module(global).
-:- use_module(unity).
-:- use_module(rules_engine).
+% :- use_module(unity).
 
 :- use_module(library(chr)).
 % Constraints
@@ -48,8 +47,11 @@ theory_engine_chr:theory(Template).
                   static_constraint_covers(+),
                   posited_rule(+, +),
                   enough_rules(+),
-                  posited_fact(+),
-                  facts_unified/0.
+                  posited_fact(+, +),
+                  related(+, +),
+                  object_in_a_fact(+),
+                  close_facts/0,
+                  objects_related(+, +).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -98,7 +100,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
     too_many_relations(SC, BodyPredicates) | fail.
 
 % Validating static rules
-'static rule head contradicted in body' @ posited_rule(static, holds(Head)-Body) <=> contradicted_head(Head, Body) | fail.
+'static rule head contradicted in body' @ posited_rule(static, Head-Body) <=> contradicted_head(Head, Body) | fail.
 'recursive static rule' @ posited_rule(static, SR) <=> recursive_static_rule(SR) | fail.
 'contradicting static rules' @ posited_rule(static, SR1)#passive \ posited_rule(static, SR2) <=> contradicting_static_rules(SR1, SR2) | fail.
 'static rules contradict a static constraint' @ posited_static_constraint(SC)#passive \ posited_rule(static, SR) <=> 
@@ -109,10 +111,20 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'idempotent causal rule' @ posited_rule(causal, CR) <=> idempotent_causal_rule(CR) | fail.
 
 % Initial conditions
-'repeated fact' @ posited_fact(F)#passive \ posited_fact(F) <=> fail.
-'reflexive relation' @ posited_fact(F) | reflexive(F) <=> fail.
-'contradictory facts' @ posited_fact(F)#passive \ posited_fact(F1) | factual_contradiction(F, F1) <=> fail.
+'reflexive relation' @ posited_fact(_, [A, A]) <=> fail.
+'no duplicate fact' @ posited_fact(F, As)#passive \ posited_fact(F, As) <=> true.
+'contradictory facts' @ posited_fact(N, [O, V1])#passive \ posited_fact(N, [O, V2]) <=>  is_domain_value(V1), is_domain_value(V2)| fail.
+'related objects' @ posited_fact(_, [O1, O2]) ==>  is_object(O2) | related(O1, O2).
+'no duplicate related' @ related(O1, O2) \ related(O1, O2) <=> true.
+'inverse related' @ related(O1, O2) ==> related(O2, O1).
+'transitive related' @ related(O1, O2),  related(O2, O3) ==> related(O1, O3).
 
+% Initial conditions unified?
+'object in a fact' @ posited_fact(_, A)#passive \ object_in_a_fact(O) <=>  member(O, A) | true.
+'object not in a fact' @ object_in_a_fact(_) <=> fail.
+% TODO - Factual Closure
+'objects related' @ related(O1, O2)#passive \ objects_related(O1, O2)  <=> true.
+'objects not related' @ objects_related(_, _) <=> fail.
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -120,7 +132,6 @@ create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
 
 theory(Template) :-
     theory_limits(Template),
-    named_model_module,
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule size
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
@@ -134,10 +145,6 @@ theory_limits(Template) :-
     max_rules(static, Template.limits.max_static_rules),
     max_rules(causal, Template.limits.max_causal_rules),
     max_elements(Template.limits.max_elements).
-
-named_model_module :-
-    uuid(UUID),
-    model_module(UUID).
 
 theory_deadline(MaxTime) :-
     get_time(Now),
@@ -219,9 +226,39 @@ posit_static_rules(_, _) :-
 
 posit_static_rules(Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
-    HoldingHead =.. [holds, Head],
-    posited_rule(static, HoldingHead-BodyPredicates),
+    posited_rule(static, Head-BodyPredicates),
     posit_static_rules(Template, DistinctVars).
+
+%%% VALIDATING RULES
+
+% Check all static constraints over the facts for too many constrained releations
+too_many_relations([StaticConstraint | _], Facts) :-
+    too_many_relations(StaticConstraint, Facts),!.
+
+too_many_relations([_ | OtherStaticConstraints], Facts) :-
+    too_many_relations(OtherStaticConstraints, Facts).
+
+% More than one condition on the same objects from the set of mutually exclusive predicates
+too_many_relations(one_relation(ConstrainedPredicateNames), Facts) :-
+    % There is a relation named in the constraint between two objects
+    select(ConstrainedPredicateName, ConstrainedPredicateNames, OtherConstrainedPredicateNames),
+    select(Fact, Facts, OtherFacts),
+    Fact =.. [fact, ConstrainedPredicateName, [ObjectName1, ObjectName2]],
+    % And there is another fact with a mutually exclusive predicate on these two objects
+    member(OtherFact, OtherFacts),
+    member(OtherConstrainedPredicateName, OtherConstrainedPredicateNames),
+    OtherFact =.. [OtherConstrainedPredicateName, ObjectName1, ObjectName2],
+    log(debug, unity, 'Multiple one_relation(~p) in facts ~p', [ConstrainedPredicateNames, Facts]).
+
+% An object is related to multiple objects via a singular relation
+too_many_relations(one_related(PredicateName), Facts) :-
+    % There is an object that can be related to another by the predicate named in the constraint
+    select(Fact, Facts, OtherFacts),
+    Fact =.. [fact, PredicateName, [ObjectName, _]],
+    member(OtherFact, OtherFacts),
+    OtherFact =.. [PredicateName, ObjectName, _],
+    log(debug, unity, 'Multiple one_related(~p) from ~p in facts ~p', [PredicateName, ObjectName, Facts]).
+
     
 %%% VALIDATING STATIC RULES
 
@@ -233,9 +270,7 @@ contradicting_static_rules(Head-Body, OtherHead-OtherBody) :-
     ).
 
 % Two rules contradict "at the head" one another if they have contradicting heads and equivalent bodies
-contradicting_heads(HoldingHead-Body, OtherHoldingHead-OtherBody) :-
-    HoldingHead =.. [holds, Head],
-    OtherHoldingHead =.. [holds, OtherHead],
+contradicting_heads(Head-Body, OtherHead-OtherBody) :-
     contradicts(Head, OtherHead),
     equivalent_bodies(Body, OtherBody).
 
@@ -264,12 +299,11 @@ recursive_static_rule(HoldingHead-BodyPredicates) :-
 
 % A recusion exists when the head of a static rule can unify with a predicate in the body of another static rule.
 recursion_in_static_rules(RulePairs) :-
-    select(HoldingHead-_, RulePairs, OtherRulePairs),
-    HoldingHead =.. [holds, Head],
+    select(Head-_, RulePairs, OtherRulePairs),
     member(_-OtherBody, OtherRulePairs),
     member(OtherBodyPredicate, OtherBody),
     Head =@= OtherBodyPredicate,
-    log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [HoldingHead, RulePairs]).
+    log(debug, theory_engine, 'Recursion on ~p in static rules ~p', [Head, RulePairs]).
 
 % One of the body predicates contradicts the head predicate
 contradicted_head(HeadPredicate, BodyPredicates) :-
@@ -301,7 +335,7 @@ idempotent_causal_rule(next(Head)-BodyPredicates) :-
 
 rule_from_template(Template, DistinctVars, Head-BodyPredicates) :-
     TypeSignature = Template.type_signature,
-    rule_head(TypeSignature.predicate_types, DistinctVars, Head),
+    rule_predicate(TypeSignature.predicate_types, DistinctVars, Head),
     posited_head_predicate(Head),
     posit_body_predicates(Template, DistinctVars),
     collect_body_predicates(BodyPredicates).
@@ -334,13 +368,9 @@ distinguish_from(Var, [Other | Rest]) :-
     dif(Var, Other),
     distinguish_from(Var, Rest).
 
-rule_head(PredicateTypes, DistinctVars, Head) :-
-    member(PredicateType, PredicateTypes),
-    make_head_predicate(PredicateType, DistinctVars, Head).
-
 make_head_predicate(predicate(Name, TypedArgs), DistinctVars, HeadPredicate) :-
     make_args(TypedArgs, DistinctVars, Args), !, 
-    HeadPredicate =.. [Name | Args].
+    HeadPredicate =.. [fact, Name , Args].
 
 make_args([], _, []).
 
@@ -374,21 +404,20 @@ posit_body_predicates(Template, DistinctVars) :-
     posit_body_predicates(Template, DistinctVars).   
 
 posit_body_predicate(PredicateTypes, DistinctVars) :-
-    member(PredicateType, PredicateTypes),
-    body_predicate(PredicateType, DistinctVars, BodyPredicate),
+    rule_predicate(PredicateTypes, DistinctVars, BodyPredicate),
     posited_body_predicate(BodyPredicate).
 
-body_predicate(predicate(Name, TypedArgs), DistinctVars, RulePredicate) :-
+rule_predicate(PredicateTypes, DistinctVars, RulePredicate) :-
+    member(predicate(Name, TypedArgs), PredicateTypes),
     make_args(TypedArgs, DistinctVars, Args),
-    RulePredicate =.. [Name | Args].
+    RulePredicate =.. [fact, Name , Args].
 
 %% Validating rule body predicates
 
-predicates_out_of_order(predicate(PredicateTypeName1, _), predicate(PredicateTypeName2, _)) :-
+predicates_out_of_order(fact(PredicateTypeName1, _), fact(PredicateTypeName2, _)) :-
     compare((<), PredicateTypeName2, PredicateTypeName1).
 
 %%% INITIAL CONDITIONS
-
 
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
@@ -400,7 +429,7 @@ initial_conditions(Template) :-
 %      2. Contradictory facts under static closure
 %      
 posit_initial_conditions(Template) :-
-    facts_unified, !.
+    facts_unified(Template.type_signature), !.
 
 posit_initial_conditions(Template) :-
     posit_fact(Template),
@@ -409,15 +438,14 @@ posit_initial_conditions(Template) :-
 posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
-   Fact =.. [PredicateName | Args],
-   posited_fact(Fact).
+   posited_fact(PredicateName, Args).
 
 ground_args([], _, []).
 ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
     ground_arg(ArgType, Objects, Arg),
     ground_args(OtherArgTypes, Objects, OtherArgs).
 
-ground_arg(object_type(ObjectType), Objects, Object) :-
+ground_arg(object_type(ObjectType), Objects, ObjectName) :-
     member(object(ObjectType, ObjectName), Objects).
 
 ground_arg(value_type(Domain), _, Value) :-
@@ -426,14 +454,38 @@ ground_arg(value_type(Domain), _, Value) :-
 
 % Validating initial conditions
 
-reflexive(Fact) :-
-    Fact =.. [_, Arg, Arg].
+is_domain_value(Value) :-
+    is_domain_value(_, Value).
 
-factual_contradiction(Fact, OtherFact) :-
-    Fact =.. [PredicateName, ObjectName, Arg],
-    OtherFact =.. [PredicateName, ObjectName, Arg1],
-    Arg \== Arg1,
-    is_domain_value(_, Arg), !.
+facts_unified(TypeSignature) :-
+    % All objects are represented
+    \+ unrepresented_object(TypeSignature.objects),
+    % The static rules are applied, possibly positing new facts, without causing contradictions
+    close_facts,
+    % All objects are related directly or indirectly by the closed facts
+    \+ unrelated_objects(TypeSignature).
+
+unrepresented_object(Objects) :-
+    member(object(_, ObjectName), Objects),
+    \+ object_in_a_fact(ObjectName),
+    log(info, theory_engine, 'Unrepresented object ~p in facts', [ObjectName]).
+
+unrelated_objects(TypeSignature) :-
+    object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
+    \+ objects_related(ObjectName1, ObjectName2),
+    log(debug, unity, 'Unrelated objects ~p and ~p in facts!', [ObjectName1, ObjectName2]).
+
+related_in_fact(Fact, ObjectName, OtherObjectName) :-
+    Fact =.. [_ | Args], member(ObjectName, Args), member(OtherObjectName, Args).
+
+is_object(ObjectName, TypedObjects) :-
+    member(object(_, ObjectName), TypedObjects).
+
+% Some pair of objects from the type signature
+object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
+    select(object(_, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
+    member(object(_, ObjectName2), RemainingSignatureObjects).
+ 
 
 %%% Utilities
 
@@ -457,8 +509,8 @@ contradiction_in([_ | Rest]) :-
 
 % Same name, same corresponding vars, different correponding values
 contradicts(BodyPredicate, Head) :-
-    BodyPredicate =.. [Name | Args1],
-    Head =.. [Name | Args2],
+    BodyPredicate =.. [fact, Name , Args1],
+    Head =.. [fact, Name , Args2],
     contradicting_args(Args1, Args2).
 
 contradicting_args([Arg1 | Rest1], [Arg2 | Rest2]) :-
@@ -471,13 +523,6 @@ contradicting_args([Arg1 | _], [Arg2 | _]) :-
     Arg1 \== Arg2, !.
 contradicting_args([_ | Rest1], [_ | Rest2]) :-
     contradicting_args(Rest1, Rest2).
-
-numerize_vars_in_rule_pair(HeadPredicate-BodyPredicates, HeadPredicate1-BodyPredicates1) :-
-    numerize_vars([HeadPredicate | BodyPredicates], [HeadPredicate1 |BodyPredicates1]).
-
-numerize_vars(Predicates, PredicatesWithNumerizedVars) :-
-    copy_term_nat(Predicates, PredicatesWithNumerizedVars),
-    numbervars(PredicatesWithNumerizedVars, 1, _).
 
 rule_repeats(Head-BodyPredicates, OtherHead-OtherBodyPredicates) :-
     equivalent_predicates(Head, OtherHead),
@@ -513,8 +558,8 @@ args_unification_count([object_type(ObjectType) | OtherArgTypes], TypedVariables
 %% Utilities
 
 equivalent_predicates(Predicate, OtherPredicate) :- 
-    Predicate =.. [PredicateName | Args],
-    OtherPredicate =.. [PredicateName | OtherArgs],
+    Predicate =.. [fact, PredicateName , Args],
+    OtherPredicate =.. [fact, PredicateName , OtherArgs],
     equivalent_args(Args, OtherArgs).
 
 equivalent_args([], []).
