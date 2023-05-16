@@ -137,8 +137,8 @@ theory(Template) :-
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule size
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
-    static_rules(Template, MaxStaticBodySize),
-    causal_rules(Template, MaxCausalBodySize),
+    rules(static, Template, MaxStaticBodySize),
+    rules(causal, Template, MaxCausalBodySize),
     initial_conditions(Template).
     % TODO - Collect theory
 
@@ -216,20 +216,20 @@ static_constraint_about(one_related(PredicateName), PredicateName).
 static_constraint_about(one_relation(PredicateNames), PredicateName) :-
     memberchk(PredicateName, PredicateNames).
 
-%%% STATIC RULES
+%%% POSITING RULES
 
-static_rules(Template, MaxBodySize) :-
+rules(Kind, Template, MaxBodySize) :-
     max_body_predicates(MaxBodySize),
     distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
-    posit_static_rules(Template, DistinctVars).
+    posit_rules(Kind, Template, DistinctVars).
 
-posit_static_rules(_, _) :-
-    enough_rules(static), !.
+posit_rules(Kind, _, _) :-
+    enough_rules(Kind), !.
 
-posit_static_rules(Template, DistinctVars) :-
+posit_rules(Kind, Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
-    posited_rule(static, Head-BodyPredicates),
-    posit_static_rules(Template, DistinctVars).
+    posited_rule(Kind, Head-BodyPredicates),
+    posit_rules(Kind, Template, DistinctVars).
 
 %%% VALIDATING RULES
 
@@ -311,21 +311,6 @@ contradicted_head(HeadPredicate, BodyPredicates) :-
     member(BodyPredicate, BodyPredicates),
     contradicts(BodyPredicate, HeadPredicate).
 
-%%% CAUSAL RULES
-
-causal_rules(Template, MaxBodySize) :-
-    max_body_predicates(MaxBodySize),
-    distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
-    posit_causal_rules(Template, DistinctVars).
-
-posit_causal_rules(_, _) :-
-    enough_rules(causal), !.
-
-posit_causal_rules(Template, DistinctVars) :-
-    rule_from_template(Template, DistinctVars, Head-BodyPredicates),
-    posited_rule(causal, Head-BodyPredicates),
-    posit_causal_rules(Template, DistinctVars).
-
 %%% VALIDATING CAUSAL RULES
 
 idempotent_causal_rule(Head-BodyPredicates) :-
@@ -335,8 +320,7 @@ idempotent_causal_rule(Head-BodyPredicates) :-
 
 rule_from_template(Template, DistinctVars, Head-BodyPredicates) :-
     TypeSignature = Template.type_signature,
-    rule_predicate(TypeSignature.predicate_types, DistinctVars, Head),
-    posited_head_predicate(Head),
+    posit_head_predicate(TypeSignature.predicate_types, DistinctVars, Head),
     posit_body_predicates(Template, DistinctVars),
     collect_body_predicates(BodyPredicates).
 
@@ -368,33 +352,27 @@ distinguish_from(Var, [Other | Rest]) :-
     dif(Var, Other),
     distinguish_from(Var, Rest).
 
-make_head_predicate(predicate(Name, TypedArgs), DistinctVars, HeadPredicate) :-
-    make_args(TypedArgs, DistinctVars, Args), !, 
-    HeadPredicate =.. [fact, Name , Args].
+% Make a list of at least one mutually valid body predicates
+posit_head_predicate(PredicateTypes, DistinctVars, HeadPredicate) :-
+    member(predicate(Name, TypedArgs), PredicateTypes),
+    make_head_args(TypedArgs, DistinctVars, Args), 
+    HeadPredicate =.. [fact, Name , Args],
+    posited_head_predicate(HeadPredicate).
 
-make_args([], _, []).
+make_head_args([], _, []).
 
-make_args([TypedArg | OtherTypedArgs], DistinctVars, [Arg | OtherArgs]) :-
-    make_arg(TypedArg, DistinctVars, UnusedDistinctVars, Arg),
-    make_args(OtherTypedArgs, UnusedDistinctVars, OtherArgs).
+make_head_args([TypedArg | OtherTypedArgs], DistinctVars, [Arg | OtherArgs]) :-
+    make_head_arg(TypedArg, DistinctVars, UnusedDistinctVars, Arg),
+    make_head_args(OtherTypedArgs, UnusedDistinctVars, OtherArgs).
 
-make_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
-    take_typed_var(Type, DistinctVars, UnusedDistinctVars, Arg).
+make_head_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
+    % Commit to the first var taken to avoid permutations of variables in the head.
+    take_typed_var(Type, DistinctVars, UnusedDistinctVars, Arg), !.
 
-make_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
+make_head_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     domain_is(Domain,Values),
     member(Arg, Values).
-    
-take_typed_var(Type, [vars(Type, Vars) | OtherTypedVars], [vars(Type, UnusedVars) | OtherTypedVars], Arg) :-
-    select(Arg, Vars, UnusedVars).
 
-take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], Arg) :-
-    TypedVar = vars(OtherType, _),
-    Type \== OtherType,
-    take_typed_var(Type, OtherTypedVars, UnusedTypedVars, Arg).
-
-
-% Make a list of at least one mutually valid body predicates
 posit_body_predicates(_, _) :-
     enough_body_predicates, !.
 
@@ -404,13 +382,35 @@ posit_body_predicates(Template, DistinctVars) :-
     posit_body_predicates(Template, DistinctVars).   
 
 posit_body_predicate(PredicateTypes, DistinctVars) :-
-    rule_predicate(PredicateTypes, DistinctVars, BodyPredicate),
+    body_predicate(PredicateTypes, DistinctVars, BodyPredicate),
     posited_body_predicate(BodyPredicate).
 
-rule_predicate(PredicateTypes, DistinctVars, RulePredicate) :-
+
+body_predicate(PredicateTypes, DistinctVars, BodyPredicate) :-
     member(predicate(Name, TypedArgs), PredicateTypes),
-    make_args(TypedArgs, DistinctVars, Args),
-    RulePredicate =.. [fact, Name , Args].
+    make_body_args(TypedArgs, DistinctVars, Args),
+    BodyPredicate =.. [fact, Name , Args].
+
+make_body_args([], _, []).
+
+make_body_args([TypedArg | OtherTypedArgs], DistinctVars, [Arg | OtherArgs]) :-
+    make_body_arg(TypedArg, DistinctVars, UnusedDistinctVars, Arg),
+    make_body_args(OtherTypedArgs, UnusedDistinctVars, OtherArgs).
+
+make_body_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
+    take_typed_var(Type, DistinctVars, UnusedDistinctVars, Arg).
+
+make_body_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
+    domain_is(Domain,Values),
+    member(Arg, Values).
+
+take_typed_var(Type, [vars(Type, Vars) | OtherTypedVars], [vars(Type, UnusedVars) | OtherTypedVars], Arg) :-
+    select(Arg, Vars, UnusedVars).
+
+take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], Arg) :-
+    TypedVar = vars(OtherType, _),
+    Type \== OtherType,
+    take_typed_var(Type, OtherTypedVars, UnusedTypedVars, Arg).
 
 %% Validating rule body predicates
 
