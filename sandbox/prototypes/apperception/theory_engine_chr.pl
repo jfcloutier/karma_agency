@@ -90,8 +90,6 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
     after_deadline(Deadline) | fail.
 'enough rules' @ max_rules(Kind, Max)#passive, rules_count(Kind, Count)#passive \ enough_rules(Kind) <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
-'keep rule, count it' @ posited_rule(Kind, _) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
-'keep rule, start count' @ posited_rule(Kind, _)  ==> rules_count(Kind, 1).
 
 % Validating rules, static and causal
 'repeated rule' @ posited_rule(Kind, R1)#passive \ posited_rule(Kind, R2) <=>
@@ -109,6 +107,10 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Validating causal rules
 'idempotent causal rule' @ posited_rule(causal, CR) <=> idempotent_causal_rule(CR) | fail.
+
+% Keeping and counting a rule
+'keep rule, count it' @ posited_rule(Kind, _) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
+'keep rule, start count' @ posited_rule(Kind, _)  ==> rules_count(Kind, 1).
 
 % Initial conditions
 'reflexive relation' @ posited_fact(_, [A, A]) <=> fail.
@@ -292,8 +294,7 @@ static_rule_contradicts_constraint(Head-BodyPredicates, one_relation(PredicateNa
     subset([PredName1, PredName2], PredicateNames),
     log(debug, theory_engine, 'Static rule ~p contradicts static constraint ~p', [Head-BodyPredicates, one_relation(PredicateNames)]).
 
-recursive_static_rule(HoldingHead-BodyPredicates) :-
-    HoldingHead =.. [holds, Head],
+recursive_static_rule(Head-BodyPredicates) :-
     member(BodyPredicate, BodyPredicates),
     Head =@= BodyPredicate.
 
@@ -322,13 +323,12 @@ posit_causal_rules(_, _) :-
 
 posit_causal_rules(Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
-    NextHead =.. [next, Head],
-    posited_rule(causal, NextHead-BodyPredicates),
+    posited_rule(causal, Head-BodyPredicates),
     posit_causal_rules(Template, DistinctVars).
 
 %%% VALIDATING CAUSAL RULES
 
-idempotent_causal_rule(next(Head)-BodyPredicates) :-
+idempotent_causal_rule(Head-BodyPredicates) :-
     memberchk_equal(Head, BodyPredicates).
 
 %%% MAKING RULES
@@ -478,8 +478,8 @@ unrelated_objects(TypeSignature) :-
 related_in_fact(Fact, ObjectName, OtherObjectName) :-
     Fact =.. [_ | Args], member(ObjectName, Args), member(OtherObjectName, Args).
 
-is_object(ObjectName, TypedObjects) :-
-    member(object(_, ObjectName), TypedObjects).
+is_object(Name) :-
+    \+ is_domain_value(Name).
 
 % Some pair of objects from the type signature
 object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
