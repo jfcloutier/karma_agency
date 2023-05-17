@@ -31,8 +31,7 @@ theory_engine_chr:theory(Template).
 
 :- chr_option(check_guard_bindings, on).
 
-:- chr_constraint model_module(+), 
-                  deadline(+),
+:- chr_constraint deadline(+),
                   max_rules(+, +),
                   max_elements(+),
                   rules_count(+, +),
@@ -51,6 +50,7 @@ theory_engine_chr:theory(Template).
                   related(+, +),
                   object_in_a_fact(+),
                   close_facts/0,
+                  evaluating_static_rule(+, +),
                   objects_related(+, +).
 
 % Time and complexity limits are singletons
@@ -91,9 +91,10 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'enough rules' @ max_rules(Kind, Max)#passive, rules_count(Kind, Count)#passive \ enough_rules(Kind) <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
 
-% Validating rules, static and causal
+% Validating rules, static or causal
 'repeated rule' @ posited_rule(Kind, R1)#passive \ posited_rule(Kind, R2) <=>
     rule_repeats(R1, R2) | fail.
+'ungroundable head' @ posited_rule(_, R) <=> ungroundable_head(R) | fail.
 'too many relations in rule' @ posited_static_constraint(SC)#passive \ posited_rule(_, _-BodyPredicates) <=>
     too_many_relations(SC, BodyPredicates) | fail.
 
@@ -112,10 +113,11 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'keep rule, count it' @ posited_rule(Kind, _) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
 'keep rule, start count' @ posited_rule(Kind, _)  ==> rules_count(Kind, 1).
 
-% Initial conditions
+%%% Initial conditions
 'reflexive relation' @ posited_fact(_, [A, A]) <=> fail.
-'no duplicate fact' @ posited_fact(F, As)#passive \ posited_fact(F, As) <=> true.
+'no duplicate fact' @ posited_fact(F, As)#passive \ posited_fact(F, As) <=> fail.
 'contradictory facts' @ posited_fact(N, [O, V1])#passive \ posited_fact(N, [O, V2]) <=>  is_domain_value(V1), is_domain_value(V2)| fail.
+% Accumulating object relations
 'related objects' @ posited_fact(_, [O1, O2]) ==>  is_object(O2) | related(O1, O2).
 'no duplicate related' @ related(O1, O2) \ related(O1, O2) <=> true.
 'inverse related' @ related(O1, O2) ==> related(O2, O1).
@@ -124,7 +126,13 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Initial conditions unified?
 'object in a fact' @ posited_fact(_, A)#passive \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
-% TODO - Factual Closure
+% Factual Closure
+'clean up static rule evaluations' @ close_facts \ evaluating_static_rule(_, _)#passive <=> true.
+'closing fact' @ posited_rule(static, Head-Body)#passive \ close_facts <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_static_rule(Head1, Body1).
+'fact from closure' @ evaluating_static_rule(Head, []) <=> ground(Head) | posited_fact(Head).
+'can not close' @ evaluating_static_rule(_, []) <=> fail.
+'reducing a static rule' @ posited_fact(Name, Args) \ evaluating_static_rule(Head, [fact(Name, Args) | Rest])  <=> evaluating_static_rule(Head, Rest).
+% Spatial unity
 'objects related' @ related(O1, O2)#passive \ objects_related(O1, O2)  <=> true.
 'objects not related' @ objects_related(_, _) <=> fail.
 
@@ -135,7 +143,7 @@ create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
 theory(Template) :-
     theory_limits(Template),
     static_constraints(Template.type_signature),
-    % Do iterative deepening on rule size
+    % Do iterative deepening on rule sizes
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
@@ -261,7 +269,14 @@ too_many_relations(one_related(PredicateName), Facts) :-
     OtherFact =.. [PredicateName, ObjectName, _],
     log(debug, unity, 'Multiple one_related(~p) from ~p in facts ~p', [PredicateName, ObjectName, Facts]).
 
-    
+% The head of a rule is ungroundable if it has a variable that never appears in the body of the rule
+ungroundable_head(fact(_, HeadArgs)-Body) :-
+    member(HeadArg, HeadArgs),
+    var(HeadArg),
+    \+ (member(fact(_, BodyArgs), Body),
+       memberchk_equal(HeadArg, BodyArgs)
+    ).
+
 %%% VALIDATING STATIC RULES
 
 contradicting_static_rules(Head-Body, OtherHead-OtherBody) :-
