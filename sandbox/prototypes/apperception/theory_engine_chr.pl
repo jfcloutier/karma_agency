@@ -49,6 +49,8 @@ theory_engine_chr:theory(Template).
                   posited_fact(+, +),
                   related(+, +),
                   object_in_a_fact(+),
+                  relevant_rule(+),
+                  fact_about(+),
                   close_facts/0,
                   evaluating_static_rule(+, +),
                   objects_related(+, +).
@@ -76,12 +78,13 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'new rule head' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
 'enough body predicates' @ max_body_predicates(Max)#passive \ body_predicate_count(Count)#passive, enough_body_predicates <=> Count == Max | true.
 'not enough body predicates' @ enough_body_predicates <=> fail.
-'too many rule body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
+'too many body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
 'body predicates in alphabetical order' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> predicates_out_of_order(P1, P2) | fail.
 'repeated body predicate' @  posited_body_predicate(P)#passive \ posited_body_predicate(P) <=> fail.
 'contradiction among body predicates' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> contradicts(P1, P2) | fail.
-'valid body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
-'first valid body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
+'body predicate breaks static contraint' @ posited_static_constraint(SC)#passive, posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> breaks_static_constraint(SC, P1, P2) | fail.
+'another body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
+'first body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
 'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P)#passive <=> Collected = P.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
@@ -95,8 +98,6 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'repeated rule' @ posited_rule(Kind, R1)#passive \ posited_rule(Kind, R2) <=>
     rule_repeats(R1, R2) | fail.
 'ungroundable head' @ posited_rule(_, R) <=> ungroundable_head(R) | fail.
-'too many relations in rule' @ posited_static_constraint(SC)#passive \ posited_rule(_, _-BodyPredicates) <=>
-    too_many_relations(SC, BodyPredicates) | fail.
 
 % Validating static rules
 'static rule head contradicted in body' @ posited_rule(static, Head-Body) <=> contradicted_head(Head, Body) | fail.
@@ -117,6 +118,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'reflexive relation' @ posited_fact(_, [A, A]) <=> fail.
 'no duplicate fact' @ posited_fact(F, As)#passive \ posited_fact(F, As) <=> fail.
 'contradictory facts' @ posited_fact(N, [O, V1])#passive \ posited_fact(N, [O, V2]) <=>  is_domain_value(V1), is_domain_value(V2)| fail.
+'facts breaks static contraint' @ posited_static_constraint(SC)#passive, posited_fact(N1, As1)#passive \ posited_fact(N2, As1)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | fail.
+
 % Accumulating object relations
 'related objects' @ posited_fact(_, [O1, O2]) ==>  is_object(O2) | related(O1, O2).
 'no duplicate related' @ related(O1, O2) \ related(O1, O2) <=> true.
@@ -126,12 +129,16 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Initial conditions unified?
 'object in a fact' @ posited_fact(_, A)#passive \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
+'relevant rule' @ posited_rule(Kind, R)#passive \ relevant_rule(Kind) <=> supported_rule(R) | true.
+'no relevant rule' @ relevant_rule(_) <=> fail.
+'fact about something' @ posited_fact(N,_)#passive \ fact_about(N) <=> true.
+'no fact about something' @ fact_about(_) <=> fail.
 % Factual Closure
 'clean up static rule evaluations' @ close_facts \ evaluating_static_rule(_, _)#passive <=> true.
-'closing fact' @ posited_rule(static, Head-Body)#passive \ close_facts <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_static_rule(Head1, Body1).
+'closing facts' @ posited_rule(static, Head-Body)#passive \ close_facts <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_static_rule(Head1, Body1).
 'fact from closure' @ evaluating_static_rule(Head, []) <=> ground(Head) | posited_fact(Head).
-'can not close' @ evaluating_static_rule(_, []) <=> fail.
-'reducing a static rule' @ posited_fact(Name, Args) \ evaluating_static_rule(Head, [fact(Name, Args) | Rest])  <=> evaluating_static_rule(Head, Rest).
+'reducing a static rule' @ posited_fact(Name, GroundArgs) \ evaluating_static_rule(Head, [fact(Name, Args) | Rest]) <=> can_unify(GroundArgs, Args) | Args = GroundArgs, evaluating_static_rule(Head, Rest).
+'can not close facts' @ evaluating_static_rule(_, _) <=> true.
 % Spatial unity
 'objects related' @ related(O1, O2)#passive \ objects_related(O1, O2)  <=> true.
 'objects not related' @ objects_related(_, _) <=> fail.
@@ -240,34 +247,6 @@ posit_rules(Kind, Template, DistinctVars) :-
     posit_rules(Kind, Template, DistinctVars).
 
 %%% VALIDATING RULES
-
-% Check all static constraints over the facts for too many constrained releations
-too_many_relations([StaticConstraint | _], Facts) :-
-    too_many_relations(StaticConstraint, Facts),!.
-
-too_many_relations([_ | OtherStaticConstraints], Facts) :-
-    too_many_relations(OtherStaticConstraints, Facts).
-
-% More than one condition on the same objects from the set of mutually exclusive predicates
-too_many_relations(one_relation(ConstrainedPredicateNames), Facts) :-
-    % There is a relation named in the constraint between two objects
-    select(ConstrainedPredicateName, ConstrainedPredicateNames, OtherConstrainedPredicateNames),
-    select(Fact, Facts, OtherFacts),
-    Fact =.. [fact, ConstrainedPredicateName, [ObjectName1, ObjectName2]],
-    % And there is another fact with a mutually exclusive predicate on these two objects
-    member(OtherFact, OtherFacts),
-    member(OtherConstrainedPredicateName, OtherConstrainedPredicateNames),
-    OtherFact =.. [OtherConstrainedPredicateName, ObjectName1, ObjectName2],
-    log(debug, unity, 'Multiple one_relation(~p) in facts ~p', [ConstrainedPredicateNames, Facts]).
-
-% An object is related to multiple objects via a singular relation
-too_many_relations(one_related(PredicateName), Facts) :-
-    % There is an object that can be related to another by the predicate named in the constraint
-    select(Fact, Facts, OtherFacts),
-    Fact =.. [fact, PredicateName, [ObjectName, _]],
-    member(OtherFact, OtherFacts),
-    OtherFact =.. [PredicateName, ObjectName, _],
-    log(debug, unity, 'Multiple one_related(~p) from ~p in facts ~p', [PredicateName, ObjectName, Facts]).
 
 % The head of a rule is ungroundable if it has a variable that never appears in the body of the rule
 ungroundable_head(fact(_, HeadArgs)-Body) :-
@@ -432,6 +411,19 @@ take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], 
 predicates_out_of_order(fact(PredicateTypeName1, _), fact(PredicateTypeName2, _)) :-
     compare((<), PredicateTypeName2, PredicateTypeName1).
 
+% Two mutually exclusive relations between the same objects or distinct variables
+breaks_static_constraint(one_relation(ConstrainedPredicateNames), fact(Name, [A1, A2]), fact(OtherName, [A3, A4])) :-
+    select(Name, ConstrainedPredicateNames, Rest),
+    member(OtherName, Rest),
+    A1 =@= A3,
+    A2 =@= A4.
+
+% A unitary relation links an object (or distinct variable) to more than one objects (or distinct variables)
+breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3, A4])) :-
+    A1 =@= A3,
+    A2 \=@= A4.
+
+
 %%% INITIAL CONDITIONS
 
 initial_conditions(Template) :-
@@ -475,10 +467,15 @@ is_domain_value(Value) :-
 facts_unified(TypeSignature) :-
     % All objects are represented
     \+ unrepresented_object(TypeSignature.objects),
-    % The static rules are applied, possibly positing new facts, without causing contradictions
+    % The initial conditions are relevant to at least one static rule
+    relevant_rule(static),
+    % The static rules are applied, possibly positing new facts, without causing contradictions (else closure fails)
     close_facts,
     % All objects are related directly or indirectly by the closed facts
-    \+ unrelated_objects(TypeSignature).
+    \+ unrelated_objects(TypeSignature),
+    % The closed initial conditions are relevant to at least one causal rule
+    relevant_rule(causal).
+    % TODO - check constraints
 
 unrepresented_object(Objects) :-
     member(object(_, ObjectName), Objects),
@@ -500,7 +497,14 @@ is_object(Name) :-
 object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
     select(object(_, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
     member(object(_, ObjectName2), RemainingSignatureObjects).
- 
+
+% A rule is supported if all of its body predicates have potentially matching facts (none of its body predicates are not supported by facts)
+supported_rule(_-Body) :-
+    \+ unsupported_body_predicate(Body).
+
+unsupported_body_predicate(Body) :-
+    member(fact(PredicateName, _), Body),
+    \+ fact_about(PredicateName).
 
 %%% Utilities
 
@@ -570,8 +574,6 @@ args_unification_count([object_type(ObjectType) | OtherArgTypes], TypedVariables
     NthArg1 is NthArg + 1,
     args_unification_count(OtherArgTypes, TypedVariables, NthArg1, Acc1, Count).
 
-%% Utilities
-
 equivalent_predicates(Predicate, OtherPredicate) :- 
     Predicate =.. [fact, PredicateName , Args],
     OtherPredicate =.. [fact, PredicateName , OtherArgs],
@@ -598,3 +600,7 @@ memberchk_equal(_, []) :- !, fail.
 memberchk_equal(_, List) :- var(List), !, fail.
 memberchk_equal(Term, [El | Rest]) :-
     Term == El -> true ; memberchk_equal(Term, Rest).
+
+can_unify(GroundArgs, Args) :-
+    unifiable(GroundArgs, Args, _).
+
