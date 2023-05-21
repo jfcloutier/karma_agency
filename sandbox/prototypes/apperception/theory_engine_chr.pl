@@ -21,12 +21,9 @@ theory_engine_chr:theory(Template).
 :- use_module(library(lists)).
 :- use_module(library(aggregate)).
 :- use_module(logger).
-:- use_module(type_signature).
 :- use_module(domains).
-:- use_module(global).
-% :- use_module(unity).
-
 :- use_module(library(chr)).
+
 % Constraints
 
 :- chr_option(check_guard_bindings, on).
@@ -46,14 +43,24 @@ theory_engine_chr:theory(Template).
                   static_constraint_covers(+),
                   posited_rule(+, +),
                   enough_rules(+),
+                  round(+),
+                  posited_fact(+),
                   posited_fact(+, +),
-                  related(+, +),
+                  related(+, +, +),
                   object_in_a_fact(+),
                   relevant_rule(+),
                   fact_about(+),
                   close_facts/0,
                   evaluating_static_rule(+, +),
-                  objects_related(+, +).
+                  objects_related(+, +),
+                  make_trace/0, 
+                  cause_next_round/0,
+                  remove_round(+),
+                  evaluating_causal_rule(+, +),
+                  carry_over_composable/0,
+                  contradicted_in_next_round(+),
+                  breaks_static_constraint_in_next_round(+),
+                  fact_in_round_not_in_other(+,+).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -62,16 +69,16 @@ max_elements(_) \ max_elements(_)#passive <=> true.
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Positing static constraints
-'adding static constraint fails after deadline' @ deadline(Deadline)#passive \ posited_static_constraint(_)  <=> 
+'static constraint after deadline' @ deadline(Deadline)#passive \ posited_static_constraint(_)  <=> 
     after_deadline(Deadline) | fail.
-'Add constraints in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
+'constraints not in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
     P2 @< P1 | fail.
-'fail on repeated static constraint' @ posited_static_constraint(C1)#passive \ posited_static_constraint(C2) <=> 
-    subsumed_static_constraint(C1 , C2) | fail.
+'duplicate static constraint' @ posited_static_constraint(SC1)#passive \ posited_static_constraint(SC2) <=> 
+    subsumed_static_constraint(SC1 , SC2) | fail.
 
 % Validating static constraints
-'static constraint covers predicate' @ posited_static_constraint(C)#passive \ static_constraint_covers(BinaryPredicateName) <=> 
-    static_constraint_about(C, BinaryPredicateName) | true.
+'static constraint covers predicate' @ posited_static_constraint(SC)#passive \ static_constraint_covers(BinaryPredicateName) <=> 
+    static_constraint_about(SC, BinaryPredicateName) | true.
 'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
 
 % Positing rule head and body predicates
@@ -114,34 +121,65 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'keep rule, count it' @ posited_rule(Kind, _) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
 'keep rule, start count' @ posited_rule(Kind, _)  ==> rules_count(Kind, 1).
 
+%%% Rounds
+'one round' @ round(_)#passive \ round(_) <=> true.
+
 %%% Initial conditions
-'reflexive relation' @ posited_fact(_, [A, A]) <=> fail.
-'no duplicate fact' @ posited_fact(F, As)#passive \ posited_fact(F, As) <=> fail.
-'contradictory facts' @ posited_fact(N, [O, V1])#passive \ posited_fact(N, [O, V2]) <=>  is_domain_value(V1), is_domain_value(V2)| fail.
-'facts breaks static contraint' @ posited_static_constraint(SC)#passive, posited_fact(N1, As1)#passive \ posited_fact(N2, As1)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | fail.
+'posited fact in implied round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
+'reflexive relation' @ posited_fact(fact(_, [A, A]), _) <=> fail.
+'duplicate fact' @ posited_fact(fact(N, As), Round)#passive \ posited_fact(fact(N, As), Round) <=> fail.
+'contradictory fact' @ posited_fact(fact(N, [O, V1]), Round)#passive \ posited_fact(fact(N, [O, V2]), Round) <=>  is_domain_value(V1), is_domain_value(V2)| fail.
+'fact breaks static contraint' @ posited_static_constraint(SC)#passive, posited_fact(fact(N1, As1), Round)#passive \ posited_fact(fact(N2, As2), Round)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | fail.
 
 % Accumulating object relations
-'related objects' @ posited_fact(_, [O1, O2]) ==>  is_object(O2) | related(O1, O2).
-'no duplicate related' @ related(O1, O2) \ related(O1, O2) <=> true.
-'inverse related' @ related(O1, O2) ==> related(O2, O1).
-'transitive related' @ related(O1, O2),  related(O2, O3) ==> related(O1, O3).
+'related objects' @ posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O2) | related(O1, O2, Round).
+'no duplicate related' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true.
+'inverse related' @ related(O1, O2, Round) ==> related(O2, O1, Round).
+'transitive related' @ related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
 
 % Initial conditions unified?
-'object in a fact' @ posited_fact(_, A)#passive \ object_in_a_fact(O) <=>  member(O, A) | true.
+'object in a fact' @ round(Round), posited_fact(fact(_, A), Round)#passive \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
 'relevant rule' @ posited_rule(Kind, R)#passive \ relevant_rule(Kind) <=> supported_rule(R) | true.
 'no relevant rule' @ relevant_rule(_) <=> fail.
-'fact about something' @ posited_fact(N,_)#passive \ fact_about(N) <=> true.
+'fact about something' @ round(Round), posited_fact(fact(N,_), Round)#passive \ fact_about(N) <=> true.
 'no fact about something' @ fact_about(_) <=> fail.
 % Factual Closure
 'clean up static rule evaluations' @ close_facts \ evaluating_static_rule(_, _)#passive <=> true.
 'closing facts' @ posited_rule(static, Head-Body)#passive \ close_facts <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_static_rule(Head1, Body1).
-'fact from closure' @ evaluating_static_rule(Head, []) <=> ground(Head) | posited_fact(Head).
-'reducing a static rule' @ posited_fact(Name, GroundArgs) \ evaluating_static_rule(Head, [fact(Name, Args) | Rest]) <=> can_unify(GroundArgs, Args) | Args = GroundArgs, evaluating_static_rule(Head, Rest).
-'can not close facts' @ evaluating_static_rule(_, _) <=> true.
+'fact from closure' @ round(Round)#passive \ evaluating_static_rule(Head, []) <=> ground(Head) | say('CLOSED FACT ~p', [Head]), posited_fact(Head, Round).
+'reducing a static rule' @ round(Round)#passive, posited_fact(fact(Name, GroundArgs), Round) \ evaluating_static_rule(Head, [fact(Name, Args) | Rest]) <=> can_unify(GroundArgs, Args) | Args = GroundArgs, evaluating_static_rule(Head, Rest).
+'done closing initial facts' @ round(1)#passive \ evaluating_static_rule(_, _) <=> true.
 % Spatial unity
-'objects related' @ related(O1, O2)#passive \ objects_related(O1, O2)  <=> true.
+'objects related' @ round(Round)#passive, related(O1, O2, Round)#passive \ objects_related(O1, O2)  <=> true.
 'objects not related' @ objects_related(_, _) <=> fail.
+
+%%% Trace
+'make a trace' @ round(1), make_trace <=> cause_next_round.
+% Repeated round
+'trace is done' @ cause_next_round, round(Round)#passive <=> Round > 1, repeated_round(Round) | remove_round(Round).
+'a fact in a round is not in another' @ posited_fact(F, Round)#passive, posited_fact(F, OtherRound)#passive \ fact_in_round_not_in_other(Round, OtherRound) <=> fail.
+'a fact in a round is not in another proven' @ fact_in_round_not_in_other(_, _) <=> true.
+'remove round' @ remove_round(Round) \ posited_fact(_, Round)#passive <=> true.
+'done removing round' @ remove_round(RemovedRound) <=> LastRound is RemovedRound - 1, round(LastRound).
+% Apply causal rules
+'clean up causal rule evaluations' @ cause_next_round \ evaluating_causal_rule(_, _)#passive <=> true.
+'apply causal rules' @ posited_rule(causal, Head-Body)#passive \ cause_next_round <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_causal_rule(Head1, Body1).
+'fact from causing' @ evaluating_causal_rule(Head, []), round(Round)#passive <=> ground(Head) | say('CAUSED FACT ~p', [Head]), NextRound is Round + 1, posited_fact(Head, NextRound).
+'reducing a causal rule' @ round(Round)#passive, posited_fact(fact(Name, GroundArgs), Round)#passive \ evaluating_causal_rule(Head, [fact(Name, Args) | Rest]) <=> can_unify(GroundArgs, Args) | Args = GroundArgs, evaluating_causal_rule(Head, Rest).
+'done causing facts, point to next round and close them' @ evaluating_causal_rule(_, _), round(Round)#passive <=> NextRound is Round + 1, round(NextRound), close_facts.
+% Apply static rules on caused facts
+'done closing caused facts, not frame' @ round(Round)#passive \ evaluating_static_rule(_, _) <=> Round > 1 | carry_over_composable.
+% Carry over composable facts from previous round
+'carry over composable' @ carry_over_composable, round(CausedRound)#passive, posited_fact(F, PreviousRound)#passive ==>  PreviousRound is CausedRound - 1, fact_composable_in_next_round(F) | posited_fact(F, CausedRound).
+
+'contradicted in next round' @ contradicted_in_next_round(fact(N, [O, V1])), round(CausedRound)#passive \ posited_fact(fact(N, [O, V2]), CausedRound) <=>  is_domain_value(V1), is_domain_value(V2).
+'not contradicted in next round' @ contradicted_in_next_round(_) <=> fail.
+
+'breaks static contraint in next round' @ breaks_static_constraint_in_next_round(fact(N1, As1)), posited_static_constraint(SC)#passive, round(CausedRound)#passive \ posited_fact(fact(N2, As2), CausedRound)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
+'does not break static contraint in next round' @ breaks_static_constraint_in_next_round(_) <=> fail.
+
+'done carrying over composable, do next round' @ carry_over_composable <=> cause_next_round.
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -154,8 +192,10 @@ theory(Template) :-
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
-    initial_conditions(Template).
-    % TODO - Collect theory
+    initial_conditions(Template),
+    make_trace.
+    % TODO - Rate the theory
+    % TODO - Collect it
 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
@@ -428,10 +468,11 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
+    round(1),
     posit_initial_conditions(Template).
 
 % Posit facts to the initial conditions until they are unified
-% TODO - conditions that fail the unified_facts assumption
+% conditions that fail the unified_facts assumption
 %      1. Transitively unrelated objects
 %      2. Contradictory facts under static closure
 %      
@@ -445,7 +486,7 @@ posit_initial_conditions(Template) :-
 posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
-   posited_fact(PredicateName, Args).
+   posited_fact(fact(PredicateName, Args)).
 
 ground_args([], _, []).
 ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
@@ -475,13 +516,13 @@ facts_unified(TypeSignature) :-
     \+ unrelated_objects(TypeSignature),
     % The closed initial conditions are relevant to at least one causal rule
     relevant_rule(causal).
-    % TODO - check constraints
 
 unrepresented_object(Objects) :-
     member(object(_, ObjectName), Objects),
     \+ object_in_a_fact(ObjectName),
     log(info, theory_engine, 'Unrepresented object ~p in facts', [ObjectName]).
 
+% Are there unrelated objects in the current round?
 unrelated_objects(TypeSignature) :-
     object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
     \+ objects_related(ObjectName1, ObjectName2),
@@ -505,6 +546,21 @@ supported_rule(_-Body) :-
 unsupported_body_predicate(Body) :-
     member(fact(PredicateName, _), Body),
     \+ fact_about(PredicateName).
+
+%%% Making a trace
+
+fact_composable_in_next_round(Fact) :-
+    \+ contradicted_in_next_round(Fact),
+    \+ breaks_static_constraint_in_next_round(Fact).
+
+% There is no other round that has all the same facts as this round
+repeated_round(Round) :-
+    \+ other_round_repeating(Round).
+
+other_round_repeating(Round) :-
+    PriorRound is Round - 1,
+    between(1, PriorRound, OtherRound),
+    \+ fact_in_round_not_in_other(Round, OtherRound).
 
 %%% Utilities
 
@@ -603,4 +659,7 @@ memberchk_equal(Term, [El | Rest]) :-
 
 can_unify(GroundArgs, Args) :-
     unifiable(GroundArgs, Args, _).
+
+say(What, About) :-
+    log(note, theory_engine, What, About).    
 
