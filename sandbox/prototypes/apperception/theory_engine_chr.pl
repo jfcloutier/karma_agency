@@ -44,6 +44,7 @@ theory_engine_chr:theory(Template).
                   posited_rule(+, +),
                   enough_rules(+),
                   round(+),
+                  bump_round(-),
                   posited_fact(+),
                   posited_fact(+, +),
                   related(+, +, +),
@@ -53,14 +54,15 @@ theory_engine_chr:theory(Template).
                   close_facts/0,
                   evaluating_static_rule(+, +),
                   objects_related(+, +),
-                  make_trace/0, 
-                  cause_next_round/0,
+                  repeated_round/0,
+                  fact_in_round_not_in_other(+, +),
+                  remove_last_round/0
                   remove_round(+),
+                  cause_next_round/0,
                   evaluating_causal_rule(+, +),
-                  carry_over_composable/0,
-                  contradicted_in_next_round(+),
-                  breaks_static_constraint_in_next_round(+),
-                  fact_in_round_not_in_other(+,+).
+                  carry_over_composable_from(+),
+                  contradicted_in_this_round(+),
+                  breaks_static_constraint_in_this_round(+).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -155,31 +157,33 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'objects not related' @ objects_related(_, _) <=> fail.
 
 %%% Trace
-'make a trace' @ round(1), make_trace <=> cause_next_round.
 % Repeated round
-'trace is done' @ cause_next_round, round(Round)#passive <=> Round > 1, repeated_round(Round) | remove_round(Round).
+'last round repeats a prior one' @ repeated_round, round(Round)#passive <=> Round > 1, repeated_round(Round) | true.
+'last round does not repeat' @ repeated_round <=> fail.
 'a fact in a round is not in another' @ posited_fact(F, Round)#passive, posited_fact(F, OtherRound)#passive \ fact_in_round_not_in_other(Round, OtherRound) <=> fail.
-'a fact in a round is not in another proven' @ fact_in_round_not_in_other(_, _) <=> true.
-'remove round' @ remove_round(Round) \ posited_fact(_, Round)#passive <=> true.
+'a fact in a round is not in another, proven' @ fact_in_round_not_in_other(_, _) <=> true.
+% Removing a round
+'remove round' @ remove_last_round, round(Round)#passive <=> remove_round(Round).
+'remove facts from round' @ remove_round(Round) \ posited_fact(_, Round)#passive <=> true.
 'done removing round' @ remove_round(RemovedRound) <=> LastRound is RemovedRound - 1, round(LastRound).
 % Apply causal rules
-'clean up causal rule evaluations' @ cause_next_round \ evaluating_causal_rule(_, _)#passive <=> true.
-'apply causal rules' @ posited_rule(causal, Head-Body)#passive \ cause_next_round <=> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_causal_rule(Head1, Body1).
-'fact from causing' @ evaluating_causal_rule(Head, []), round(Round)#passive <=> ground(Head) | say('CAUSED FACT ~p', [Head]), NextRound is Round + 1, posited_fact(Head, NextRound).
+'apply causal rules' @ cause_next_round,  posited_rule(causal, Head-Body)#passive ==> copy_term(Head, Head1), copy_term(Body, Body1), evaluating_causal_rule(Head1, Body1).
+'fact from causing' @ round(Round)#passive \ evaluating_causal_rule(Head, []) <=> ground(Head) | say('CAUSED FACT ~p', [Head]), NextRound is Round + 1, posited_fact(Head, NextRound).
 'reducing a causal rule' @ round(Round)#passive, posited_fact(fact(Name, GroundArgs), Round)#passive \ evaluating_causal_rule(Head, [fact(Name, Args) | Rest]) <=> can_unify(GroundArgs, Args) | Args = GroundArgs, evaluating_causal_rule(Head, Rest).
-'done causing facts, point to next round and close them' @ evaluating_causal_rule(_, _), round(Round)#passive <=> NextRound is Round + 1, round(NextRound), close_facts.
-% Apply static rules on caused facts
-'done closing caused facts, not frame' @ round(Round)#passive \ evaluating_static_rule(_, _) <=> Round > 1 | carry_over_composable.
+'clean up causal rule evaluations' @ evaluating_causal_rule(_, _) <=> true.
+% Bump round
+'bump round' @ bump_round(PreviousRound), round(Round)#passive <=> NextRound is Round + 1, PreviousRound = Round, round(NextRound).
 % Carry over composable facts from previous round
-'carry over composable' @ carry_over_composable, round(CausedRound)#passive, posited_fact(F, PreviousRound)#passive ==>  PreviousRound is CausedRound - 1, fact_composable_in_next_round(F) | posited_fact(F, CausedRound).
+'carry over composable' @ carry_over_composable_from(PreviousRound), round(CausedRound)#passive, posited_fact(F, PreviousRound)#passive ==>  fact_composable_from_previous_round(F) | posited_fact(F, CausedRound).
+'done composing' @ carry_over_composable_from(_) <=> true.
 
-'contradicted in next round' @ contradicted_in_next_round(fact(N, [O, V1])), round(CausedRound)#passive \ posited_fact(fact(N, [O, V2]), CausedRound) <=>  is_domain_value(V1), is_domain_value(V2).
-'not contradicted in next round' @ contradicted_in_next_round(_) <=> fail.
+'contradicted in next round' @ contradicted_in_this_round(fact(N, [O, V1])), round(CausedRound)#passive \ posited_fact(fact(N, [O, V2]), CausedRound) <=>  is_domain_value(V1), is_domain_value(V2).
+'not contradicted in next round' @ contradicted_in_this_round(_) <=> fail.
 
-'breaks static contraint in next round' @ breaks_static_constraint_in_next_round(fact(N1, As1)), posited_static_constraint(SC)#passive, round(CausedRound)#passive \ posited_fact(fact(N2, As2), CausedRound)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
-'does not break static contraint in next round' @ breaks_static_constraint_in_next_round(_) <=> fail.
+'breaks static contraint in next round' @ breaks_static_constraint_in_this_round(fact(N1, As1)), posited_static_constraint(SC)#passive, round(CausedRound)#passive \ posited_fact(fact(N2, As2), CausedRound)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
+'does not break static contraint in next round' @ breaks_static_constraint_in_this_round(_) <=> fail.
 
-'done carrying over composable, do next round' @ carry_over_composable <=> cause_next_round.
+'done carrying over composable, do next round' @ carry_over_composable_from(_) <=> cause_next_round.
 
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
@@ -549,9 +553,19 @@ unsupported_body_predicate(Body) :-
 
 %%% Making a trace
 
-fact_composable_in_next_round(Fact) :-
-    \+ contradicted_in_next_round(Fact),
-    \+ breaks_static_constraint_in_next_round(Fact).
+make_trace :-
+    make_next_round,
+    (repeated_round -> remove_last_round ; make_trace).
+
+make_next_round :-
+    cause_next_round,
+    bump_round(PreviousRound),
+    close_facts,
+    carry_over_composable_from(PreviousRound).
+
+fact_from_previous_round_composable(Fact) :-
+    \+ contradicted_in_this_round(Fact),
+    \+ breaks_static_constraint_in_this_round(Fact).
 
 % There is no other round that has all the same facts as this round
 repeated_round(Round) :-
