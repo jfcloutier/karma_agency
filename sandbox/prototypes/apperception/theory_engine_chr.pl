@@ -1,4 +1,4 @@
-:- module(theory_engine_chr, [create_theory_engine/3]).
+:- module(theory_engine_chr, [create_theory_engine/2]).
 
 % An engine that generates valid causal theories on demand,
 % given a minimal type signature (implied by the sequence of observations) 
@@ -6,7 +6,7 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[logger, type_signature, theory_engine_chr].
+[logger, global, type_signature, theory_engine_chr].
 set_log_level(note).
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ],
@@ -15,13 +15,14 @@ TypedVariables = [variables(led, 2)],
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
 Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 300},
 Template = template{type_signature:TypeSignature, limits:Limits},
-theory_engine_chr:theory(Template).
+theory_engine_chr:theory(Template, Theory, Trace).
 */
 
 :- use_module(library(lists)).
 :- use_module(library(aggregate)).
 :- use_module(logger).
 :- use_module(domains).
+:- use_module(global).
 :- use_module(library(chr)).
 
 % Constraints
@@ -29,12 +30,12 @@ theory_engine_chr:theory(Template).
 :- chr_option(check_guard_bindings, on).
 
 :- chr_type list(T) ---> [] ; [T | list(T)].
-:- chr_type round ---> int.
+:- chr_type round == int.
 :- chr_type rule_kind ---> static ; causal.
-:- chr_type object ---> any.
-:- chr_type value ---> any.
+:- chr_type object == any.
+:- chr_type value == any.
 % :- chr_type arg ---> object ; value.
-:- chr_type fact ---> fact(any, list(any)). % should be list(arg) but the CHR compiler complains
+:- chr_type fact ---> fact(any, list(any)). % I want it to be list(arg) but the CHR compiler complains
 :- chr_type static_constraint ---> one_relation(list(any)) ; one_related(any).
 :- chr_constraint deadline(+any),
                   max_rules(+rule_kind, +),
@@ -64,14 +65,24 @@ theory_engine_chr:theory(Template).
                   evaluating_rule(+rule_kind, +fact, +list(fact)),
                   objects_related(+object, +object),
                   repeated_round/0,
-                  fact_in_round_not_in_other(+round, +round),
+                  facts_in_both_rounds(+round, +round),
+                  repeated_fact(+fact),
+                  count_repeated_facts/0,
+                  repeated_count(+int),
+                  extract_repeated_count(-int),
+                  counting_facts/0,
+                  count_facts/0,
+                  counted_fact(+fact),
+                  fact_count(+int),
+                  extract_fact_count(-int),
                   remove_last_round/0,
                   remove_round(+round),
-                  cause_next_round/0,
-                  cleanup_causing/0,
                   carry_over_composable_from(+round),
                   contradicted_in_this_round(+fact),
-                  breaks_static_constraint_in_this_round(+fact).
+                  breaks_static_constraint_in_this_round(+fact),
+                  many_rounds/0,
+                  % to help debugging
+                  inferred_fact(+rule_kind, +fact, +round).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -80,8 +91,8 @@ max_elements(_) \ max_elements(_)#passive <=> true.
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Positing static constraints
-'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
-    after_deadline(Deadline) | fail.
+% 'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
+%     after_deadline(Deadline) | fail.
 'constraints not in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
     P2 @< P1 | fail.
 'duplicate static constraint' @ posited_static_constraint(SC1)#passive \ posited_static_constraint(SC2) <=> 
@@ -93,6 +104,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
 
 % Positing rule head and body predicates
+'one head predicate' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
 'enough body predicates' @ max_body_predicates(Max) \ body_predicate_count(Count), enough_body_predicates <=> Count == Max | true.
 'not enough body predicates' @ enough_body_predicates <=> fail.
 'too many body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
@@ -102,12 +114,12 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'body predicate breaks static contraint' @ posited_static_constraint(SC), posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> breaks_static_constraint(SC, P1, P2) | fail.
 'another body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
 'first body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
-'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P)#passive <=> Collected = P.
-'done collecting body predicates - remove head' @  collected_body_predicate(_), posited_head_predicate(_) <=> true.
+'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P) <=> Collected = P.
+'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
 % Positing rules, static and causal
-'adding rule after deadline' @ deadline(Deadline)\ posited_rule(_, _, _)  <=> 
-    after_deadline(Deadline) | fail.
+% 'adding rule after deadline' @ deadline(Deadline)\ posited_rule(_, _, _)  <=> 
+%     after_deadline(Deadline) | fail.
 'enough rules' @ max_rules(Kind, Max), rules_count(Kind, Count) \ enough_rules(Kind) <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
 
@@ -128,7 +140,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'idempotent causal rule' @ posited_rule(causal, H, B) <=> idempotent_causal_rule(H-B) | fail.
 
 % Keeping and counting a rule
-'keep rule, count it' @ posited_rule(Kind, _, _ ) \ rules_count(Kind, Count) <=> Count1 is Count + 1, rules_count(Kind, Count1).
+'keep rule, count it' @ posited_rule(Kind, _, _ ) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
 'keep rule, start count' @ posited_rule(Kind, _, _)  ==> rules_count(Kind, 1).
 
 %%% Rounds
@@ -157,13 +169,15 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'no fact about something' @ fact_about(_) <=> fail.
 
 % Applying rules
+'inferred known fact' @ posited_fact(Fact, Round)#passive \ inferred_fact(_, Fact, Round) <=> true.
+'inferred new fact' @ inferred_fact(_, Fact, Round) ==> posited_fact(Fact, Round).
 'applying rules' @ posited_rule(Kind, Head, Body), applying_rules(Kind) ==> evaluating_rule(Kind, Head, Body).
 'applying rules started' @ applying_rules(_) <=> true.
-'fact from static rule' @ round(Round) \ evaluating_rule(static, Head, []) <=> ground(Head) | posited_fact(Head, Round).
-'fact from causal' @ round(Round) \ evaluating_rule(causal, Head, []) <=> ground(Head) | NextRound is Round + 1, posited_fact(Head, NextRound).
+'fact from static rule' @ round(Round) \ evaluating_rule(static, Head, []) <=> ground(Head) | inferred_fact(static, Head, Round).
+'fact from causal' @ round(Round) \ evaluating_rule(causal, Head, []) <=> ground(Head) | NextRound is Round + 1, inferred_fact(causal, Head, NextRound).
 'reducing a rule' @ round(Round), posited_fact(fact(Name, GroundArgs), Round), evaluating_rule(Kind, Head, [fact(Name, Args) | Rest]) 
                                                                             ==> can_unify(GroundArgs, Args) | 
-                                                                            copy_term([Head, Args, Rest], [Head1, Args1, Rest1]), Args1 = GroundArgs, evaluating_rule(Kind, Head1, Rest1).
+                                                                            copy_term_nat([Head, Args, Rest], [Head1, Args1, Rest1]), Args1 = GroundArgs, evaluating_rule(Kind, Head1, Rest1).
 'cleanup evaluating rules' @ done_applying_rules \ evaluating_rule(_,_,_) <=> true.
 'done evaluating rules' @ done_applying_rules <=> true.
 
@@ -173,44 +187,72 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 %%% Trace
 % Repeated round
-'last round repeats a prior one' @ repeated_round, round(Round) <=> Round > 1, repeated_round(Round) | true.
+'last round repeats a prior one' @ round(Round) \ repeated_round <=> Round > 1, repeated_round(Round) | true.
 'last round repeats - not' @ repeated_round <=> fail.
-'a fact in a round is not be in another - not' @ posited_fact(F, Round), posited_fact(F, OtherRound) \ fact_in_round_not_in_other(Round, OtherRound) <=> fail.
-'a fact in a round is not in another' @ fact_in_round_not_in_other(_, _) <=> true.
+
+% counting facts and repeated facts
+
+% repeated facts
+'a fact in both rounds' @ posited_fact(Fact, Round), posited_fact(Fact, OtherRound), facts_in_both_rounds(Round, OtherRound) ==> repeated_fact(Fact).
+'done finding repeated facts' @ facts_in_both_rounds(_, _) <=> true.
+'count repeated facts' @ count_repeated_facts \ repeated_count(Count), repeated_fact(_) <=> Count1 is Count + 1 | repeated_count(Count1).
+'done counting repeated' @ repeated_count(_) \ count_repeated_facts <=> true.
+'start count of repeated facts' @ count_repeated_facts ==> repeated_count(0).
+'extract repeated count' @ extract_repeated_count(C), repeated_count(Count) <=> C = Count.
+% counting facts
+'mark facts for counting' @ counting_facts, round(Round), posited_fact(F, Round) ==> counted_fact(F).
+'count facts' @ count_facts \ fact_count(Count), counted_fact(_) <=> Count1 is Count + 1 | fact_count(Count1).
+'done counting facts' @ fact_count(_) \ count_facts <=> true.
+'start count of facts' @ count_facts ==> fact_count(0).
+'extract fact count' @ extract_fact_count(C), fact_count(Count) <=> C = Count.
+
 % Removing a round
-'remove last round' @ remove_last_round, round(Round) <=> remove_round(Round).
-'remove facts from last round' @ remove_round(Round) \ posited_fact(_, Round) <=> true.
+'remove last round' @ remove_last_round, round(Round)#passive <=> remove_round(Round).
+'remove facts from last round' @ remove_round(Round) \ posited_fact(_, Round)#passive <=> true.
+'remove related from last round' @ remove_round(Round) \ related(_, _, Round)#passive <=> true.
 'done removing round' @ remove_round(RemovedRound) <=> LastRound is RemovedRound - 1, round(LastRound).
 % Bump round
 'bump round' @ bump_round(PreviousRound), round(Round) <=> NextRound is Round + 1, PreviousRound = Round, round(NextRound).
 % Carry over composable facts from previous round
 'carry over composable' @ carry_over_composable_from(PreviousRound), round(CausedRound), posited_fact(F, PreviousRound) ==>  
-                                                                        fact_composable_from_previous_round(F) | posited_fact(F, CausedRound).
+                                                                        fact_from_previous_round_composable(F) | posited_fact(F, CausedRound).
 'done composing' @ carry_over_composable_from(_) <=> true.
 
-'contradicted in round' @ contradicted_in_this_round(fact(N, [O, V1])), round(Round) \ posited_fact(fact(N, [O, V2]), Round) <=>  is_domain_value(V1), is_domain_value(V2).
+'contradicted in round' @ round(Round), posited_fact(fact(N, [O, V2]), Round) \ contradicted_in_this_round(fact(N, [O, V1])) <=>  is_domain_value(V1), is_domain_value(V2), V1 \== V2 | true.
 'not contradicted in round' @ contradicted_in_this_round(_) <=> fail.
 
 'breaks static contraint in next round' @ breaks_static_constraint_in_this_round(fact(N1, As1)), posited_static_constraint(SC)#passive, round(Round)#passive \ posited_fact(fact(N2, As2), Round)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
 'does not break static contraint in next round' @ breaks_static_constraint_in_this_round(_) <=> fail.
 
-'done carrying over composable, do next round' @ carry_over_composable_from(_) <=> cause_next_round.
+'done carrying over composable, do next round' @ carry_over_composable_from(_) <=> true.
+% Validate trace
+'trace has many rounds' @ round(Round) \ many_rounds <=> Round > 1 | true.
+'trace has one round' @ many_rounds <=> fail.
 
 % Create an engine that produces theories with their traces.
-create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
-    engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
+create_theory_engine(Template, TheoryEngine) :-
+    engine_create(Theory-Trace, theory(Template, Theory, Trace), TheoryEngine), !.
 
-theory(Template) :-
+theory(Template, Theory, Trace) :-
     theory_limits(Template),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
-    rules(static, Template, MaxStaticBodySize).
-    % rules(causal, Template, MaxCausalBodySize).
-    % initial_conditions(Template),
-    % make_trace.
-    % TODO - Rate the theory
-    % TODO - Collect it
+    rules(static, Template, MaxStaticBodySize),
+    rules(causal, Template, MaxCausalBodySize),
+    % Only try 10 sets of initial conditions in a row if getting no trace
+    catch(
+        (
+        reset_counter(theory_engine/no_trace, 10),
+        initial_conditions(Template),
+        trace(Trace)
+        ),
+        error(no_trace, _),
+        (
+            log(note, theory_engine, 'CAN"T GET A TRACE!!!'),
+            fail
+        )
+    ).
 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
@@ -223,6 +265,7 @@ theory_deadline(MaxTime) :-
     Deadline is Now + MaxTime,
     deadline(Deadline).
 
+% TODO - use throw - catch when dealine is exceeded
 after_deadline(Deadline) :-
     get_time(Now),
     Now > Deadline.
@@ -289,12 +332,15 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 %%% POSITING RULES
 
 rules(Kind, Template, MaxBodySize) :-
+    log(note, theory_engine, 'Making ~p rules', [Kind]),
     max_body_predicates(MaxBodySize),
     distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
-    posit_rules(Kind, Template, DistinctVars).
+    posit_rules(Kind, Template, DistinctVars),
+    log(note, theory_engine, 'Done making ~p rules', [Kind]).
 
 posit_rules(Kind, _, _) :-
-    enough_rules(Kind), !.
+    enough_rules(Kind), 
+    !.
 
 posit_rules(Kind, Template, DistinctVars) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
@@ -387,19 +433,19 @@ distinct_typed_variables(TypedVariables, Acc, DistinctVars) :-
     distinct_typed_variables(Rest, [vars(Type, Vars) | Acc], DistinctVars).
 
 distinct_vars(N, Vars) :-
-    length(Vars, N).
-%     distinguish_all(Vars).
+    length(Vars, N),
+    distinguish_all(Vars).
 
-% distinguish_all([]).
-% distinguish_all([Var | Rest]) :-
-%     distinguish_from(Var, Rest),
-%     distinguish_all(Rest).
+distinguish_all([]).
+distinguish_all([Var | Rest]) :-
+    distinguish_from(Var, Rest),
+    distinguish_all(Rest).
 
-% distinguish_from(_, []).
-% distinguish_from(Var, [Other | Rest]) :-
-%     % constraint: Var and Other can never unify
-%     dif(Var, Other),
-%     distinguish_from(Var, Rest).
+distinguish_from(_, []).
+distinguish_from(Var, [Other | Rest]) :-
+    % constraint: Var and Other can never unify
+    dif(Var, Other),
+    distinguish_from(Var, Rest).
 
 % Make a list of at least one mutually valid body predicates
 posit_head_predicate(PredicateTypes, DistinctVars, HeadPredicate) :-
@@ -482,9 +528,10 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 %%% INITIAL CONDITIONS
 
 initial_conditions(Template) :-
-    log(info, theory_engine, 'Making initial conditions'),
+    log(note, theory_engine, 'Making initial conditions'),
     round(1),
-    posit_initial_conditions(Template).
+    posit_initial_conditions(Template),
+    log(note, theory_engine, 'Done making initial conditions').
 
 % Posit facts to the initial conditions until they are unified
 % conditions that fail the unified_facts assumption
@@ -536,7 +583,7 @@ facts_unified(TypeSignature) :-
 % Fails if contradictory or constraint-breaking facts would be added to a round.
 apply_rules(Kind) :-
     applying_rules(Kind),
-    cleanup_applying_rules.
+    done_applying_rules.
 
 unrepresented_object(Objects) :-
     member(object(_, ObjectName), Objects),
@@ -570,8 +617,29 @@ unsupported_body_predicate(Body) :-
 
 %%% Making a trace
 
+trace(Trace) :-
+   log(note, theory_engine, 'Making trace'),
+    make_trace,
+    % Fail if making a trace did not produce rounds beyond initial conditions
+    many_rounds, !,
+    % restart the count of no trace in a row
+    reset_counter(theory_engine/no_trace, 10),
+    log(note, theory_engine, 'Done making trace').
+    % TODO - Collect the trace
+
+% Throw an error if too many failed attempts at building a trace from initial conditions
+% We don't want to try all possible initial conditions before giving up
+trace(_) :-
+    (count_down(theory_engine/no_trace) ->
+        % backtrack and try another set of initial conditions
+        fail
+        ;
+        % count down over - give up
+        throw(error(no_trace, context(theory_engine, trace)))
+    ).
+
 make_trace :-
-    make_next_round,
+     make_next_round,
     (repeated_round -> remove_last_round ; make_trace).
 
 make_trace.
@@ -587,14 +655,22 @@ fact_from_previous_round_composable(Fact) :-
     \+ contradicted_in_this_round(Fact),
     \+ breaks_static_constraint_in_this_round(Fact).
 
-% There is no other round that has all the same facts as this round
+% There is a prior round such that all facts in the round are repeated in the other round (i.e no fact in this round is unrepeated in the other round)
 repeated_round(Round) :-
-    \+ other_round_repeating(Round).
-
-other_round_repeating(Round) :-
     PriorRound is Round - 1,
     between(1, PriorRound, OtherRound),
-    \+ fact_in_round_not_in_other(Round, OtherRound).
+    \+ unrepeated_facts(Round, OtherRound).
+
+% There is one or more facts in a round not repeated in some other round if
+% the number of facts is in the round is different from the number of repeated facts.
+unrepeated_facts(Round, OtherRound) :-
+    facts_in_both_rounds(Round, OtherRound),
+    count_repeated_facts,
+    counting_facts,
+    count_facts,
+    extract_repeated_count(RepeatedCount),
+    extract_fact_count(FactCount),
+    RepeatedCount \== FactCount.
 
 %%% Utilities
 

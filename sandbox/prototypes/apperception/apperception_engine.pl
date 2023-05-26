@@ -3,7 +3,7 @@
 :- use_module(logger).
 :- use_module(global).
 :- use_module(template_engine).
-:- use_module(theory_engine).
+:- use_module(theory_engine_chr).
 :- use_module(trace).
 :- use_module(rating).
 
@@ -73,9 +73,8 @@ init_search(TheoryTemplateEngine, SequenceAsTrace, Search) :-
     get_time(Now),
     engine_next(TheoryTemplateEngine, Template),
     log(info, apperception_engine, 'First template ~p', [Template]),
-    create_theory_engine(Template, SequenceAsTrace, TheoryEngine),
-    uuid(Module),
-    Search = search{started_at: Now, completed: false, theories_count: 0, best_theories: [], template_engine: TheoryTemplateEngine, template: Template, theory_engine: TheoryEngine, module: Module, sequence_as_trace: SequenceAsTrace}.
+    create_theory_engine(Template, TheoryEngine),
+    Search = search{started_at: Now, completed: false, theories_count: 0, best_theories: [], template_engine: TheoryTemplateEngine, template: Template, theory_engine: TheoryEngine, sequence_as_trace: SequenceAsTrace}.
 
 stop_search(Search) :-
     destroy_engine(Search.template_engine),
