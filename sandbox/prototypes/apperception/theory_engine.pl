@@ -87,7 +87,9 @@ theory_engine_chr:theory(Template, Theory, Trace).
                   many_rounds/0,
                   inferred_fact(+rule_kind, +fact, +round), % for debugging
                   last_round(-round),
-                  extract_fact(-fact, +round).
+                  extract_fact(-fact, +round),
+                  extract_static_constraint(-static_constraint),
+                  extract_rule(+rule_kind, -fact, -list(fact)).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -247,6 +249,12 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'extracting a fact from a round' @ extract_fact(F, R), posited_fact(Fact, Round) <=> R == Round | Fact = F.
 'done extracting facts from a round' @ extract_fact(_,_) <=> fail.
 
+% Extracting static constraints and rules
+'extracting a static constraint' @ extract_static_constraint(Sc), posited_static_constraint(StaticConstraint) <=> Sc = StaticConstraint.
+'done extracting static constraints' @ extract_static_constraint(_) <=> fail.
+'extracting a rule' @ extract_rule(K, H, B), posited_rule(Kind, Head, Body) <=> K == Kind | Head = H, Body = B.
+'done extracting rules' @ extract_rule(_, _, _) <=> fail.
+
 % Create an engine that produces theories with their traces.
 create_theory_engine(Template, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, Theory, Trace), TheoryEngine), !.
@@ -263,7 +271,8 @@ theory(Template, Theory, Trace) :-
         (
         reset_counter(theory_engine/no_trace, 10),
         initial_conditions(Template),
-        trace(Trace)
+        trace(Trace),
+        extract_theory(Theory, Trace)
         ),
         error(no_trace, _),
         (
@@ -715,6 +724,32 @@ extract_facts(N, [Predicate | Others]) :-
     extract_facts(N, Others).
 
 extract_facts(_, []).
+
+%%% Extracting the theory
+
+extract_theory(Theory, [InitialConditions | _]) :-
+    extract_static_constraints(StaticConstraints),
+    extract_rules(static, StaticRules),
+    extract_rules(causal, CausalRules),
+    Theory = theory{static_rules:StaticRules, causal_rules:CausalRules, static_constraints:StaticConstraints, initial_conditions:InitialConditions, rating: 0, found_time: 0}.
+
+extract_static_constraints([StaticConstraint | Others]) :-
+    extract_static_constraint(StaticConstraint), !,
+    extract_static_constraints(Others).
+
+extract_static_constraints([]).
+
+extract_rules(Kind, [Head1-Body1 | Others]) :-
+    extract_rule(Kind, Head, Body), !,
+    defact([Head | Body], [Head1 | Body1]),
+    extract_rules(Others).
+
+extract_rules([]).
+
+defact([], []).
+defact([fact(Name, Args) | OtherFacts], [Predicate | OtherPredicates]) :-
+    Predicate =.. [Name | Args],
+    defact(OtherFacts, OtherPredicates).
 
 %%% Utilities
 
