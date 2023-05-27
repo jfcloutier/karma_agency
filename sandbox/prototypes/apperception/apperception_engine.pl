@@ -3,8 +3,7 @@
 :- use_module(logger).
 :- use_module(global).
 :- use_module(template_engine).
-:- use_module(theory_engine_chr).
-:- use_module(trace).
+:- use_module(theory_engine).
 :- use_module(rating).
 
 %% An apperception engine.
@@ -19,7 +18,7 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, trace, unity, rules_engine, rating, apperception_engine].
+[logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, rating, apperception_engine].
 set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
@@ -198,3 +197,47 @@ timestamp_theory(Theory, TheoryTS) :-
     get_time(Now),
     FoundTime is Now - StartTime,
     put_dict(found_time, Theory, FoundTime, TheoryTS).
+
+%%% Sequence as trace
+
+% Covert a sequence to a trace so they can be compared
+sequence_as_trace(Sequence, Trace) :-
+    sequence_as_trace_(Sequence, [], Trace).
+
+sequence_as_trace_([], ReversedTrace, Trace) :-
+    reverse(ReversedTrace, Trace).
+
+sequence_as_trace_([State | OtherStates], Acc, Trace) :-
+    state_as_round(State, Round),
+    sequence_as_trace_(OtherStates, [Round | Acc], Trace).
+
+% Convert a trace round to a state in a sequence of observations
+state_as_round(State, Round) :-
+    state_as_round_(State, [], Round).
+
+state_as_round_([], Round, Round).
+
+state_as_round_([Observation | OtherObservations], Acc, Round) :-
+    Observation =.. [sensed, PredicateName, ObservationArgs, _],
+    !,
+    convert_observation_args(ObservationArgs, Args),
+    Fact =.. [PredicateName | Args],
+    state_as_round_(OtherObservations, [Fact | Acc], Round).
+
+state_as_round_([_ | OtherObservations], Acc, Round) :-
+    state_as_round_(OtherObservations, Acc, Round).
+
+convert_observation_args(ObservationArgs, Args) :-
+    convert_observation_args_(ObservationArgs, [], Args).
+
+ convert_observation_args_([], ReversedArgs, Args) :-
+    reverse(ReversedArgs, Args).
+
+convert_observation_args_([ObservationArg | OtherObservationArgs], Acc, Args) :-
+    convert_observation_arg(ObservationArg, Arg),
+    convert_observation_args_(OtherObservationArgs, [Arg | Acc], Args).
+
+convert_observation_arg(ObservationArg, ObjectName) :-
+    ObservationArg =.. [object, _, ObjectName], !.
+
+convert_observation_arg(Arg, Arg).

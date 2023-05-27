@@ -21,7 +21,7 @@ cd('sandbox/stuff').
 %% For all
 remove_samples \ sample(_)#passive <=> true.
 remove_samples <=> true.
-
+ 
 bigger_samples, sample(N)#passive ==> N1 is N * 10, big_sample(N1).
 bigger_samples <=> true.
 
