@@ -7,7 +7,7 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, global, type_signature, theory_engine_chr].
-set_log_level(note).
+set_log_level(info).
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ],
 Objects = [object(led, light1), object(led, light2)],
@@ -15,7 +15,7 @@ TypedVariables = [variables(led, 2)],
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
 Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 300},
 Template = template{type_signature:TypeSignature, limits:Limits},
-theory_engine_chr:theory(Template, Theory, Trace).
+theory_engine:theory(Template, Theory, Trace).
 */
 
 :- use_module(library(lists)).
@@ -98,8 +98,8 @@ max_elements(_) \ max_elements(_)#passive <=> true.
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Positing static constraints
-% 'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
-%     after_deadline(Deadline) | fail.
+'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
+     after_deadline(Deadline) | fail.
 'constraints not in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
     P2 @< P1 | fail.
 'duplicate static constraint' @ posited_static_constraint(SC1)#passive \ posited_static_constraint(SC2) <=> 
@@ -112,22 +112,21 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Positing rule head and body predicates
 'one head predicate' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
-'enough body predicates' @ max_body_predicates(Max) \ body_predicate_count(Count), enough_body_predicates <=> Count == Max | true.
+'set body predicate count to zero' @ posited_head_predicate(_) ==> body_predicate_count(0).
+'enough body predicates' @ max_body_predicates(Max) \ enough_body_predicates,  body_predicate_count(Count)#passive <=> Count == Max | true.
 'not enough body predicates' @ enough_body_predicates <=> fail.
-'too many body predicates' @ posited_body_predicate(_), max_body_predicates(Max), body_predicate_count(Count) ==> Count > Max | fail.
 'body predicates in alphabetical order' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> predicates_out_of_order(P1, P2) | fail.
 'repeated body predicate' @  posited_body_predicate(P)#passive \ posited_body_predicate(P) <=> fail.
 'contradiction among body predicates' @ posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> contradicts(P1, P2) | fail.
 'body predicate breaks static contraint' @ posited_static_constraint(SC), posited_body_predicate(P1)#passive \ posited_body_predicate(P2) <=> breaks_static_constraint(SC, P1, P2) | fail.
 'another body predicate' @ posited_body_predicate(_) \ body_predicate_count(Count)#passive <=> Count1 is Count + 1, body_predicate_count(Count1).
-'first body predicate' @ posited_body_predicate(_) ==> body_predicate_count(1).
 'collecting body predicates' @ collected_body_predicate(Collected), posited_body_predicate(P) <=> Collected = P.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
 % Positing rules, static and causal
-% 'adding rule after deadline' @ deadline(Deadline)\ posited_rule(_, _, _)  <=> 
-%     after_deadline(Deadline) | fail.
-'enough rules' @ max_rules(Kind, Max), rules_count(Kind, Count) \ enough_rules(Kind) <=> Count == Max | true.
+ 'adding rule after deadline' @ deadline(Deadline) \ posited_rule(_, _, _)  <=> 
+    after_deadline(Deadline) | fail.
+'enough rules' @ max_rules(Kind, Max) \ enough_rules(Kind), rules_count(Kind, Count)  <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
 
 % Validating rules, static or causal
@@ -154,7 +153,9 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'new round replaces previous round' @ round(_) \ round(_)#passive  <=> true.
 
 %%% Initial conditions
-'posited fact in implied round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
+'adding fact after deadline' @ deadline(Deadline) \ posited_fact(_)  <=> 
+    after_deadline(Deadline) | fail.
+'posited fact in current round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
 'reflexive relation' @ posited_fact(fact(_, [A, A]), _) <=> fail.
 'duplicate fact' @ posited_fact(fact(N, As), Round)#passive \ posited_fact(fact(N, As), Round) <=> false.
 'contradictory fact' @ posited_fact(fact(N, [O, V1]), Round)#passive \ posited_fact(fact(N, [O, V2]), Round) <=>  is_domain_value(V1), is_domain_value(V2) | fail.
@@ -242,7 +243,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Validate trace
 'trace has many rounds' @ round(Round) \ many_rounds <=> Round > 1 | true.
-'trace has one round' @ many_rounds <=> fail.
+'trace does not have many rounds' @ many_rounds <=> fail.
 
 % Extracting trace
 'last round is' @ round(Round) \ last_round(R) <=> Round = R.
@@ -276,7 +277,7 @@ theory(Template, Theory, Trace) :-
         ),
         error(no_trace, _),
         (
-            log(note, theory_engine, 'CAN"T GET A TRACE!!!'),
+            log(info, theory_engine, 'CAN"T GET A TRACE!!!'),
             fail
         )
     ).
@@ -292,21 +293,22 @@ theory_deadline(MaxTime) :-
     Deadline is Now + MaxTime,
     deadline(Deadline).
 
-% TODO - use throw - catch when dealine is exceeded
+% Throw error when deadline is exceeded
 after_deadline(Deadline) :-
     get_time(Now),
-    Now > Deadline.
+    Now > Deadline,
+    throw(error(time_expired, context(theory_engine, Deadline))).
 
 % A number between 1 and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
     % "Worst case" is all unary predicates
-    UpperLimit is div(Template.limits.max_elements, 6),
+    UpperLimit is div(Template.limits.max_elements, 10),
     UpperLimit1 is min(UpperLimit, Total),
-    between(1, UpperLimit1, MaxStaticBodySize),
-    between(1, UpperLimit1, MaxCausalBodySize),
+    choose_pair_in_range(1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
+    % between(1, UpperLimit1, MaxStaticBodySize),
+    % between(1, UpperLimit1, MaxCausalBodySize),
     log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
-
 
 %%% STATIC CONSTRAINTS
 
@@ -316,12 +318,12 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
 % A uniqueness constraint states that for an object X, there is exactly one object Y such that r(X, Y).
 %   one_related(pred1). 
 static_constraints(TypeSignature) :-
-    log(note, theory_engine, 'Making static constraints'),
+    log(info, theory_engine, 'Making static constraints'),
     all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
     maybe_posit_static_constraint(one_related, AllBinaryPredicateNames),
     maybe_posit_static_constraint(one_relation, AllBinaryPredicateNames),
     static_constraints_conceptually_unified(AllBinaryPredicateNames),
-    log(note, theory_engine, 'Done making static constraints').
+    log(info, theory_engine, 'Done making static constraints').
 
 maybe_posit_static_constraint(_, _).
 
@@ -359,11 +361,11 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 %%% POSITING RULES
 
 rules(Kind, Template, MaxBodySize) :-
-    log(note, theory_engine, 'Making ~p rules', [Kind]),
+    log(info, theory_engine, 'Making ~p rules', [Kind]),
     max_body_predicates(MaxBodySize),
     distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
     posit_rules(Kind, Template, DistinctVars),
-    log(note, theory_engine, 'Done making ~p rules', [Kind]).
+    log(info, theory_engine, 'Done making ~p rules', [Kind]).
 
 posit_rules(Kind, _, _) :-
     enough_rules(Kind), 
@@ -476,7 +478,7 @@ distinguish_from(Var, [Other | Rest]) :-
 
 % Make a list of at least one mutually valid body predicates
 posit_head_predicate(PredicateTypes, DistinctVars, HeadPredicate) :-
-    member(predicate(Name, TypedArgs), PredicateTypes),
+    member_rand(predicate(Name, TypedArgs), PredicateTypes),
     make_head_args(TypedArgs, DistinctVars, Args), 
     HeadPredicate =.. [fact, Name , Args],
     posited_head_predicate(HeadPredicate).
@@ -493,7 +495,7 @@ make_head_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
 
 make_head_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     domain_is(Domain,Values),
-    member(Arg, Values).
+    member_rand(Arg, Values).
 
 posit_body_predicates(_, _) :-
     enough_body_predicates, !.
@@ -509,7 +511,7 @@ posit_body_predicate(PredicateTypes, DistinctVars) :-
 
 
 body_predicate(PredicateTypes, DistinctVars, BodyPredicate) :-
-    member(predicate(Name, TypedArgs), PredicateTypes),
+    member_rand(predicate(Name, TypedArgs), PredicateTypes),
     make_body_args(TypedArgs, DistinctVars, Args),
     BodyPredicate =.. [fact, Name , Args].
 
@@ -524,7 +526,7 @@ make_body_arg(object_type(Type), DistinctVars, UnusedDistinctVars, Arg) :-
 
 make_body_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     domain_is(Domain,Values),
-    member(Arg, Values).
+    member_rand(Arg, Values).
 
 take_typed_var(Type, [vars(Type, Vars) | OtherTypedVars], [vars(Type, UnusedVars) | OtherTypedVars], Arg) :-
     select(Arg, Vars, UnusedVars).
@@ -555,10 +557,10 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 %%% INITIAL CONDITIONS
 
 initial_conditions(Template) :-
-    log(note, theory_engine, 'Making initial conditions'),
+    log(info, theory_engine, 'Making initial conditions'),
     round(1),
     posit_initial_conditions(Template),
-    log(note, theory_engine, 'Done making initial conditions').
+    log(info, theory_engine, 'Done making initial conditions').
 
 % Posit facts to the initial conditions until they are unified
 % conditions that fail the unified_facts assumption
@@ -587,7 +589,7 @@ ground_arg(object_type(ObjectType), Objects, ObjectName) :-
 
 ground_arg(value_type(Domain), _, Value) :-
     domain_is(Domain, Values),
-    member(Value, Values).
+    member_rand(Value, Values).
 
 % Validating initial conditions
 
@@ -642,16 +644,16 @@ unsupported_body_predicate(Body) :-
     member(fact(PredicateName, _), Body),
     \+ fact_about(PredicateName).
 
-%%% Making a trace
-
+% Making a trace from a set of initial conditions.
+% It fails if the trace has only one round (the initial conditions).
+% TODO - move the count down to number of initial conditions traced per rule set.
 trace(Trace) :-
-   log(note, theory_engine, 'Making trace'),
+   log(info, theory_engine, 'Making trace'),
     make_trace,
     % Fail if making a trace did not produce rounds beyond initial conditions
     many_rounds, !,
     % restart the count of no trace in a row
     reset_counter(theory_engine/no_trace, 10),
-    log(note, theory_engine, 'Done making trace'),
     extract_trace(Trace).
 
 % Throw an error if too many failed attempts at building a trace from initial conditions
@@ -662,6 +664,7 @@ trace(_) :-
         fail
         ;
         % count down over - give up
+        log(info, theory_engine, 'Done making trace'),
         throw(error(no_trace, context(theory_engine, trace)))
     ).
 
@@ -850,5 +853,21 @@ can_unify(GroundArgs, Args) :-
     unifiable(GroundArgs, Args, _).
 
 say(What, About) :-
-    log(note, theory_engine, What, About).    
+    log(info, theory_engine, What, About).    
 
+choose_pair_in_range(_, _, 2-2).
+
+% choose_pair_in_range(Low, High, E1-E2) :-
+%     bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
+%     predsort(ord_pair, Pairs, Sorted),
+%     member(E1-E2, Sorted).
+
+ord_pair(Comparison, X1-Y1, X2-Y2) :-
+    S1 is X1 + Y1,
+    S2 is X2 + Y2,
+    (S1 =< S2 -> Comparison = '<' ; Comparison = '>').
+
+% Get member of a randomly permuted list
+member_rand(X, List) :-
+    random_permutation(List, RandList),
+    member(X, RandList).

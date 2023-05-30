@@ -23,7 +23,7 @@ set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 10000, keep_n_theories: 1, time_secs: 300},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 100000, keep_n_theories: 1, time_secs: 3000},
 apperceive(Sequence, ApperceptionLimits, Theories, Search).
 */
 
@@ -56,9 +56,9 @@ find_best_theories(_, Search, Theories) :-
 find_best_theories(ApperceptionLimits, Search, Theories) :-   
     log(info, apperception_engine, 'Searching for a theory. Search = ~p', [Search]),
     find_theory(ApperceptionLimits, Search, Theory, Trace, UpdatedSearch),
-    log(note, apperception_engine, 'Found theory ~p from template ~p', [Theory, Search.template]),
     % Rate the theory
     rate_theory(Theory, Search.sequence_as_trace, Trace, RatedTheory),
+    log(note, apperception_engine, 'Found theory ~p from template ~p', [RatedTheory, Search.template]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, UpdatedSearch, LatestSearch),
     !,
     find_best_theories(ApperceptionLimits, LatestSearch, Theories).
@@ -98,7 +98,7 @@ find_theory(ApperceptionLimits, Search, Theory, Trace, LatestSearch) :-
 
 maybe_change_template(ApperceptionLimits, Search, UpdatedSearch) :-
     Search.theories_count >= ApperceptionLimits.max_theories_per_template,
-    log(info, apperception_engine, 'Max theory count ~p for template!', [Search.theories_count]),
+    log(note, apperception_engine, 'Max theory count ~p for template!', [Search.theories_count]),
     !,
     next_theory_template(Search, UpdatedSearch).
 
@@ -124,13 +124,13 @@ handle_theory_engine_reponse(the(Theory-Trace), Theory, Trace, Search, UpdatedSe
     put_dict(theories_count, Search, Inc, UpdatedSearch), !.
 
 handle_theory_engine_reponse(no, Theory, Trace, Search, UpdatedSearch) :-
-    log(warn, apperception_engine, 'NO MORE THEORIES for the template'),
+    log(note, apperception_engine, 'NO MORE THEORIES for the template'),
     next_theory_template(Search, Search1),
     !,
     next_theory(Search1, Theory, Trace, UpdatedSearch).
 
 handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine, _))), Theory, Trace, Search, UpdatedSearch) :-
-    log(info, apperception_engine, 'Time expired getting a theory. Trying another template.'),
+    log(note, apperception_engine, 'Time expired getting a theory. Trying another template.'),
     next_theory_template(Search, Search1),
     !,
     next_theory(Search1, Theory, Trace, UpdatedSearch).
