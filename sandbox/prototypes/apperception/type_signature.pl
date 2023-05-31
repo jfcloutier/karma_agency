@@ -1,7 +1,9 @@
 :- module(type_signature, [
     min_type_signature/2, 
     extended_type_signature/3,
-    all_binary_predicate_names/2, binary_predicate_name/2
+    all_predicate_names/2,
+    all_binary_predicate_names/2, 
+    binary_predicate_name/2
     ]).
 
 % cd('sandbox/prototypes/apperception').
@@ -32,10 +34,18 @@ extended_type_signature(TypeSignature,
     ExtendedTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes, typed_variables:TypedVariables}.
 
 
+all_predicate_names(TypeSignature, AllPredicateNames) :-
+    PredicateTypes = TypeSignature.predicate_types,
+    findall(PredicateName, predicate_name(PredicateTypes, PredicateName), AllPredicateNames).
+
 % All relations in a type signature
 all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
     PredicateTypes = TypeSignature.predicate_types,
     findall(BinaryPredicateName, binary_predicate_name(PredicateTypes, BinaryPredicateName), AllBinaryPredicateNames).
+
+% The name of a predicate in a list of predicate types.
+predicate_name(PredicateTypes, PredicateName) :-
+    member(predicate(PredicateName, _), PredicateTypes).
 
 % The name of a binary predicate in a list of predicate types.
 binary_predicate_name(PredicateTypes, BinaryPredicateName) :-

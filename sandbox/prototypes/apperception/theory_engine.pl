@@ -6,15 +6,16 @@
 
 /*
 cd('sandbox/prototypes/apperception').
-[logger, global, type_signature, theory_engine_chr].
-set_log_level(info).
+[logger, global, type_signature, theory_engine].
+set_log_level(note).
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ],
 Objects = [object(led, light1), object(led, light2)],
 TypedVariables = [variables(led, 2)],
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
+MinTypeSignature = type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]},
 Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 300},
-Template = template{type_signature:TypeSignature, limits:Limits},
+Template = template{type_signature:TypeSignature, min_type_signature:MinTypeSignature, limits:Limits},
 theory_engine:theory(Template, Theory, Trace).
 */
 
@@ -267,17 +268,17 @@ theory(Template, Theory, Trace) :-
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
-    % Only try 10 sets of initial conditions in a row if getting no trace
+    % Only try 10 sets of initial conditions to get a trace from a rule set
     catch(
         (
-        reset_counter(theory_engine/no_trace, 10),
+        reset_counter(theory_engine/max_traces, 10),
         initial_conditions(Template),
         trace(Trace),
         extract_theory(Theory, Trace)
         ),
-        error(no_trace, _),
+        error(max_traces, _),
         (
-            log(info, theory_engine, 'CAN"T GET A TRACE!!!'),
+            log(info, theory_engine, 'Done trying to make traces from this rule set'),
             fail
         )
     ).
@@ -443,8 +444,7 @@ idempotent_causal_rule(Head-BodyPredicates) :-
 %%% MAKING RULES
 
 rule_from_template(Template, DistinctVars, Head-BodyPredicates) :-
-    TypeSignature = Template.type_signature,
-    posit_head_predicate(TypeSignature.predicate_types, DistinctVars, Head),
+    posit_head_predicate(Template, DistinctVars, Head),
     posit_body_predicates(Template, DistinctVars),
     collect_body_predicates(BodyPredicates).
 
@@ -476,9 +476,12 @@ distinguish_from(Var, [Other | Rest]) :-
     dif(Var, Other),
     distinguish_from(Var, Rest).
 
-% Make a list of at least one mutually valid body predicates
-posit_head_predicate(PredicateTypes, DistinctVars, HeadPredicate) :-
-    member_rand(predicate(Name, TypedArgs), PredicateTypes),
+% Make a predicate for the rule's head, preferring predicates made from the type signature of the observations
+posit_head_predicate(Template, DistinctVars, HeadPredicate) :-
+    all_predicate_names(Template.type_signature, AllPredicateNames),
+    all_predicate_names(Template.min_type_signature, PreferredPredicateNames),
+    member_rand(Name, PreferredPredicateNames, AllPredicateNames),
+    member(predicate(Name, TypedArgs), Template.type_signature.predicate_types),
     make_head_args(TypedArgs, DistinctVars, Args), 
     HeadPredicate =.. [fact, Name , Args],
     posited_head_predicate(HeadPredicate).
@@ -644,36 +647,32 @@ unsupported_body_predicate(Body) :-
     member(fact(PredicateName, _), Body),
     \+ fact_about(PredicateName).
 
-% Making a trace from a set of initial conditions.
-% It fails if the trace has only one round (the initial conditions).
-% TODO - move the count down to number of initial conditions traced per rule set.
 trace(Trace) :-
-   log(info, theory_engine, 'Making trace'),
-    make_trace,
-    % Fail if making a trace did not produce rounds beyond initial conditions
-    many_rounds, !,
-    % restart the count of no trace in a row
-    reset_counter(theory_engine/no_trace, 10),
-    extract_trace(Trace).
-
-% Throw an error if too many failed attempts at building a trace from initial conditions
-% We don't want to try all possible initial conditions before giving up
-trace(_) :-
-    (count_down(theory_engine/no_trace) ->
-        % backtrack and try another set of initial conditions
-        fail
+    (count_down(theory_engine/max_traces) ->
+        % make a trace from initial conditions
+        make_trace(Trace)
         ;
         % count down over - give up
-        log(info, theory_engine, 'Done making trace'),
-        throw(error(no_trace, context(theory_engine, trace)))
+        throw(error(max_traces, context(theory_engine, trace)))
     ).
 
-make_trace :-
+
+% Making a trace from a set of initial conditions.
+% It fails if the trace has only one round (the initial conditions).
+make_trace(Trace) :-
+   log(info, theory_engine, 'Making trace'),
+    % Grow a trace until it repeats
+    grow_trace,
+    % Fail if making a trace did not produce rounds beyond initial conditions
+    many_rounds, !,
+    extract_trace(Trace).
+
+grow_trace :-
      make_next_round,
      !,
-    (repeated_round -> remove_last_round ; make_trace).
+    (repeated_round -> remove_last_round ; grow_trace).
 
-make_trace.
+grow_trace.
 
 % Can fail
 make_next_round :-
@@ -855,8 +854,9 @@ can_unify(GroundArgs, Args) :-
 say(What, About) :-
     log(info, theory_engine, What, About).    
 
-choose_pair_in_range(_, _, 2-2).
+% TODO - REINSTATE
 
+choose_pair_in_range(_, _, 2-2).
 % choose_pair_in_range(Low, High, E1-E2) :-
 %     bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
 %     predsort(ord_pair, Pairs, Sorted),
@@ -871,3 +871,11 @@ ord_pair(Comparison, X1-Y1, X2-Y2) :-
 member_rand(X, List) :-
     random_permutation(List, RandList),
     member(X, RandList).
+
+% Get member of a randomly permutation list, with preferred elements upfront
+member_rand(X, Preferred, All) :-
+    subtract(All, Preferred, Rest),
+    random_permutation(Preferred, Preferred1),
+    random_permutation(Rest, Rest1),
+    append(Preferred1, Rest1, List),
+    member(X, List).
