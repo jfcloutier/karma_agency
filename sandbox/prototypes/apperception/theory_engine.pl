@@ -268,7 +268,8 @@ theory(Template, Theory, Trace) :-
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
-    % Only try 10 sets of initial conditions to get a trace from a rule set
+    % Only allow 10 consecutive failures to posit a fact into initial conditions 
+    % and only try 10 sets of initial conditions to get a trace from a rule set
     catch(
         (
         reset_counter(theory_engine/max_traces, 10),
@@ -276,9 +277,10 @@ theory(Template, Theory, Trace) :-
         trace(Trace),
         extract_theory(Theory, Trace)
         ),
-        error(max_traces, _),
+        % Thrown can be max_fact_failures or max_traces
+        error(Thrown, _),
         (
-            log(info, theory_engine, 'Done trying to make traces from this rule set'),
+            log(info, theory_engine, 'Done with this rule set because ~p', [Thrown]),
             fail
         )
     ).
@@ -562,6 +564,7 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
     round(1),
+    reset_counter(theory_engine/max_fact_failures, 10),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
@@ -580,7 +583,14 @@ posit_initial_conditions(Template) :-
 posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
-   posited_fact(fact(PredicateName, Args)).
+   posited_fact(fact(PredicateName, Args)),
+   reset_counter(theory_engine/max_fact_failures, 10).
+
+posit_fact(_) :-
+    count_down(theory_engine/max_fact_failures) ->
+        throw(error(max_fact_failures, context(theory_engine, posit_fact)))
+        ;
+        fail.
 
 ground_args([], _, []).
 ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
@@ -655,7 +665,6 @@ trace(Trace) :-
         % count down over - give up
         throw(error(max_traces, context(theory_engine, trace)))
     ).
-
 
 % Making a trace from a set of initial conditions.
 % It fails if the trace has only one round (the initial conditions).
