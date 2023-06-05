@@ -267,7 +267,17 @@ theory(Template, Theory, Trace) :-
     % Do iterative deepening on rule sizes
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
-    rules(causal, Template, MaxCausalBodySize),
+    catch(
+        (
+        reset_counter(theory_engine/max_causal_rule_sets, 50),
+        make_causal_rules(Template, MaxCausalBodySize)
+        ),
+        error(Thrown, _),
+        (
+            log(note, theory_engine, 'Done with this static rule because ~p', [Thrown]),
+            fail
+        )
+    ),
     % Only allow 10 consecutive failures to posit a fact into initial conditions 
     % and only try 10 sets of initial conditions to get a trace from a rule set
     catch(
@@ -280,7 +290,7 @@ theory(Template, Theory, Trace) :-
         % Thrown can be max_fact_failures or max_traces
         error(Thrown, _),
         (
-            log(info, theory_engine, 'Done with this rule set because ~p', [Thrown]),
+            log(note, theory_engine, 'Done with this rule set because ~p', [Thrown]),
             fail
         )
     ).
@@ -362,6 +372,14 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
     memberchk(PredicateName, PredicateNames).
 
 %%% POSITING RULES
+
+make_causal_rules(Template, MaxCausalBodySize) :-
+    rules(causal, Template, MaxCausalBodySize),
+    (count_down(theory_engine/max_causal_rule_sets) -> 
+        true
+        ;
+        throw(error(max_causal_rule_sets, context(theory_engine, causal_rules)))
+    ).
 
 rules(Kind, Template, MaxBodySize) :-
     log(info, theory_engine, 'Making ~p rules', [Kind]),
