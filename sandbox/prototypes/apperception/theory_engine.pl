@@ -269,30 +269,31 @@ theory(Template, Theory, Trace) :-
     % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
+    % Only allow 10 consecutive failures to posit a fact into initial conditions before failing static rule
+    % Only allow trying at most 50 causal rules per static rule
     catch(
         (
         reset_counter(theory_engine/max_causal_rule_sets, 50),
-        make_causal_rules(Template, MaxCausalBodySize)
+        make_causal_rules(Template, MaxCausalBodySize),
+        % Only try 10 sets of initial conditions to get a trace from a rule set
+        catch(
+                (
+                reset_counter(theory_engine/max_traces, 10),
+                initial_conditions(Template),
+                trace(Trace),
+                extract_theory(Theory, Trace)
+                ),
+                error(max_traces, _),
+                (
+                    log(note, theory_engine, 'Tried max number of traces with this rule set'),
+                    fail
+                )
+            )
         ),
+        % Thrown is max_fact_failures or max_causal_rule_sets
         error(Thrown, _),
         (
             log(note, theory_engine, 'Done with this static rule because ~p', [Thrown]),
-            fail
-        )
-    ),
-    % Only allow 10 consecutive failures to posit a fact into initial conditions 
-    % and only try 10 sets of initial conditions to get a trace from a rule set
-    catch(
-        (
-        reset_counter(theory_engine/max_traces, 10),
-        initial_conditions(Template),
-        trace(Trace),
-        extract_theory(Theory, Trace)
-        ),
-        % Thrown can be max_fact_failures or max_traces
-        error(Thrown, _),
-        (
-            log(note, theory_engine, 'Done with this rule set because ~p', [Thrown]),
             fail
         )
     ).
