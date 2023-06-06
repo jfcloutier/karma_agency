@@ -28,8 +28,6 @@ theory_engine:theory(Template, Theory, Trace).
 
 % Constraints
 
-:- chr_option(check_guard_bindings, on).
-
 :- chr_type list(T) ---> [] ; [T | list(T)].
 :- chr_type round == int.
 :- chr_type rule_kind ---> static ; causal.
@@ -91,6 +89,11 @@ theory_engine:theory(Template, Theory, Trace).
                   extract_fact(-fact, +round),
                   extract_static_constraint(-static_constraint),
                   extract_rule(+rule_kind, -fact, -list(fact)).
+
+:- chr_option(check_guard_bindings, on).
+% Setting optimize to full and debug to off causes an is/2 instantiation error.
+:- chr_option(optimize, off).
+:- chr_option(debug, on).
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
@@ -165,7 +168,6 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Accumulating object relations
 'remove duplicate relations' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
 'related objects' @ posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
-'no duplicate related' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true.
 'inverse related' @ related(O1, O2, Round) ==> related(O2, O1, Round).
 'transitive related' @ related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
 
@@ -264,7 +266,7 @@ create_theory_engine(Template, TheoryEngine) :-
 theory(Template, Theory, Trace) :-
     theory_limits(Template),
     static_constraints(Template.type_signature),
-    % Do iterative deepening on rule sizes
+    % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     catch(
@@ -319,8 +321,6 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     UpperLimit is div(Template.limits.max_elements, 10),
     UpperLimit1 is min(UpperLimit, Total),
     choose_pair_in_range(1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
-    % between(1, UpperLimit1, MaxStaticBodySize),
-    % between(1, UpperLimit1, MaxCausalBodySize),
     log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
 
 %%% STATIC CONSTRAINTS
@@ -881,13 +881,11 @@ can_unify(GroundArgs, Args) :-
 say(What, About) :-
     log(info, theory_engine, What, About).    
 
-% TODO - REINSTATE
-
-choose_pair_in_range(_, _, 2-2).
-% choose_pair_in_range(Low, High, E1-E2) :-
-%     bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
-%     predsort(ord_pair, Pairs, Sorted),
-%     member(E1-E2, Sorted).
+% First choose pairs with lowest sum (favor simplicity)
+choose_pair_in_range(Low, High, E1-E2) :-
+    bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
+    predsort(ord_pair, Pairs, Sorted),
+    member(E1-E2, Sorted).
 
 ord_pair(Comparison, X1-Y1, X2-Y2) :-
     S1 is X1 + Y1,
