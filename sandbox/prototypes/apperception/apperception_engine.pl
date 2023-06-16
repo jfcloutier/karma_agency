@@ -109,7 +109,7 @@ next_theory_template(Search, UpdatedSearch) :-
     destroy_engine(Search.theory_engine),
     try_engine_next(Search.template_engine, Template),
     log(info, apperception_engine, 'Next template ~p', [Template]),
-    create_theory_engine(Template, Search.sequence_as_trace, TheoryEngine),
+    create_theory_engine(Template, TheoryEngine),
     put_dict(theories_count, Search, 0, Search1),
     put_dict(template, Search1, Template, Search2),
     put_dict(theory_engine, Search2, TheoryEngine, UpdatedSearch), !.
