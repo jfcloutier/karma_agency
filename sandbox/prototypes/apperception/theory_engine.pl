@@ -285,7 +285,7 @@ theory(Template, Theory, Trace) :-
                 ),
                 error(max_traces, _),
                 (
-                    log(note, theory_engine, 'Tried max number of traces with this rule set'),
+                    log(info, theory_engine, 'Tried max number of traces with this rule set'),
                     fail
                 )
             )
@@ -293,7 +293,7 @@ theory(Template, Theory, Trace) :-
         % Thrown is max_fact_failures or max_causal_rule_sets
         error(Thrown, _),
         (
-            log(note, theory_engine, 'Done with this static rule because ~p', [Thrown]),
+            log(info, theory_engine, 'Done with this static rule because ~p', [Thrown]),
             fail
         )
     ).
@@ -322,7 +322,7 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     UpperLimit is div(Template.limits.max_elements, 10),
     UpperLimit1 is min(UpperLimit, Total),
     choose_pair_in_range(1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
-    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
+    log(info, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
 
 %%% STATIC CONSTRAINTS
 
@@ -649,7 +649,7 @@ apply_rules(Kind) :-
 unrepresented_object(Objects) :-
     member(object(_, ObjectName), Objects),
     \+ object_in_a_fact(ObjectName),
-    log(info, theory_engine, 'Unrepresented object ~p in facts', [ObjectName]).
+    log(debug, theory_engine, 'Unrepresented object ~p in facts', [ObjectName]).
 
 % Are there unrelated objects in the current round?
 unrelated_objects(TypeSignature) :-

@@ -13,11 +13,11 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, rating, apperception_engine_chr].
-set_log_level(note).
+set_log_level(info).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
-MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 100000, keep_n_theories: 1, time_secs: 3000},
+MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -34,18 +34,20 @@ apperceive(Sequence, ApperceptionLimits, Theories).
                   past_deadline(+float),
                   max_theories_count(+int),
                   theories_count(+int),
-                  theory(+any, +any),
+                  found_theory(+any, +any),
                   collected_theory(-any).
 
 :- chr_option(check_guard_bindings, on).
 
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
-'time is up' @ deadline(T1) \ past_deadline(T2) <=> T2 > T1.
+'time is up' @ deadline(T1) \ past_deadline(T2) <=> T2 > T1 | throw(error(time_expired, context(apperception_engine, T1))).
+'time is not up' @ past_deadline(_) <=> true.
+
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
-'theory found, under max count' @ theory(_, _), max_theories_count(Max)#passive \ theories_count(Count)#passive <=> Count < Max | Count1 is Count + 1, theories_count(Count1).
-'better theory found, at max count' @ theory(_, Rating1) \ theory(_, Rating2)#passive <=> better_rating(Rating1, Rating2) | true.
-'dismiss theory' @ theory(_, _) <=> true.
-'collecting theories' @ collected_theory(Collected), theory(Theory, _) <=> Collected = Theory.
+'theory found, under max count' @ found_theory(_, _), max_theories_count(Max)#passive \ theories_count(Count)#passive <=> Count < Max | Count1 is Count + 1, theories_count(Count1).
+'better theory found, at max count' @ found_theory(_, Rating1) \ found_theory(_, Rating2)#passive <=> better_rating(Rating1, Rating2) | true.
+'dismiss theory' @ found_theory(_, _) <=> true.
+'collecting theories' @ collected_theory(Collected), found_theory(Theory, _) <=> Collected = Theory.
 'done collecting theories' @ collected_theory(_) <=> true.
 
 % Given a sequence and some limits, find winning theories.
@@ -55,6 +57,7 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     sequence_as_trace(Sequence, SequenceAsTrace),
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TemplateEngine),
     best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories), !,
+    log(note, apperception_engine, 'THEORIES = ~p', [Theories]),
     destroy_engine(TemplateEngine).
 
 % Initialize apperception
@@ -72,10 +75,7 @@ set_deadline(ApperceptionLimits) :-
 % Throw an exception if time is expired
 check_time_expired :-
     get_time(Now),
-    (past_deadline(Now) -> 
-        throw(error(time_expired, context(apperception_engine, Now))) 
-        ; 
-        true).
+    past_deadline(Now).
 
 % Until time expired or a perfect solution is found,
 % grab N templates and concurrently find the best theories in each template.
@@ -85,11 +85,11 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories) :-
     catch(
         search_for_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine),
         error(Thrown, _),
-        (log(note, apperception_engine, 'Exception ~p', [Thrown]),
-         collect_best_theories(Theories),
+        (log(note, apperception_engine, 'EXCEPTION ~p', [Thrown]),
          destroy_engine(TemplateEngine)
         )
-    ).
+    ),
+    collect_best_theories(Theories).
 
 % Search for causal theories in multiple templates concurrently.
 % Terminates when an exception is thrown, either because a perfect solution was found in a template, or time's up,
@@ -106,7 +106,16 @@ search_for_theories(_, _, _).
 % Get N templates where N is the number of CPU cores.
 next_templates(TemplateEngine, Templates) :-
     current_prolog_flag(cpu_count, N),
-    findnsols(N, Template, engine_next(TemplateEngine, Template) , Templates).
+    get_templates(TemplateEngine, N, Templates).
+
+get_templates(TemplateEngine, N, [Template | Others]) :-
+    N > 0,
+    engine_next(TemplateEngine, Template),
+    log(note, apperception_engine, 'Template ~p', [Template]),
+    N1 is N -1,
+    !,
+    get_templates(TemplateEngine, N1, Others).
+get_templates(_, _, []).
 
 search_templates(ApperceptionLimits, Templates, SequenceAsTrace) :-
     length(Templates, N),
@@ -114,15 +123,14 @@ search_templates(ApperceptionLimits, Templates, SequenceAsTrace) :-
     pairs_keys_values(Pairs, Templates, Vars),
     findall(find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, Theories), member(Template-Theories, Pairs), Goals),
     concurrent(N, Goals, []),
-    new_theories(Vars).
+    forall(member(find_best_theories_in_template(_, _, _, Theories), Goals), new_theories(Theories)).
 
 % Find the best theories in a template within allowed limits
 find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, BestTheories) :-
-    setup_call_cleanup(
-        create_theory_engine(Template, TheoryEngine),
-        best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, 0, [], BestTheories),
-        destroy_engine(TheoryEngine)
-    ).
+    create_theory_engine(Template, TheoryEngine),
+    best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, 0, [], BestTheories),
+    log(note, apperception_engine, 'Best theories for template ~p are ~p', [Template, BestTheories]),
+    destroy_engine(TheoryEngine).
 
  best_theories_in_template(ApperceptionLimits, _, _, Count, BestTheories, BestTheories) :-
     ApperceptionLimits.keep_n_theories == Count, !.
@@ -133,7 +141,7 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, Be
     Count1 is Count + 1,
     % Rate the theory
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
-    log(note, apperception_engine, 'Found theory ~p', [RatedTheory]),
+    log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, RatedTheories, KeptRatedTheories),
     !,
     best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, Count1, KeptRatedTheories, BestTheories).
@@ -150,11 +158,11 @@ next_theory(TheoryEngine, Theory, Trace) :-
 handle_theory_engine_reponse(the(Theory-Trace), Theory, Trace).
 
 handle_theory_engine_reponse(no, _, _) :- 
-    log(note, apperception_engine, 'NO MORE THEORIES for the template'),
+    log(info, apperception_engine, 'NO MORE THEORIES for the template'),
     fail.
 
 handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine, _))), _, _) :-
-    log(note, apperception_engine, 'Time expired getting a theory from a template.'),
+    log(info, apperception_engine, 'Time expired getting a theory from a template.'),
     fail.
 
 % handle_theory_engine_reponse(exception(Exception), _, _) :-
@@ -163,9 +171,8 @@ handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine
 
 % Posit new rated theories. Only the best ones across templates are be retained.
  new_theories(RatedTheories) :-
-    forall( member(RatedTheory, RatedTheories),
-            new_theory(RatedTheory, RatedTheory.rating)
-    ).
+    forall(member(RatedTheory, RatedTheories),
+           found_theory(RatedTheory, RatedTheory.rating)).
 
 % Get all kept theories, sorted from best to worse.
 collect_best_theories(BestToWorstTheories) :-
@@ -190,7 +197,7 @@ destroy_engine(Engine) :-
 maybe_keep_theory(RatedTheory, _, KeptTheories, KeptTheories) :-
     Coverage-_ = RatedTheory.rating,
     Coverage == 0,
-    log(note, apperception_engine, 'DUD!'),
+    log(info, apperception_engine, 'DUD!'),
     !.
 % Throw an exception if a perfect theory is found to halt search
 maybe_keep_theory(RatedTheory, _, _, _) :-
@@ -201,7 +208,7 @@ maybe_keep_theory(RatedTheory, _, _, _) :-
 maybe_keep_theory(RatedTheory, KeepHowMany, KeptTheories, [RatedTheory | KeptTheories]) :-
     length(KeptTheories, L),
     L < KeepHowMany, !,
-    log(warn, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]).
+    log(warn, apperception_engine, 'Keeping new theory with rating ~p', [RatedTheory.rating]).
 
 maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
     add_if_better(RatedTheory, KeptTheories, UpdatedKeptTheories).
@@ -209,7 +216,7 @@ maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
 add_if_better(RatedTheory, BestTheoriesSoFar, [RatedTheory | Others]) :-
     find_worse(BestTheoriesSoFar, RatedTheory.rating, WorseTheory),
     !,
-    log(note, apperception_engine, 'Keeping theory with rating ~p', [RatedTheory.rating]),
+    log(info, apperception_engine, 'Keeping better theory with rating ~p', [RatedTheory.rating]),
     delete(BestTheoriesSoFar, WorseTheory, Others).
 
 add_if_better(_, BestTheoriesSoFar, BestTheoriesSoFar).
