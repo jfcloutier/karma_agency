@@ -13,7 +13,7 @@
 /*
 cd('sandbox/prototypes/apperception').
 [logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, rating, apperception_engine_chr].
-set_log_level(info).
+set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
@@ -44,9 +44,11 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'time is not up' @ past_deadline(_) <=> true.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
-'theory found, under max count' @ found_theory(_, _), max_theories_count(Max)#passive \ theories_count(Count)#passive <=> Count < Max | Count1 is Count + 1, theories_count(Count1).
-'better theory found, at max count' @ found_theory(_, Rating1) \ found_theory(_, Rating2)#passive <=> better_rating(Rating1, Rating2) | true.
-'dismiss theory' @ found_theory(_, _) <=> true.
+
+% TODO - These rules dont keep the N best theories
+'better theory exists over max count' @ max_theories_count(Max)#passive, theories_count(Count)#passive, found_theory(_, Rating1)#passive \ found_theory(_, Rating2)  <=> Count > Max, better_rating(Rating1, Rating2) | true.
+'keep theory' @ found_theory(_, _) \ theories_count(Count)#passive  <=> Count1 is Count + 1, theories_count(Count1).
+
 'collecting theories' @ collected_theory(Collected), found_theory(Theory, _) <=> Collected = Theory.
 'done collecting theories' @ collected_theory(_) <=> true.
 
@@ -84,12 +86,19 @@ check_time_expired :-
 best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories) :-
     catch(
         search_for_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine),
-        error(Thrown, _),
+        error(Thrown, Context),
         (log(note, apperception_engine, 'EXCEPTION ~p', [Thrown]),
-         destroy_engine(TemplateEngine)
+        % Handle found_perfect_theory by adding theory
+        handle_thrown(Thrown, Context),
+        destroy_engine(TemplateEngine)
         )
     ),
     collect_best_theories(Theories).
+
+handle_thrown(found_perfect_theory, context(_, RatedTheory)) :-
+    found_better_theory(RatedTheory).
+
+handle_thrown(_, _).
 
 % Search for causal theories in multiple templates concurrently.
 % Terminates when an exception is thrown, either because a perfect solution was found in a template, or time's up,
@@ -111,7 +120,7 @@ next_templates(TemplateEngine, Templates) :-
 get_templates(TemplateEngine, N, [Template | Others]) :-
     N > 0,
     engine_next(TemplateEngine, Template),
-    log(note, apperception_engine, 'Template ~p', [Template]),
+    log(info, apperception_engine, 'Template ~p', [Template]),
     N1 is N -1,
     !,
     get_templates(TemplateEngine, N1, Others).
@@ -170,9 +179,15 @@ handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine
 %     fail.
 
 % Posit new rated theories. Only the best ones across templates are be retained.
- new_theories(RatedTheories) :-
+new_theories(RatedTheories) :-
+    log(note, apperception_engine, 'NEW THEORIES ~p', [RatedTheories]),
     forall(member(RatedTheory, RatedTheories),
-           found_theory(RatedTheory, RatedTheory.rating)).
+           found_better_theory(RatedTheory)).
+
+found_better_theory(RatedTheory) :-
+    found_theory(RatedTheory, RatedTheory.rating), !.
+    
+found_better_theory(_).
 
 % Get all kept theories, sorted from best to worse.
 collect_best_theories(BestToWorstTheories) :-
@@ -232,20 +247,20 @@ find_worse(BestTheoriesSoFar, Coverage-Cost, WorstTheory) :-
 compare_theories(Delta, RatedTheory1, RatedTheory2) :-
     compare_ratings(Delta, RatedTheory1.rating, RatedTheory2.rating).
 
-compare_ratings(Coverage1-Cost1, Coverage2-Cost2) :-
+compare_ratings(Delta, Coverage1-Cost1, Coverage2-Cost2) :-
     (Coverage1 < Coverage2 ->
-      '<'
+      Delta = '<'
       ;
       Coverage1 > Coverage2 ->
-      '>'
+      Delta = '>'
       ;
       Cost1 > Cost2 ->
-      '<'
+      Delta = '<'
       ;
-      Cost1 > Cost2 ->
-      '>'
+      Cost1 < Cost2 ->
+      Delta = '>'
       ;
-      '='
+      Delta = '='
     ).
 
 better_rating(Rating1, Rating2) :-
