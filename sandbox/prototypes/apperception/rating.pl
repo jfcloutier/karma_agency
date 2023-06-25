@@ -31,7 +31,7 @@ rate_coverage_starting_at(Trace, Start, SequenceAsTrace, CoverageRating) :-
     findall(Rating, (member(TraceRound-SequenceRound, RoundPairs), rate_round_pair(TraceRound-SequenceRound, Rating)), Ratings),
     sum_list(Ratings, Sum),
     length(Ratings, L),
-    CoverageRating is div(Sum, L).
+    (L > 0 -> CoverageRating is div(Sum, L); CoverageRating = 0).
 
 pair_rounds([], _, _, _ , []).
 pair_rounds(_, _, [], RoundPairs, RoundPairs).
