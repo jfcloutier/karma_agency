@@ -17,7 +17,7 @@ set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, keep_n_theories: 3, time_secs: 120},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 120},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -95,7 +95,7 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories) :-
     ).
 
 handle_exception(Thrown, context(apperception_engine, Theories), Theories) :-
-    member(Thrown, [found_perfect_theory, time_expired]),
+    member(Thrown, [found_good_enough_theory, time_expired]),
     !,
 
     log(note, apperception_engine, 'Search terminated by ~p', [Thrown]).
@@ -171,7 +171,7 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, St
     % Rate the theory
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
-    maybe_keep_theory(RatedTheory, ApperceptionLimits.keep_n_theories, RatedTheories, KeptRatedTheories),
+    maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),
     !,
     best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, StartTime, Count1, KeptRatedTheories, BestTheories).
 
@@ -244,15 +244,15 @@ maybe_keep_theory(RatedTheory, _, KeptTheories, KeptTheories) :-
     log(info, apperception_engine, 'DUD!'),
     !.
 % Throw an exception if a perfect theory is found to halt search
-maybe_keep_theory(RatedTheory, _, _, _) :-
+maybe_keep_theory(RatedTheory, ApperceptionLimits, _, _) :-
     Coverage-_ = RatedTheory.rating,
-    Coverage == 100,
+    Coverage >= ApperceptionLimits.good_enough_coverage,
     found_better_theory(RatedTheory),
-    abort_with_best_theories(found_perfect_theory).   
+    abort_with_best_theories(found_good_enough_theory).   
 
-maybe_keep_theory(RatedTheory, KeepHowMany, KeptTheories, [RatedTheory | KeptTheories]) :-
+maybe_keep_theory(RatedTheory, ApperceptionLimits, KeptTheories, [RatedTheory | KeptTheories]) :-
     length(KeptTheories, L),
-    L < KeepHowMany, !,
+    L < ApperceptionLimits.keep_n_theories, !,
     log(warn, apperception_engine, 'Keeping new theory with rating ~p', [RatedTheory.rating]).
 
 maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
