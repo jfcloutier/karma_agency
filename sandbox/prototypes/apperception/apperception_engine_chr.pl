@@ -17,7 +17,7 @@ set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, keep_n_theories: 3, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, keep_n_theories: 3, time_secs: 120},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
