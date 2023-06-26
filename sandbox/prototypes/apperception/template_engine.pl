@@ -42,23 +42,23 @@ init_template_counter :-
     set_global(apperception, template_engine/template_count, 0).
 
 %% For testing
-theory_template(_, _, Template) :-
-    between(30, 50, N),
-    Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300},
-                        type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
-                        min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
+% theory_template(_, _, Template) :-
+%     between(30, 50, N),
+%     Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300},
+%                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
+%                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
 
-% theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
-%     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
-%     % generated
-%     signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
-%     reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
-%     % generated
-%     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
-%     % implied
-%     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-%     Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, limits:TheoryLimits},
-%     increment_template_count.
+theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
+    scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
+    % generated
+    signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
+    reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
+    % generated
+    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
+    % implied
+    theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
+    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, limits:TheoryLimits},
+    increment_template_count.
 
 reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
     allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
