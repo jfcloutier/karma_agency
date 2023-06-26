@@ -151,15 +151,8 @@ search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-
     pairs_keys_values(Pairs, Templates, Vars),
     findall(find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, StartTime, Theories), member(Template-Theories, Pairs), Goals),
     concurrent(N, Goals, []),
-    % call_all(Goals),
     !,
     keep_best_theories(Goals).
-
-    % call_all([]).
-    % call_all([Goal | Others]) :-
-    %     call(Goal),
-    %     !,
-    %     call_all(Others).
 
 % Find the best theories in a template within allowed limits
 find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, StartTime, BestTheories) :-
