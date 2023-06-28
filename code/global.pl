@@ -2,8 +2,8 @@
 
 % Facilities for creating, updating and deleting non-backtrackable variables containing dictionaries.
 /*
-cd('sandbox/prototypes/apperception').
-[global].
+[load].
+[code(global)].
 set_global(test, a/b, 1),
 get_global(test, a/b, Value),
 delete_global(test).

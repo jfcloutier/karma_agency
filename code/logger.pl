@@ -1,8 +1,8 @@
 :- module(logger, [log/3, log/4, log/5, set_log_level/1, log_level/1, ignore_log_topic/1, reset_logging/0]).
 
 /*
-cd('sandbox/prototypes/apperception').
-[logger].
+[load].
+[code(logger)].
 
 reset_logging,
 log(debug, test, 'This is a debug test'),

@@ -5,8 +5,8 @@
 % and a template (which sets the scope of the search space).
 
 /*
-cd('sandbox/prototypes/apperception').
-[logger, global, type_signature, theory_engine].
+[load].
+[code(logger), code(global), apperception(type_signature), apperception(theory_engine)].
 set_log_level(note).
 ObjectTypes = [led],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ],
@@ -21,9 +21,9 @@ theory_engine:theory(Template, Theory, Trace).
 
 :- use_module(library(lists)).
 :- use_module(library(aggregate)).
-:- use_module(logger).
-:- use_module(domains).
-:- use_module(global).
+:- use_module(code(logger)).
+:- use_module(apperception(domains)).
+:- use_module(code(global)).
 :- use_module(library(chr)).
 
 % Constraints

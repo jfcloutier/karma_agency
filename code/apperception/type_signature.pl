@@ -6,12 +6,12 @@
     binary_predicate_name/2
     ]).
 
-% cd('sandbox/prototypes/apperception').
-% [logger, leds_observations, domains, sequence, type_signature].
+% [load].
+% [code(logger), tests(apperception/leds_observations), apperception(domains), apperception(sequence), apperception(type_signature)].
 % sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
 
-:- use_module(logger).
-:- use_module(domains).
+:- use_module(code(logger)).
+:- use_module(apperception(domains)).
 
 % The minimum type signature manifested by a sequence of obaservations.
 min_type_signature(Sequence, TypeSignature) :-

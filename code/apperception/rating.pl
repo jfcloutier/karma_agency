@@ -1,6 +1,6 @@
 :- module(rating, [rate_theory/4, count_elements/2]).
 
-:- use_module(logger).
+:- use_module(code(logger)).
 
 % Rate how well the trace covers the sequence and how simple the theory is.
 rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory) :-

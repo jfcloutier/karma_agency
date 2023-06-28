@@ -11,8 +11,10 @@
 %% It rejects those that are not unified and retains the highest rated ones found so far.
 
 /*
-cd('sandbox/prototypes/apperception').
-[logger, leds_observations, sequence, type_signature, domains, global, template_engine, theory_engine, rating, apperception_engine].
+[load].
+[code(logger), code(global)].
+[apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
+[tests(apperception/leds_observations)].
 set_log_level(note).
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
@@ -21,11 +23,11 @@ ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureEx
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
-:- use_module(logger).
-:- use_module(global).
-:- use_module(template_engine).
-:- use_module(theory_engine).
-:- use_module(rating).
+:- use_module(code(logger)).
+:- use_module(code(global)).
+:- use_module(apperception(template_engine)).
+:- use_module(apperception(theory_engine)).
+:- use_module(apperception(rating)).
 :- use_module(library(chr)).
 
 % Constraints

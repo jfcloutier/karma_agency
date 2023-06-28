@@ -13,8 +13,8 @@
 
 
 /*
-cd('sandbox/prototypes/apperception').
-[logger, leds_observations, sequence, type_signature, domains, global, template_engine].
+[load].
+[code(logger), code(global), tests(apperception/leds_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -26,10 +26,10 @@ engine_destroy(TheoryTemplateEngine).
 
 :- module(template_engine, [create_theory_template_engine/3]).
 
-:- use_module(logger).
-:- use_module(global).
-:- use_module(type_signature).
-:- use_module(domains).
+:- use_module(code(logger)).
+:- use_module(code(global)).
+:- use_module(apperception(type_signature)).
+:- use_module(apperception(domains)).
 
 %% Create an engine that produces theory templates on request
 create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine) :-
