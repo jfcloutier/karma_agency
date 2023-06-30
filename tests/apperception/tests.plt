@@ -1,5 +1,8 @@
 
-:- begin_tests(apperception).
+/*
+[load].
+['tests/apperception/apperceive.plt'].
+run_tests.
+*/
 
-
-:- end_tests(apperception).
+['tests/apperception/apperceive.plt'].

@@ -1,4 +1,6 @@
 :- [
-    'tests/actor_model/tests.plt', 
-    'tests/apperception/tests.plt'
+    'tests/logger.plt', 
+    'tests/global.plt',
+    'tests/actor_model/supervised_actors.plt', 
+    'tests/apperception/apperceive.plt'
    ].
