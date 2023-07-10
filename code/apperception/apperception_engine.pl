@@ -15,12 +15,10 @@
 [code(logger), code(global)].
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations)].
-set_log_level(note).
+set_log_level(warn).
 sequence(leds_observations, Sequence), 
-%% WHY IS THIS NEEDED OR ELSE NO THEORIES FOUND???
-min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 120},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 30},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -28,6 +26,7 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 :- use_module(code(global)).
 :- use_module(apperception(template_engine)).
 :- use_module(apperception(theory_engine)).
+:- use_module(apperception(type_signature)).
 :- use_module(apperception(rating)).
 :- use_module(library(chr)).
 
@@ -47,9 +46,9 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'time is not up' @ before_deadline(_) <=> true.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
-'theories count' @ max_theories_count(Max)#passive \ theories_count(Count) <=> Count > Max | theories_count(Max).
+'theories count ceiling' @ max_theories_count(Max)#passive \ theories_count(Count) <=> Count > Max | theories_count(Max).
 
-'better theory exists over max count' @ max_theories_count(Max)#passive, theories_count(Count)#passive, better_theory(_, Rating1)#passive \ better_theory(_, Rating2) <=> 
+'better theory exists over max count' @ max_theories_count(Max)#passive, theories_count(Count)#passive, better_theory(_, Rating1) \ better_theory(_, Rating2) <=> 
                                             Count >= Max, better_rating(Rating1, Rating2) | true.
 'keep theory' @ better_theory(_, _) \ theories_count(Count)#passive  <=> Count1 is Count + 1, theories_count(Count1).
 

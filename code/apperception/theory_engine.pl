@@ -280,6 +280,7 @@ theory(Template, Theory, Trace) :-
                 (
                 reset_counter(theory_engine/max_traces, 10),
                 initial_conditions(Template),
+                delete_global(trace),
                 trace(Trace),
                 extract_theory(Theory, Trace)
                 ),

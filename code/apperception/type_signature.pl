@@ -11,6 +11,7 @@
 % sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
 
 :- use_module(code(logger)).
+:- use_module(code(global)).
 :- use_module(apperception(domains)).
 
 % The minimum type signature manifested by a sequence of obaservations.

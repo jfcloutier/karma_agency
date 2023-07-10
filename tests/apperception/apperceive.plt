@@ -8,18 +8,15 @@ run_tests.
 
 :- use_module(code(logger)).
 :- use_module(apperception(sequence)).
-:- use_module(apperception(type_signature)).
 :- use_module(apperception(apperception_engine)).
 :- use_module(tests(apperception/leds_observations)).
 
 test(find_causal_theories) :-
-    set_log_level(note),
+    set_log_level(warn),
     sequence(leds_observations, Sequence), 
     log(note, tests, 'Sequence is ~p', [Sequence]),
-    % WHY IS THIS NEEDED ELSE NO THEORIES FOUND???
-    min_type_signature(Sequence, MinTypeSignature), 
     MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
-    ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 120},
+    ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 30},
     apperceive(Sequence, ApperceptionLimits, Theories),
     length(Theories, Length),
     assertion(Length > 0).
