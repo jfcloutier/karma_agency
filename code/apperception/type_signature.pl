@@ -164,6 +164,7 @@ make_argument_type(ObjectTypes, _, ObjectType) :-
 make_argument_type(_, DomainTypes, value_type(DomainType)) :-
     member(DomainType, DomainTypes).
 
+% Finds the maximum index used in a list of signature element, e.g nmax index is 2 in [object_type(type_1), object_type(type_2)]
 max_index([], _, _, MaxIndex, MaxIndex).
 max_index([Term | Others], Prefix, Position, Max, MaxIndex) :-
     Term =.. List,

@@ -1,6 +1,6 @@
 % An engine for generating on demand theory templates of mostly increasing complexity.
 
-% Each template specifies a search space theories explaining a sequence of observations.
+% Each template specifies a search space for theories explaining a sequence of observations.
 % Since it is not expected that there will be enough time to search each template for its implied theories,
 % the sequence of templates generated on demand is randomized, but favoring simple templates first.
 
@@ -8,7 +8,7 @@
 %%
 %% Limits impose max object types, max objects and max predicate types on tuples tuple(NumObjectTypes, NumObjects, NumPredicateTypes).
 %% Produce all tuples, offered in semi-random order, favoring frugality.
-%% limit the number of templates generated per tuple so that any one tuple does not hog template generation
+%% Limit the number of templates generated per tuple so that any one tuple does not hog template generation
 %% For each tuple, generate templates.
 
 
@@ -72,12 +72,12 @@ increment_template_count :-
     set_global(apperception, template_engine/template_count, Inc),
     log(info, template_engine, 'COUNT IS NOW ~p', [Inc]).
 
-allow_max_templates(TypeSignature,
+allow_max_templates(MinTypeSignature,
                     tuple(NumObjectTypes, NumObjects, NumPredicateTypes), 
                     Max) :-
-    length(TypeSignature.object_types, MinObjectTypes),
-    length(TypeSignature.objects,MinObjects),
-    length(TypeSignature.predicate_types, MinPredicates),
+    length(MinTypeSignature.object_types, MinObjectTypes),
+    length(MinTypeSignature.objects,MinObjects),
+    length(MinTypeSignature.predicate_types, MinPredicates),
     ObjectTypesCount is MinObjectTypes + NumObjectTypes,
     ObjectsCount is MinObjects + NumObjects,
     PredicatesCount is MinPredicates + NumPredicateTypes,
