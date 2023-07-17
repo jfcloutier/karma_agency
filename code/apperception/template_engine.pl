@@ -14,7 +14,7 @@
 
 /*
 [load].
-[code(logger), code(global), tests(apperception/leds_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
+[code(logger), tests(apperception/leds_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -27,19 +27,13 @@ engine_destroy(TheoryTemplateEngine).
 :- module(template_engine, [create_theory_template_engine/3]).
 
 :- use_module(code(logger)).
-:- use_module(code(global)).
 :- use_module(apperception(type_signature)).
 :- use_module(apperception(domains)).
 
 %% Create an engine that produces theory templates on request
 create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine) :-
-    init_template_counter,
+    log(info, template_engine, 'Creating template engine'),
     engine_create(Template, theory_template(MinTypeSignature, MaxSignatureExtension, Template), TheoryTemplateEngine).
-
-% Add a value to the global variable to keep count of templates produced vs maximum allowed
-init_template_counter :-
-    set_global(apperception, template_engine/max_templates, 0),
-    set_global(apperception, template_engine/template_count, 0).
 
 %% For testing
 % theory_template(_, _, Template) :-
@@ -52,36 +46,24 @@ theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
     % generated
     signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
-    reset_template_counter(MinTypeSignature, SignatureExtensionTuple),
+    allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
     % generated
     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, limits:TheoryLimits},
-    increment_template_count.
+    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, 
+                        limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
 
-reset_template_counter(MinTypeSignature, SignatureExtensionTuple) :-
-    allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
-    set_global(apperception, template_engine/max_templates, Max),
-    set_global(apperception, template_engine/template_count, 0),
-    log(info, template_engine, 'MAX ~p TEMPLATES ALLOWED', [Max]).
-
-increment_template_count :-
-    get_global(apperception, template_engine/template_count, Count),
-    Inc is Count + 1,
-    set_global(apperception, template_engine/template_count, Inc),
-    log(info, template_engine, 'COUNT IS NOW ~p', [Inc]).
-
-allow_max_templates(MinTypeSignature,
-                    tuple(NumObjectTypes, NumObjects, NumPredicateTypes), 
-                    Max) :-
+allow_max_templates(MinTypeSignature, Tuple, Max) :-
+    tuple(NumObjectTypes, NumObjects, NumPredicateTypes) = Tuple,
     length(MinTypeSignature.object_types, MinObjectTypes),
     length(MinTypeSignature.objects,MinObjects),
     length(MinTypeSignature.predicate_types, MinPredicates),
     ObjectTypesCount is MinObjectTypes + NumObjectTypes,
     ObjectsCount is MinObjects + NumObjects,
     PredicatesCount is MinPredicates + NumPredicateTypes,
-    Max is ObjectTypesCount * ObjectsCount * PredicatesCount.
+    Max is ObjectTypesCount * ObjectsCount * PredicatesCount,
+    log(warn, template_engine, 'Max ~p templates for tuple ~p', [Max, Tuple]).
 
 scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     random_permutation(TypeSignature.object_types, ScrambledObjectTypes),

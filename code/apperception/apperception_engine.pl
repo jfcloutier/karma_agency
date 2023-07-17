@@ -12,7 +12,7 @@
 
 /*
 [load].
-[code(logger), code(global)].
+[code(logger)].
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations)].
 set_log_level(warn).
@@ -23,7 +23,6 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
 :- use_module(code(logger)).
-:- use_module(code(global)).
 :- use_module(apperception(template_engine)).
 :- use_module(apperception(theory_engine)).
 :- use_module(apperception(type_signature)).
@@ -34,6 +33,9 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 :- chr_constraint deadline(+float),
                   before_deadline(+float),
+                  templates_tuple(+any, +int),
+                  tuple_templates_count(+int),
+                  inc_templates_count,
                   max_theories_count(+int),
                   theories_count(+int),
                   better_theory(+any, +any),
@@ -44,6 +46,12 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
 'time is up' @ deadline(T1) \ before_deadline(T2) <=> T1 < T2 | fail.
 'time is not up' @ before_deadline(_) <=> true.
+
+'new templates tuple' @ templates_tuple(_, _) \ templates_tuple(_, _)#passive, tuple_templates_count(_)#passive <=> tuple_templates_count(0).
+'first templates tuple' @ templates_tuple(_,_) ==> tuple_templates_count(0).
+'increment tuple templates count' @ templates_tuple(_, Max) \ tuple_templates_count(Count)#passive, inc_templates_count <=> 
+                                        Count < Max | Count1 is Count + 1, tuple_templates_count(Count1).
+'max tuple template count reached' @ inc_templates_count <=> fail.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
 'theories count ceiling' @ max_theories_count(Max)#passive \ theories_count(Count) <=> Count > Max | theories_count(Max).
@@ -138,13 +146,24 @@ get_templates(_, _, []).
 next_template_from_engine(TemplateEngine, Template) :-
     engine_next_reified(TemplateEngine, Answer),
     !,
-    handle_template_engine_answer(Answer, Template).
+    handle_template_engine_answer(Answer, Template),
+    got_template_from(TemplateEngine).
 
-handle_template_engine_answer(the(Template), Template).
+% Restart the count of templates if the template was generated from a new tuple
+handle_template_engine_answer(the(Template), Template) :-
+    templates_tuple(Template.tuple, Template.max_tuple_templates).
 handle_template_engine_answer(no, _) :- fail.
 handle_template_engine_answer(throw(Exception), _) :-
     log(note, apperception_engine, 'Template engine threw ~p', [Exception]),
     fail.
+
+% Let the Template Engine know whether we've obtained the maximum number of templates for the current tuple.
+got_template_from(TemplateEngine) :-
+    inc_templates_count ->
+        engine_post(TemplateEngine, max_tuple_templates_reached(false))
+        ;
+        log(warn, apperception_engine, "MAX TEMPLATES COUNT REACHED FOR TUPLE"),
+        engine_post(TemplateEngine, max_tuple_templates_reached(true)).
 
 search_templates(_, [], _, _) :- !, fail.
 search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-

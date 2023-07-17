@@ -11,7 +11,6 @@
 % sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
 
 :- use_module(code(logger)).
-:- use_module(code(global)).
 :- use_module(apperception(domains)).
 
 % The minimum type signature manifested by a sequence of obaservations.
@@ -21,7 +20,7 @@ min_type_signature(Sequence, TypeSignature) :-
     setof(PredicateType, sequence_implies_predicate_types(Sequence,  PredicateType), PredicateTypes),
     TypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}.
 
-% An extended type signature given a starting type signature, extension bounds, and global counters to limit the number of extensions that can be produced.
+% An extended type signature given a starting type signature, extension bounds, and a tuple with limits on the extensions that can be produced.
 extended_type_signature(TypeSignature,
                         tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
                         ExtendedTypeSignature) :-
@@ -180,7 +179,11 @@ max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
     max_index(Others, Prefix, Position, Max, MaxIndex).
 
 max_template_count_reached :-
-    get_global(apperception, template_engine/max_templates, Max),
-    get_global(apperception, template_engine/template_count, Max),
-    log(warn, type_signature, 'MAX ~p TEMPLATES EXCEEDED!', [Max]).
+    catch(
+        (
+            engine_fetch(max_tuple_templates_reached(true)), 
+            log(warn, template_engine, 'FETCHED max_tuple_templates_reached(true)')
+        ),
+        _, 
+        fail).
 
