@@ -47,7 +47,8 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'time is up' @ deadline(T1) \ before_deadline(T2) <=> T1 < T2 | fail.
 'time is not up' @ before_deadline(_) <=> true.
 
-'new templates tuple' @ templates_tuple(_, _) \ templates_tuple(_, _)#passive, tuple_templates_count(_)#passive <=> tuple_templates_count(0).
+'same template tuple' @ templates_tuple(Tuple, _) \ templates_tuple(Tuple, _) <=> true.
+'replacement templates tuple' @ templates_tuple(Tuple1, _) \ templates_tuple(Tuple2, _)#passive, tuple_templates_count(_)#passive <=> Tuple1 \== Tuple2 | tuple_templates_count(0).
 'first templates tuple' @ templates_tuple(_,_) ==> tuple_templates_count(0).
 'increment tuple templates count' @ templates_tuple(_, Max) \ tuple_templates_count(Count)#passive, inc_templates_count <=> 
                                         Count < Max | Count1 is Count + 1, tuple_templates_count(Count1).
@@ -160,10 +161,20 @@ handle_template_engine_answer(throw(Exception), _) :-
 % Let the Template Engine know whether we've obtained the maximum number of templates for the current tuple.
 got_template_from(TemplateEngine) :-
     inc_templates_count ->
-        engine_post(TemplateEngine, max_tuple_templates_reached(false))
+        safe_engine_post(TemplateEngine, max_tuple_templates_reached(false))
         ;
-        log(warn, apperception_engine, "MAX TEMPLATES COUNT REACHED FOR TUPLE"),
-        engine_post(TemplateEngine, max_tuple_templates_reached(true)).
+        log(warn, apperception_engine, 'Max templates reached for tuple'),
+        safe_engine_post(TemplateEngine, max_tuple_templates_reached(true)).
+
+% Ignore permission errors if previous post has not yet been fetched in the engine
+safe_engine_post(Engine, Term) :-
+    catch(
+    (
+        engine_post(Engine, Term),
+        log(debug, apperception_engine, 'Posted ~p to engine', [Term])
+    ),
+    Error,
+    log(debug, apperception_engine, 'Ignoring error ~p posting ~p to engine', [Error, Term])).
 
 search_templates(_, [], _, _) :- !, fail.
 search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-

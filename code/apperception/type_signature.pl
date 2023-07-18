@@ -179,11 +179,19 @@ max_index([_ | Others], Prefix, Position, Max, MaxIndex) :-
     max_index(Others, Prefix, Position, Max, MaxIndex).
 
 max_template_count_reached :-
+    max_template_count_reached(Reached),
+    Reached == true.
+
+max_template_count_reached(Reached) :-
     catch(
         (
-            engine_fetch(max_tuple_templates_reached(true)), 
-            log(warn, template_engine, 'FETCHED max_tuple_templates_reached(true)')
+            engine_fetch(max_tuple_templates_reached(Reached)), 
+            log(debug, template_engine, 'FETCHED max_tuple_templates_reached(~p)', [Reached])
         ),
-        _, 
-        fail).
+        _,
+        (
+            log(debug, template_engine, 'FAILED TO FETCH max_tuple_templates_reached/1'),
+            Reached = false
+        )
+        ).
 
