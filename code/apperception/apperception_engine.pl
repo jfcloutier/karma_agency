@@ -47,10 +47,10 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'time is up' @ deadline(T1) \ before_deadline(T2) <=> T1 < T2 | fail.
 'time is not up' @ before_deadline(_) <=> true.
 
-'same template tuple' @ templates_tuple(Tuple, _) \ templates_tuple(Tuple, _) <=> true.
-'replacement templates tuple' @ templates_tuple(Tuple1, _) \ templates_tuple(Tuple2, _)#passive, tuple_templates_count(_)#passive <=> Tuple1 \== Tuple2 | tuple_templates_count(0).
-'first templates tuple' @ templates_tuple(_,_) ==> tuple_templates_count(0).
-'increment tuple templates count' @ templates_tuple(_, Max) \ tuple_templates_count(Count)#passive, inc_templates_count <=> 
+'new templates tuple' @ templates_tuple(Tuple1, _) \ templates_tuple(Tuple2, _)#passive <=> Tuple1 \== Tuple2 | tuple_templates_count(0).
+'same template tuple' @ templates_tuple(_, _) \ templates_tuple(_, _)#passive <=> true.
+'one templates count' @ tuple_templates_count(_) \ tuple_templates_count(_)#passive <=> true.
+'increment tuple templates count' @ templates_tuple(_, Max)#passive \ tuple_templates_count(Count)#passive, inc_templates_count <=> 
                                         Count < Max | Count1 is Count + 1, tuple_templates_count(Count1).
 'max tuple template count reached' @ inc_templates_count <=> fail.
 
@@ -69,6 +69,7 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     init(ApperceptionLimits),
     min_type_signature(Sequence, MinTypeSignature),
     sequence_as_trace(Sequence, SequenceAsTrace),
+    tuple_templates_count(0),
     create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TemplateEngine),
     !,
     best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories),

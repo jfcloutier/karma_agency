@@ -186,7 +186,8 @@ max_template_count_reached(Reached) :-
     catch(
         (
             engine_fetch(max_tuple_templates_reached(Reached)), 
-            log(debug, template_engine, 'FETCHED max_tuple_templates_reached(~p)', [Reached])
+            Reached == true ->
+                log(warn, template_engine, 'FETCHED max_tuple_templates_reached(~p)', [Reached])
         ),
         _,
         (

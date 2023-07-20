@@ -63,7 +63,7 @@ allow_max_templates(MinTypeSignature, Tuple, Max) :-
     ObjectsCount is MinObjects + NumObjects,
     PredicatesCount is MinPredicates + NumPredicateTypes,
     Max is ObjectTypesCount * ObjectsCount * PredicatesCount,
-    log(warn, template_engine, 'Max ~p templates for tuple ~p', [Max, Tuple]).
+    log(warn, template_engine, 'Max ~p templates allowed for tuple ~p', [Max, Tuple]).
 
 scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     random_permutation(TypeSignature.object_types, ScrambledObjectTypes),
