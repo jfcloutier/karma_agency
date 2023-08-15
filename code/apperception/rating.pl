@@ -7,7 +7,7 @@ rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory) :-
     rate_coverage(Trace, SequenceAsTrace, CoverageRating),
     rate_cost(Theory, Cost),
     Rating = CoverageRating-Cost,
-    log(info, apperception_engine, 'Theory coverage ~p, cost ~p', [CoverageRating, Cost]),
+    log(note, apperception_engine, 'Theory ~p with trace ~p over sequence ~p has coverage ~p, cost ~p', [Theory, Trace, SequenceAsTrace, CoverageRating, Cost]),
     put_dict(rating, Theory, Rating, RatedTheory).
 
 % Find the best coverage and rate it as a percentage.

@@ -3,12 +3,15 @@
     extended_type_signature/3,
     all_predicate_names/2,
     all_binary_predicate_names/2, 
-    binary_predicate_name/2
+    binary_predicate_name/2,
+    applicable_predicate_name/3,
+    predicates_observed_to_vary/3
     ]).
-
-% [load].
-% [code(logger), tests(apperception/leds_observations), apperception(domains), apperception(sequence), apperception(type_signature)].
-% sequence(leds_observations, Sequence), min_type_signature(Sequence, TypeSignature).
+/*
+[load].
+[code(logger), tests(apperception/leds_observations), apperception(domains), apperception(sequence), apperception(type_signature)].
+sequence(leds_observations, Sequence), min_type_signature(Sequence, MinTypeSignature), predicates_observed_to_vary(MinTypeSignature, Sequence, PredicateNames).
+*/
 
 :- use_module(code(logger)).
 :- use_module(apperception(domains)).
@@ -33,6 +36,20 @@ extended_type_signature(TypeSignature,
     sort(ExtendedObjects, Objects),
     ExtendedTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes, typed_variables:TypedVariables}.
 
+% The names of all predicates observed to vary
+predicates_observed_to_vary(TypeSignature, Sequence, PredicateNames) :-
+    all_predicate_names(TypeSignature, AllPredicateNames),
+    setof(PredicateName, (member(PredicateName, AllPredicateNames), observed_to_vary(PredicateName, Sequence)), PredicateNames).
+
+observed_to_vary(PredicateName, Sequence) :-
+    select(State1, Sequence, RestOfSequence),
+    member(Observation1, State1),
+    Observation1 =.. [_, PredicateName, [Object1, Value1], _],
+    member(State2, RestOfSequence),
+    member(Observation2, State2),
+    Observation2 =.. [_, PredicateName, [Object1, Value2], _],
+    Value1 \== Value2,
+    !.
 
 all_predicate_names(TypeSignature, AllPredicateNames) :-
     PredicateTypes = TypeSignature.predicate_types,
@@ -46,6 +63,11 @@ all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames) :-
 % The name of a predicate in a list of predicate types.
 predicate_name(PredicateTypes, PredicateName) :-
     member(predicate(PredicateName, _), PredicateTypes).
+
+% The name of a predicate which can be applied to a type of object.
+applicable_predicate_name(TypeSignature, ObjectType, PredicateName) :-
+    member(predicate(PredicateName, ArgTypes), TypeSignature.predicate_types),
+    member(object_type(ObjectType), ArgTypes).
 
 % The name of a binary predicate in a list of predicate types.
 binary_predicate_name(PredicateTypes, BinaryPredicateName) :-

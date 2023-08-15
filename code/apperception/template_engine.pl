@@ -17,32 +17,33 @@
 [code(logger), tests(apperception/leds_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
 sequence(leds_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
+predicates_observed_to_vary(MinTypeSignature, Sequence, VaryingPredicateNames),
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
-create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine),
+create_theory_template_engine(MinTypeSignature, VaryingPredicateName, MaxSignatureExtension, TheoryTemplateEngine),
 engine_next(TheoryTemplateEngine, Template1),
 engine_next(TheoryTemplateEngine, Template2),
 engine_destroy(TheoryTemplateEngine).
 */
 
-:- module(template_engine, [create_theory_template_engine/3]).
+:- module(template_engine, [create_theory_template_engine/4]).
 
 :- use_module(code(logger)).
 :- use_module(apperception(type_signature)).
 :- use_module(apperception(domains)).
 
 %% Create an engine that produces theory templates on request
-create_theory_template_engine(MinTypeSignature, MaxSignatureExtension, TheoryTemplateEngine) :-
+create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, TheoryTemplateEngine) :-
     log(info, template_engine, 'Creating template engine'),
-    engine_create(Template, theory_template(MinTypeSignature, MaxSignatureExtension, Template), TheoryTemplateEngine).
+    engine_create(Template, theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template), TheoryTemplateEngine).
 
 %% For testing
 % theory_template(_, _, Template) :-
 %     between(30, 50, N),
-%     Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300},
+%     Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
 %                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
 
-theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
+theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template) :-
     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
     % generated
     signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
@@ -51,7 +52,7 @@ theory_template(MinTypeSignature, MaxSignatureExtension, Template) :-
     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, 
+    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
                         limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
 
 allow_max_templates(MinTypeSignature, Tuple, Max) :-
@@ -97,9 +98,14 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
     MaxConstraintElements is PredicateTypesCount * 2,
-    UpperMaxRules is ObjectsCount * PredicateTypesCount,
-    between(1, UpperMaxRules, MaxCausalRules),
-    between(1, UpperMaxRules, MaxStaticRules),
+ %   UpperMaxRules is ObjectsCount * PredicateTypesCount, % Too big
+
+ % TODO - REVERT
+    % UpperMaxRules is PredicateTypesCount,
+    % between(1, UpperMaxRules, MaxCausalRules),
+    % between(1, UpperMaxRules, MaxStaticRules),
+     between(1, 1, MaxCausalRules),
+     between(1, 1, MaxStaticRules),
     MaxStaticElements is MaxStaticRules * ObjectsCount * PredicateTypesCount,
     MaxCausalElements is MaxCausalRules * ObjectsCount * PredicateTypesCount,
     MaxElements is 2 * (MaxConstraintElements + MaxStaticElements + MaxCausalElements),

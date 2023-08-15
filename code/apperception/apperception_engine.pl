@@ -15,10 +15,10 @@
 [code(logger)].
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations)].
-set_log_level(warn).
+set_log_level(note).
 sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:2, max_objects:2, max_predicate_types:2},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, max_theories_per_template: 1000, good_enough_coverage: 100, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -64,13 +64,14 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'collecting theories' @ collected_theory(Collected), better_theory(Theory, _) <=> Collected = Theory.
 'done collecting theories' @ collected_theory(_) <=> true.
 
-% Given a sequence and some limits, find winning theories.
+% Given a sequence of observations and some limits, find good causal theories.
 apperceive(Sequence, ApperceptionLimits, Theories) :-
     init(ApperceptionLimits),
     min_type_signature(Sequence, MinTypeSignature),
+    predicates_observed_to_vary(MinTypeSignature, Sequence, VaryingPredicateNames),
     sequence_as_trace(Sequence, SequenceAsTrace),
     tuple_templates_count(0),
-    create_theory_template_engine(MinTypeSignature, ApperceptionLimits.max_signature_extension, TemplateEngine),
+    create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, ApperceptionLimits.max_signature_extension, TemplateEngine),
     !,
     best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories),
     log(note, apperception_engine, 'THEORIES = ~p~n', [Theories]),

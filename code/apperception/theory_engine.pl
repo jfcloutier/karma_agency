@@ -7,16 +7,21 @@
 /*
 [load].
 [code(logger), code(global), apperception(type_signature), apperception(theory_engine)].
-set_log_level(note).
-ObjectTypes = [led],
-PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)]), predicate(next_to, [object_type(led),  object_type(led)]), predicate(behind, [object_type(led),  object_type(led)]) ],
-Objects = [object(led, light1), object(led, light2)],
-TypedVariables = [variables(led, 2)],
-TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:PredicateTypes, objects:Objects, typed_variables:TypedVariables},
-MinTypeSignature = type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]},
-Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 300},
-Template = template{type_signature:TypeSignature, min_type_signature:MinTypeSignature, limits:Limits},
+set_log_level(info).
+ObjectTypes = [object_type(led)],
+PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)])],
+Objects = [object(led, a), object(led, b)],
+TypedVariables = [variables(led, 3)],
+MinTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes},
+TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:[predicate(pred_1, [object_type(led),  object_type(led)]) | PredicateTypes], objects:[object(led, object_1) | Objects], typed_variables:TypedVariables},
+Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 30},
+Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
 theory_engine:theory(Template, Theory, Trace).
+*/
+
+/* TODO -
+Every varying, observed predicate must appear in the head of at least one causal rule set ===> imposes minimum number of causal rules)
+Every varying, observed predicate must appear in the body of at least one causal rule set ===> imposes minimum number of causal rules)
 */
 
 :- use_module(library(lists)).
@@ -58,7 +63,11 @@ theory_engine:theory(Template, Theory, Trace).
                   posited_fact(+fact, +round),
                   related(+object, +object, +round),
                   object_in_a_fact(+object),
+                  predicate_applied(+predicate_name, +object),
+                  predicate_caused(+predicate_name),
+                  predicate_causing(+predicate_name),
                   relevant_rule(+rule_kind),
+                  predicate_type_used_in_rule(+rule_kind, +predicate_name),
                   fact_about(+any),
                   applying_rules(+rule_kind),
                   done_applying_rules/0,
@@ -137,6 +146,9 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'repeated rule' @ posited_rule(Kind, H1, B1)#passive \ posited_rule(Kind, H2, B2) <=>
     rule_repeats(H1-B1, H2-B2) | fail.
 'ungroundable head' @ posited_rule(_, H, B) <=> ungroundable_head(H-B) | fail.
+'unrelated vars' @ posited_rule(_, H, B) <=> unrelated_vars(H-B) | fail.
+'predicate used in rule' @ posited_rule(Kind, H, B) \ predicate_type_used_in_rule(Kind, Name) <=>  memberchk(fact(Name, _), [H | B]) | true.
+'predicate not used in rule' @ predicate_type_used_in_rule(_,_) <=> fail.
 
 % Validating static rules
 'static rule head contradicted in body' @ posited_rule(static, Head, Body) <=> contradicted_head(Head, Body) | fail.
@@ -148,8 +160,14 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Validating causal rules
 'idempotent causal rule' @ posited_rule(causal, H, B) <=> idempotent_causal_rule(H-B) | fail.
+'predicate caused' @ posited_rule(causal, fact(N, _), _) \ predicate_caused(N) <=> true.
+'predicate not caused' @ predicate_caused(_) <=> false.
+'predicate causing' @ posited_rule(causal, _, B) \ predicate_causing(N) <=> memberchk(fact(N, _), B) | true.
+'predicate not causing' @ predicate_causing(_) <=> false.
+
 
 % Keeping and counting a rule
+'keep higher count' @ rules_count(Kind, C2) \ rules_count(Kind, C1) <=> C2 >= C1 | true. 
 'keep rule, count it' @ posited_rule(Kind, _, _ ) \ rules_count(Kind, Count)#passive <=> Count1 is Count + 1, rules_count(Kind, Count1).
 'keep rule, start count' @ posited_rule(Kind, _, _)  ==> rules_count(Kind, 1).
 
@@ -168,12 +186,14 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Accumulating object relations
 'remove duplicate relations' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
 'related objects' @ posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
-'inverse related' @ related(O1, O2, Round) ==> related(O2, O1, Round).
+% 'inverse related' @ related(O1, O2, Round) ==> related(O2, O1, Round).
 'transitive related' @ related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
 
 % Initial conditions unified?
 'object in a fact' @ round(Round), posited_fact(fact(_, A), Round) \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
+'predicate applied to object' @ round(Round), posited_fact(fact(N, A), Round) \ predicate_applied(N, O) <=> member(O, A) | true.
+'predicate not applied to object' @ predicate_applied(_,_) <=> false.
 'relevant rule' @ posited_rule(Kind, H, B) \ relevant_rule(Kind) <=> supported_rule(H-B) | true.
 'no relevant rule' @ relevant_rule(_) <=> fail.
 'fact about something' @ round(Round), posited_fact(fact(N,_), Round) \ fact_about(N) <=> true.
@@ -184,11 +204,15 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'inferred new fact' @ inferred_fact(_, Fact, Round) ==> posited_fact(Fact, Round).
 'applying rules' @ posited_rule(Kind, Head, Body), applying_rules(Kind) ==> evaluating_rule(Kind, Head, Body).
 'applying rules started' @ applying_rules(_) <=> true.
-'fact from static rule' @ round(Round) \ evaluating_rule(static, Head, []) <=> ground(Head) | inferred_fact(static, Head, Round).
-'fact from causal' @ round(Round) \ evaluating_rule(causal, Head, []) <=> ground(Head) | NextRound is Round + 1, inferred_fact(causal, Head, NextRound).
-'reducing a rule' @ round(Round), posited_fact(fact(Name, GroundArgs), Round), evaluating_rule(Kind, Head, [fact(Name, Args) | Rest]) 
-                                                                            ==> can_unify(GroundArgs, Args) | 
-                                                                            copy_term_nat([Head, Args, Rest], [Head1, Args1, Rest1]), Args1 = GroundArgs, evaluating_rule(Kind, Head1, Rest1).
+'fact from static rule' @ round(Round) \ evaluating_rule(static, Head, []) <=> 
+    ground(Head) | inferred_fact(static, Head, Round).
+'fact from causal' @ round(Round) \ evaluating_rule(causal, Head, []) <=>
+    ground(Head) | NextRound is Round + 1, inferred_fact(causal, Head, NextRound).
+'reducing a rule' @ round(Round), posited_fact(fact(Name, GroundArgs), Round), 
+                    evaluating_rule(Kind, Head, [fact(Name, Args) | Rest])   ==> 
+    can_unify(GroundArgs, Args) | 
+    copy_term_nat([Head, Args, Rest], [Head1, Args1, Rest1]), 
+    Args1 = GroundArgs, evaluating_rule(Kind, Head1, Rest1).
 'cleanup evaluating rules' @ done_applying_rules \ evaluating_rule(_,_,_) <=> true.
 'done evaluating rules' @ done_applying_rules <=> true.
 
@@ -280,7 +304,6 @@ theory(Template, Theory, Trace) :-
                 (
                 reset_counter(theory_engine/max_traces, 10),
                 initial_conditions(Template),
-                delete_global(trace),
                 trace(Trace),
                 extract_theory(Theory, Trace)
                 ),
@@ -316,13 +339,17 @@ after_deadline(Deadline) :-
     Now > Deadline,
     throw(error(time_expired, context(theory_engine, Deadline))).
 
-% A number between 1 and the greatest possible number of predicates in any rule
+% A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
+    length(Template.type_signature.predicate_types, LowerLimit),
+    % length(Template.type_signature.objects, ObjectCount),
+    % LowerLimit is PredicateTypeCount + ObjectCount,
     aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
-    % "Worst case" is all unary predicates
-    UpperLimit is div(Template.limits.max_elements, 10),
+    % "Worst case" is all unary predicates. max_elements is the maximum number of atoms in a rule body. A unary predicate has 2 atoms.
+    UpperLimit is div(Template.limits.max_elements, 2),
     UpperLimit1 is min(UpperLimit, Total),
-    choose_pair_in_range(1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
+    LowerLimit1 is min(LowerLimit, UpperLimit1),
+    choose_pair_in_range(LowerLimit1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
     log(info, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
 
 %%% STATIC CONSTRAINTS
@@ -390,16 +417,19 @@ rules(Kind, Template, MaxBodySize) :-
     posit_rules(Kind, Template, DistinctVars),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
 
-posit_rules(Kind, _, _) :-
-    enough_rules(Kind), 
-    !.
+%There is enough rules and there are no unused predicates in them.
+posit_rules(Kind, Template, _) :-
+    enough_rules(Kind),
+    valid_rule_set(Kind, Template).
 
+% There are not enough rules and more can be added
 posit_rules(Kind, Template, DistinctVars) :-
+    \+ enough_rules(Kind),
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     posited_rule(Kind, Head, BodyPredicates),
     posit_rules(Kind, Template, DistinctVars).
 
-%%% VALIDATING RULES
+%%% VALIDATING A RULE
 
 % The head of a rule is ungroundable if it has a variable that never appears in the body of the rule
 ungroundable_head(fact(_, HeadArgs)-Body) :-
@@ -409,7 +439,78 @@ ungroundable_head(fact(_, HeadArgs)-Body) :-
        memberchk_equal(HeadArg, BodyArgs)
     ).
 
-%%% VALIDATING STATIC RULES
+% A var is not connected to some other var in the rule
+unrelated_vars(Head-Body) :-    
+    all_vars([Head | Body], [], AllVars),
+    all_var_pairs([Head | Body], [], VarPairs),
+    select(Var1, AllVars, Rest),
+    member(Var2, Rest),
+    \+ vars_connected(Var1, Var2, VarPairs).
+
+% There exists a predicate (by name) not used in a given kind of rules
+unused_predicate_type(Kind, Template) :-
+    all_predicate_names(Template.type_signature, PredicateNames),
+    member(PredicateName, PredicateNames),
+    \+ predicate_type_used_in_rule(Kind, PredicateName),
+    log(info, theory_engine, 'No predicate ~p is being used in ~p rules', [PredicateName, Kind]).
+
+% The set of variables in predicates
+all_vars([], AllVars, AllVars).
+all_vars([fact(_, Args) | OtherPredicates], Acc, AllVars) :-
+    var_args(Args, Acc, VarArgs),
+    all_vars(OtherPredicates, VarArgs, AllVars).
+
+% The set of vars in a predicate's arguments
+var_args([], VarArgs, VarArgs).
+var_args([Arg | OtherArgs], Acc, VarArgs) :-
+    var(Arg),
+    \+ memberchk_equal(Arg, Acc),
+    !,
+    var_args(OtherArgs,[Arg | Acc], VarArgs).
+var_args([_ | Args], Acc, VarArgs) :-
+    var_args(Args, Acc, VarArgs).
+
+% Al directed pairs directly connecting variables in a rule
+all_var_pairs([], VarPairs, VarPairs).
+all_var_pairs([fact(_, [Arg1, Arg2]) | OtherPredicates], Acc, VarPairs) :-
+    var(Arg1),
+    var(Arg2),
+    \+ memberchk_equal(Arg1-Arg2, Acc),
+    !,
+    all_var_pairs(OtherPredicates, [Arg1-Arg2 | Acc], VarPairs).
+all_var_pairs([_ | Predicates], Acc, VarPairs) :- all_var_pairs(Predicates, Acc, VarPairs).
+
+% Whether two variable are directly or indirectly connected, in any direction.
+vars_connected(Var1, Var2, Pairs) :-
+  vars_directly_connected(Var1, Var2, Pairs), !.
+
+vars_connected(Var1, Var2, Pairs) :-
+  vars_indirectly_connected(Var1, Var2, Pairs).
+
+vars_directly_connected(Var1, Var2, [V1-V2 | _]) :-
+    (Var1 == V1,
+    Var2 == V2
+    ;
+    Var1 == V2,
+    Var2 == V1
+    ),
+    !.
+
+vars_directly_connected(Var1, Var2, [_ | Pairs]) :-
+  vars_directly_connected(Var1, Var2, Pairs), !.
+
+vars_indirectly_connected(Var1, Var2, Pairs) :-
+  select(Var1-Var3, Pairs, Rest),
+  Var2 \== Var3,
+  vars_connected(Var3, Var2, Rest), 
+  !.
+
+vars_indirectly_connected(Var1, Var2, Pairs) :-
+  select(Var3-Var1, Pairs, Rest),
+  Var2 \== Var3,
+  vars_connected(Var3, Var2, Rest).
+
+%%% VALIDATING A STATIC RULE
 
 contradicting_static_rules(Head-Body, OtherHead-OtherBody) :-
     (contradicting_heads(Head-Body, OtherHead-OtherBody) -> 
@@ -458,10 +559,33 @@ contradicted_head(HeadPredicate, BodyPredicates) :-
     member(BodyPredicate, BodyPredicates),
     contradicts(BodyPredicate, HeadPredicate).
 
-%%% VALIDATING CAUSAL RULES
+%%% VALIDATING A CAUSAL RULE
 
 idempotent_causal_rule(Head-BodyPredicates) :-
     memberchk_equal(Head, BodyPredicates).
+
+%%% VALIDATING A RULE SET
+
+% A static rule set is valid if there are no unused predicate types
+valid_rule_set(static, Template) :-
+    \+ unused_predicate_type(static, Template).
+
+% A causal rule set is valid if there are no unused predicate types,
+% all predicates observed to vary are in the head of a rule and in the body of a rule.
+valid_rule_set(causal, Template) :-
+    \+ unused_predicate_type(causal, Template),
+    \+ uncaused_varying_predicate(Template),
+    \+ uncausing_varying_predicate(Template).
+
+uncaused_varying_predicate(Template) :-
+    member(PredicateName, Template.varying_predicate_names),
+    \+ predicate_caused(PredicateName),
+    log(info, theory_engine, 'Uncaused predicate ~p rules', [PredicateName]).
+
+uncausing_varying_predicate(Template) :-
+    member(PredicateName, Template.varying_predicate_names),
+    \+ predicate_causing(PredicateName),
+    log(info, theory_engine, 'Uncausingpredicate ~p rules', [PredicateName]).
 
 %%% MAKING RULES
 
@@ -584,7 +708,7 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
     round(1),
-    reset_counter(theory_engine/max_fact_failures, 10),
+    reset_counter(theory_engine/max_fact_failures, 50),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
@@ -592,7 +716,7 @@ initial_conditions(Template) :-
 % conditions that fail the unified_facts assumption
 %      1. Transitively unrelated objects
 %      2. Contradictory facts under static closure
-%      
+%      3. Under-described objects (a predicate applicable to an object is not applied)
 posit_initial_conditions(Template) :-
     facts_unified(Template.type_signature), !.
 
@@ -604,7 +728,7 @@ posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
    posited_fact(fact(PredicateName, Args)),
-   reset_counter(theory_engine/max_fact_failures, 10).
+   reset_counter(theory_engine/max_fact_failures, 50).
 
 posit_fact(_) :-
     count_down(theory_engine/max_fact_failures) ->
@@ -632,6 +756,8 @@ is_domain_value(Value) :-
 facts_unified(TypeSignature) :-
     % All objects are represented
     \+ unrepresented_object(TypeSignature.objects),
+    % No under-described object
+    \+ underdescribed_object(TypeSignature),
     % The initial conditions are relevant to at least one static rule
     relevant_rule(static),
     % The static rules are applied, possibly positing new facts, without causing contradictions (else closure fails)
@@ -647,10 +773,17 @@ apply_rules(Kind) :-
     applying_rules(Kind),
     done_applying_rules.
 
+% One the given objects is not represented
 unrepresented_object(Objects) :-
     member(object(_, ObjectName), Objects),
     \+ object_in_a_fact(ObjectName),
     log(debug, theory_engine, 'Unrepresented object ~p in facts', [ObjectName]).
+
+% A predicate applicable to an object is not applied to it
+underdescribed_object(TypeSignature) :-
+    member(object(ObjectType, ObjectName), TypeSignature.objects),
+    applicable_predicate_name(TypeSignature, ObjectType, PredicateName),
+    \+ predicate_applied(PredicateName, ObjectName).
 
 % Are there unrelated objects in the current round?
 unrelated_objects(TypeSignature) :-
@@ -694,7 +827,8 @@ make_trace(Trace) :-
     grow_trace,
     % Fail if making a trace did not produce rounds beyond initial conditions
     many_rounds, !,
-    extract_trace(Trace).
+    extract_trace(Trace),
+    log(note, theory_engine, 'Made trace ~p', [Trace]).
 
 grow_trace :-
      make_next_round,
@@ -759,6 +893,8 @@ extract_facts(_, []).
 %%% Extracting the theory
 
 extract_theory(Theory, [InitialConditions | _]) :-
+    % log(note, theory_engine, '==============='),
+    % chr_show_store(theory_engine),
     extract_static_constraints(StaticConstraints),
     extract_rules(static, StaticRules),
     extract_rules(causal, CausalRules),
@@ -773,9 +909,9 @@ extract_static_constraints([]).
 extract_rules(Kind, [Head1-Body1 | Others]) :-
     extract_rule(Kind, Head, Body), !,
     defact([Head | Body], [Head1 | Body1]),
-    extract_rules(Others).
+    extract_rules(Kind, Others).
 
-extract_rules([]).
+extract_rules(_, []).
 
 defact([], []).
 defact([fact(Name, Args) | OtherFacts], [Predicate | OtherPredicates]) :-
