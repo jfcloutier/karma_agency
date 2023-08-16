@@ -295,35 +295,11 @@ theory(Template, Theory, Trace) :-
     % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
-    % Only allow 10 consecutive failures to posit a fact into initial conditions before failing static rule
-    % Only allow trying at most 50 causal rules per static rule
-    catch(
-        (
-        % reset_counter(theory_engine/max_causal_rule_sets, 500),
-        make_causal_rules(Template, MaxCausalBodySize),
-        % Only try 10 sets of initial conditions to get a trace from a rule set - this risks missing working initial conditions
-        catch(
-                (
-               % reset_counter(theory_engine/max_traces, 100),
-                initial_conditions(Template),
-                trace(Trace),
-                extract_theory(Theory, Trace)
-                ),
-                error(max_traces, _),
-                (
-                    log(info, theory_engine, 'Tried max number of traces with this rule set'),
-                    fail
-                )
-            )
-        ),
-        % Thrown is max_fact_failures (TODO - NOT ANYMORE) or max_causal_rule_sets
-        error(Thrown, _),
-        (
-            log(info, theory_engine, 'Done with this static rule because ~p', [Thrown]),
-            fail
-        )
-    ).
-
+    rules(causal, Template, MaxCausalBodySize), 
+    initial_conditions(Template),
+    trace(Trace),
+    extract_theory(Theory, Trace).
+                
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
     max_rules(static, Template.limits.max_static_rules),
@@ -404,14 +380,6 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
     memberchk(PredicateName, PredicateNames).
 
 %%% POSITING RULES
-
-make_causal_rules(Template, MaxCausalBodySize) :-
-    rules(causal, Template, MaxCausalBodySize).
-    % (count_down(theory_engine/max_causal_rule_sets) -> 
-    %     true
-    %     ;
-    %     throw(error(max_causal_rule_sets, context(theory_engine, causal_rules)))
-    % ).
 
 rules(Kind, Template, MaxBodySize) :-
     log(info, theory_engine, 'Making ~p rules', [Kind]),
@@ -583,12 +551,12 @@ valid_rule_set(causal, Template) :-
 uncaused_varying_predicate(Template) :-
     member(PredicateName, Template.varying_predicate_names),
     \+ predicate_caused(PredicateName),
-    log(info, theory_engine, 'Uncaused predicate "~p" in rules', [PredicateName]).
+    log(debug, theory_engine, 'Uncaused predicate "~p" in rules', [PredicateName]).
 
 uncausing_varying_predicate(Template) :-
     member(PredicateName, Template.varying_predicate_names),
     \+ predicate_causing(PredicateName),
-    log(info, theory_engine, 'Uncausing predicate "~p" in rules', [PredicateName]).
+    log(debug, theory_engine, 'Uncausing predicate "~p" in rules', [PredicateName]).
 
 %%% MAKING RULES
 
@@ -705,13 +673,11 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
     A1 =@= A3,
     A2 \=@= A4.
 
-
 %%% INITIAL CONDITIONS
 
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
     round(1),
- %   reset_counter(theory_engine/max_fact_failures, 50),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
@@ -731,13 +697,6 @@ posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
    posited_fact(fact(PredicateName, Args)).
- %  reset_counter(theory_engine/max_fact_failures, 50).
-
-% posit_fact(_) :-
-%     count_down(theory_engine/max_fact_failures) ->
-%         throw(error(max_fact_failures, context(theory_engine, posit_fact)))
-%         ;
-%         fail.
 
 facts_out_of_order(fact(PredicateTypeName1, _), fact(PredicateTypeName2, _)) :-
     compare((<), PredicateTypeName2, PredicateTypeName1), !.
@@ -819,25 +778,16 @@ unsupported_body_predicate(Body) :-
     member(fact(PredicateName, _), Body),
     \+ fact_about(PredicateName).
 
-trace(Trace) :-
-   % (count_down(theory_engine/max_traces) ->
-        % make a trace from initial conditions
-        make_trace(Trace).
-       % ;
-        % count down over - give up
-       % throw(error(max_traces, context(theory_engine, trace)))
-    %).
-
 % Making a trace from a set of initial conditions.
 % It fails if the trace has only one round (the initial conditions).
-make_trace(Trace) :-
+trace(Trace) :-
    log(info, theory_engine, 'Making trace'),
     % Grow a trace until it repeats
     grow_trace,
     % Fail if making a trace did not produce rounds beyond initial conditions
     many_rounds, !,
     extract_trace(Trace),
-    log(note, theory_engine, 'Made trace ~p', [Trace]).
+    log(info, theory_engine, 'Made trace ~p', [Trace]).
 
 grow_trace :-
      make_next_round,
@@ -902,8 +852,6 @@ extract_facts(_, []).
 %%% Extracting the theory
 
 extract_theory(Theory, [InitialConditions | _]) :-
-    % log(note, theory_engine, '==============='),
-    % chr_show_store(theory_engine),
     extract_static_constraints(StaticConstraints),
     extract_rules(static, StaticRules),
     extract_rules(causal, CausalRules),
