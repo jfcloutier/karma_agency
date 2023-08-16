@@ -52,6 +52,7 @@ theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, 
     extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
+    log(info, template_engine, 'Template created with extension ~p and type signature ~p', [SignatureExtensionTuple, ExtendedTypeSignature]),
     Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
                         limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
 
@@ -73,13 +74,16 @@ scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     !,
     ScrambledTypeSignature = type_signature{object_types:ScrambledObjectTypes, objects:ScrambledObjects, predicate_types:ScrambledPredicateTypes}.
 
-signature_extension_tuple(MaxSignatureExtension, Tuple) :-
-    findall(RatedTuple, rated_tuple(MaxSignatureExtension, RatedTuple), RatedTuples),
-    sort(1, @=<, RatedTuples, Tuples),
-    !,
-    member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
-    Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
-    log(info, template_engine, '****TUPLE ~p', [Tuple]).
+% TODO - REVERT
+
+signature_extension_tuple(MaxSignatureExtension, tuple(0,1,1)).
+% signature_extension_tuple(MaxSignatureExtension, Tuple) :-
+%     findall(RatedTuple, rated_tuple(MaxSignatureExtension, RatedTuple), RatedTuples),
+%     sort(1, @=<, RatedTuples, Tuples),
+%     !,
+%     member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
+%     Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
+%     log(info, template_engine, '****TUPLE ~p', [Tuple]).
 
 rated_tuple(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObjects, max_predicate_types:MaxPredicateTypes}, IndexedTuple) :-
     between(0, MaxObjectTypes, NumObjectTypes),
@@ -109,6 +113,7 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     MaxStaticElements is MaxStaticRules * ObjectsCount * PredicateTypesCount,
     MaxCausalElements is MaxCausalRules * ObjectsCount * PredicateTypesCount,
     MaxElements is 2 * (MaxConstraintElements + MaxStaticElements + MaxCausalElements),
-    MaxTheoryTime is MaxElements * 0.01,
+    % TODO - REVERT to MaxElements * 0.01?
+    MaxTheoryTime is MaxElements * 1000,
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
     log(info, template_engine, 'Template limits ~p', [Limits]).

@@ -14,7 +14,7 @@ Objects = [object(led, a), object(led, b)],
 TypedVariables = [variables(led, 3)],
 MinTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes},
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:[predicate(pred_1, [object_type(led),  object_type(led)]) | PredicateTypes], objects:[object(led, object_1) | Objects], typed_variables:TypedVariables},
-Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time: 30},
+Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:150, max_theory_time:30000},
 Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
 theory_engine:theory(Template, Theory, Trace).
 */
@@ -174,7 +174,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 %%% Rounds
 'new round replaces previous round' @ round(_) \ round(_)#passive  <=> true.
 
-%%% Initial conditions
+%%% Facts in rounds
 'adding fact after deadline' @ deadline(Deadline) \ posited_fact(_)  <=> 
     after_deadline(Deadline) | fail.
 'posited fact in current round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
@@ -183,13 +183,15 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'contradictory fact' @ posited_fact(fact(N, [O, V1]), Round)#passive \ posited_fact(fact(N, [O, V2]), Round) <=>  is_domain_value(V1), is_domain_value(V2) | fail.
 'fact breaks static contraint' @ posited_static_constraint(SC)#passive, posited_fact(fact(N1, As1), Round)#passive \ posited_fact(fact(N2, As2), Round)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | fail.
 
+%%% Initial conditions (round 1)
+'fact posited in wrong order' @ posited_fact(F1, 1)#passive \ posited_fact(F2, 1) <=> facts_out_of_order(F1, F2) | fail.
+
 % Accumulating object relations
 'remove duplicate relations' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
 'related objects' @ posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
-% 'inverse related' @ related(O1, O2, Round) ==> related(O2, O1, Round).
 'transitive related' @ related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
 
-% Initial conditions unified?
+% Facts unified in a round?
 'object in a fact' @ round(Round), posited_fact(fact(_, A), Round) \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
 'predicate applied to object' @ round(Round), posited_fact(fact(N, A), Round) \ predicate_applied(N, O) <=> member(O, A) | true.
@@ -297,12 +299,12 @@ theory(Template, Theory, Trace) :-
     % Only allow trying at most 50 causal rules per static rule
     catch(
         (
-        reset_counter(theory_engine/max_causal_rule_sets, 50),
+        % reset_counter(theory_engine/max_causal_rule_sets, 500),
         make_causal_rules(Template, MaxCausalBodySize),
-        % Only try 10 sets of initial conditions to get a trace from a rule set
+        % Only try 10 sets of initial conditions to get a trace from a rule set - this risks missing working initial conditions
         catch(
                 (
-                reset_counter(theory_engine/max_traces, 10),
+               % reset_counter(theory_engine/max_traces, 100),
                 initial_conditions(Template),
                 trace(Trace),
                 extract_theory(Theory, Trace)
@@ -314,7 +316,7 @@ theory(Template, Theory, Trace) :-
                 )
             )
         ),
-        % Thrown is max_fact_failures or max_causal_rule_sets
+        % Thrown is max_fact_failures (TODO - NOT ANYMORE) or max_causal_rule_sets
         error(Thrown, _),
         (
             log(info, theory_engine, 'Done with this static rule because ~p', [Thrown]),
@@ -344,7 +346,8 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     length(Template.type_signature.predicate_types, LowerLimit),
     % length(Template.type_signature.objects, ObjectCount),
     % LowerLimit is PredicateTypeCount + ObjectCount,
-    aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), Total),
+    aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), WorstCase),
+    Total is WorstCase div 2,
     % "Worst case" is all unary predicates. max_elements is the maximum number of atoms in a rule body. A unary predicate has 2 atoms.
     UpperLimit is div(Template.limits.max_elements, 2),
     UpperLimit1 is min(UpperLimit, Total),
@@ -403,12 +406,12 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 %%% POSITING RULES
 
 make_causal_rules(Template, MaxCausalBodySize) :-
-    rules(causal, Template, MaxCausalBodySize),
-    (count_down(theory_engine/max_causal_rule_sets) -> 
-        true
-        ;
-        throw(error(max_causal_rule_sets, context(theory_engine, causal_rules)))
-    ).
+    rules(causal, Template, MaxCausalBodySize).
+    % (count_down(theory_engine/max_causal_rule_sets) -> 
+    %     true
+    %     ;
+    %     throw(error(max_causal_rule_sets, context(theory_engine, causal_rules)))
+    % ).
 
 rules(Kind, Template, MaxBodySize) :-
     log(info, theory_engine, 'Making ~p rules', [Kind]),
@@ -580,12 +583,12 @@ valid_rule_set(causal, Template) :-
 uncaused_varying_predicate(Template) :-
     member(PredicateName, Template.varying_predicate_names),
     \+ predicate_caused(PredicateName),
-    log(info, theory_engine, 'Uncaused predicate ~p rules', [PredicateName]).
+    log(info, theory_engine, 'Uncaused predicate "~p" in rules', [PredicateName]).
 
 uncausing_varying_predicate(Template) :-
     member(PredicateName, Template.varying_predicate_names),
     \+ predicate_causing(PredicateName),
-    log(info, theory_engine, 'Uncausingpredicate ~p rules', [PredicateName]).
+    log(info, theory_engine, 'Uncausing predicate "~p" in rules', [PredicateName]).
 
 %%% MAKING RULES
 
@@ -708,7 +711,7 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 initial_conditions(Template) :-
     log(info, theory_engine, 'Making initial conditions'),
     round(1),
-    reset_counter(theory_engine/max_fact_failures, 50),
+ %   reset_counter(theory_engine/max_fact_failures, 50),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
@@ -727,14 +730,20 @@ posit_initial_conditions(Template) :-
 posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
-   posited_fact(fact(PredicateName, Args)),
-   reset_counter(theory_engine/max_fact_failures, 50).
+   posited_fact(fact(PredicateName, Args)).
+ %  reset_counter(theory_engine/max_fact_failures, 50).
 
-posit_fact(_) :-
-    count_down(theory_engine/max_fact_failures) ->
-        throw(error(max_fact_failures, context(theory_engine, posit_fact)))
-        ;
-        fail.
+% posit_fact(_) :-
+%     count_down(theory_engine/max_fact_failures) ->
+%         throw(error(max_fact_failures, context(theory_engine, posit_fact)))
+%         ;
+%         fail.
+
+facts_out_of_order(fact(PredicateTypeName1, _), fact(PredicateTypeName2, _)) :-
+    compare((<), PredicateTypeName2, PredicateTypeName1), !.
+
+facts_out_of_order(fact(PredicateTypeName, [Arg1, _]), fact(PredicateTypeName, [Arg2, _])) :-
+    compare((<), Arg2, Arg1).
 
 ground_args([], _, []).
 ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
@@ -811,13 +820,13 @@ unsupported_body_predicate(Body) :-
     \+ fact_about(PredicateName).
 
 trace(Trace) :-
-    (count_down(theory_engine/max_traces) ->
+   % (count_down(theory_engine/max_traces) ->
         % make a trace from initial conditions
-        make_trace(Trace)
-        ;
+        make_trace(Trace).
+       % ;
         % count down over - give up
-        throw(error(max_traces, context(theory_engine, trace)))
-    ).
+       % throw(error(max_traces, context(theory_engine, trace)))
+    %).
 
 % Making a trace from a set of initial conditions.
 % It fails if the trace has only one round (the initial conditions).
