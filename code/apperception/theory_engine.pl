@@ -97,7 +97,9 @@ Every varying, observed predicate must appear in the body of at least one causal
                   last_round(-round),
                   extract_fact(-fact, +round),
                   extract_static_constraint(-static_constraint),
-                  extract_rule(+rule_kind, -fact, -list(fact)).
+                  extract_rule(+rule_kind, -fact, -list(fact)),
+                  end_time(+any, +float),
+                  time_ended(+any, +float, +any).
 
 :- chr_option(check_guard_bindings, on).
 % Setting optimize to full and debug to off causes an is/2 instantiation error.
@@ -109,6 +111,10 @@ Every varying, observed predicate must appear in the body of at least one causal
 max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true. 
 max_elements(_) \ max_elements(_)#passive <=> true. 
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
+
+'replace timer' @ end_time(T, _) \ end_time(T, _)#passive <=> true.
+'timer done' @ end_time(T, Time1)#passive, time_ended(T, Time2, B) <=> Time2 > Time1, B = true | true.
+'timer not done' @ time_ended(_, _, B) <=> B = false | true.
 
 % Positing static constraints
 'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
@@ -295,7 +301,7 @@ theory(Template, Theory, Trace) :-
     % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
-    rules(causal, Template, MaxCausalBodySize), 
+    rules(causal, Template, MaxCausalBodySize),
     initial_conditions(Template),
     trace(Trace),
     extract_theory(Theory, Trace).
@@ -388,7 +394,7 @@ rules(Kind, Template, MaxBodySize) :-
     posit_rules(Kind, Template, DistinctVars),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
 
-%There is enough rules and there are no unused predicates in them.
+% There is enough rules and there are no unused predicates in them.
 posit_rules(Kind, Template, _) :-
     enough_rules(Kind),
     valid_rule_set(Kind, Template).
@@ -686,6 +692,7 @@ initial_conditions(Template) :-
 %      1. Transitively unrelated objects
 %      2. Contradictory facts under static closure
 %      3. Under-described objects (a predicate applicable to an object is not applied)
+
 posit_initial_conditions(Template) :-
     facts_unified(Template.type_signature), !.
 
@@ -780,6 +787,7 @@ unsupported_body_predicate(Body) :-
 
 % Making a trace from a set of initial conditions.
 % It fails if the trace has only one round (the initial conditions).
+
 trace(Trace) :-
    log(info, theory_engine, 'Making trace'),
     % Grow a trace until it repeats
@@ -999,3 +1007,24 @@ member_rand(X, Preferred, All) :-
     random_permutation(Rest, Rest1),
     append(Preferred1, Rest1, List),
     member(X, List).
+
+%%%% UNUSED
+
+start_timer_to_trace :-
+    start_timer(trace, 1000).
+
+times_up_to_trace :-
+    times_up(trace).
+
+% Starts a timer (in msecs)
+start_timer(Timer, Duration) :-
+    get_time(T),
+    Deadline is T + (Duration / 1000),
+    end_time(Timer, Deadline),
+     log(debug, theory_engine, 'Started timer ~p for ~p', [Timer, Duration]).
+
+% Succeeds if the timer is done
+times_up(Timer) :- 
+    get_time(T),
+    time_ended(Timer, T, true),
+    log(debug, theory_engine, 'Times up for ~p', [Timer]).

@@ -74,16 +74,13 @@ scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     !,
     ScrambledTypeSignature = type_signature{object_types:ScrambledObjectTypes, objects:ScrambledObjects, predicate_types:ScrambledPredicateTypes}.
 
-% TODO - REVERT
-
-signature_extension_tuple(MaxSignatureExtension, tuple(0,1,1)).
-% signature_extension_tuple(MaxSignatureExtension, Tuple) :-
-%     findall(RatedTuple, rated_tuple(MaxSignatureExtension, RatedTuple), RatedTuples),
-%     sort(1, @=<, RatedTuples, Tuples),
-%     !,
-%     member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
-%     Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
-%     log(info, template_engine, '****TUPLE ~p', [Tuple]).
+signature_extension_tuple(MaxSignatureExtension, Tuple) :-
+    findall(RatedTuple, rated_tuple(MaxSignatureExtension, RatedTuple), RatedTuples),
+    sort(1, @=<, RatedTuples, Tuples),
+    !,
+    member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
+    Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
+    log(info, template_engine, '****TUPLE ~p', [Tuple]).
 
 rated_tuple(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObjects, max_predicate_types:MaxPredicateTypes}, IndexedTuple) :-
     between(0, MaxObjectTypes, NumObjectTypes),
@@ -103,17 +100,12 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.predicate_types, PredicateTypesCount),
     MaxConstraintElements is PredicateTypesCount * 2,
  %   UpperMaxRules is ObjectsCount * PredicateTypesCount, % Too big
-
- % TODO - REVERT
-    % UpperMaxRules is PredicateTypesCount,
-    % between(1, UpperMaxRules, MaxCausalRules),
-    % between(1, UpperMaxRules, MaxStaticRules),
-     between(1, 1, MaxCausalRules),
-     between(1, 1, MaxStaticRules),
+    UpperMaxRules is round(PredicateTypesCount * 1.5),
+    between(1, UpperMaxRules, MaxCausalRules),
+    between(1, UpperMaxRules, MaxStaticRules),
     MaxStaticElements is MaxStaticRules * ObjectsCount * PredicateTypesCount,
     MaxCausalElements is MaxCausalRules * ObjectsCount * PredicateTypesCount,
     MaxElements is 2 * (MaxConstraintElements + MaxStaticElements + MaxCausalElements),
-    % TODO - REVERT to MaxElements * 0.01?
-    MaxTheoryTime is MaxElements * 1000,
+    MaxTheoryTime is MaxElements * 0.15,
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
     log(info, template_engine, 'Template limits ~p', [Limits]).

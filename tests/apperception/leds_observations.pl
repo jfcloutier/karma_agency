@@ -15,5 +15,3 @@ sensed(on, [object(led, b), true], 6).
 sensed(on, [object(led, a), false], 7).
 sensed(on, [object(led, b), true], 7).
 sensed(on, [object(led, a), true], 8).
-
-% sensed(distance_from, [object(wall, c), far], 9).
