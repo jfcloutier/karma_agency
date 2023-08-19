@@ -98,6 +98,7 @@ Every varying, observed predicate must appear in the body of at least one causal
                   extract_fact(-fact, +round),
                   extract_static_constraint(-static_constraint),
                   extract_rule(+rule_kind, -fact, -list(fact)),
+                  % UNUSED
                   end_time(+any, +float),
                   time_ended(+any, +float, +any).
 
@@ -112,6 +113,7 @@ max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true.
 max_elements(_) \ max_elements(_)#passive <=> true. 
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
+% UNUSED
 'replace timer' @ end_time(T, _) \ end_time(T, _)#passive <=> true.
 'timer done' @ end_time(T, Time1)#passive, time_ended(T, Time2, B) <=> Time2 > Time1, B = true | true.
 'timer not done' @ time_ended(_, _, B) <=> B = false | true.
@@ -304,7 +306,7 @@ theory(Template, Theory, Trace) :-
     rules(causal, Template, MaxCausalBodySize),
     initial_conditions(Template),
     trace(Trace),
-    extract_theory(Theory, Trace).
+    theory_with_trace(Theory, Trace).
                 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
@@ -859,7 +861,7 @@ extract_facts(_, []).
 
 %%% Extracting the theory
 
-extract_theory(Theory, [InitialConditions | _]) :-
+theory_with_trace(Theory, [InitialConditions | _]) :-
     extract_static_constraints(StaticConstraints),
     extract_rules(static, StaticRules),
     extract_rules(causal, CausalRules),
