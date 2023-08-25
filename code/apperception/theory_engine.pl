@@ -14,7 +14,7 @@ Objects = [object(led, a), object(led, b)],
 TypedVariables = [variables(led, 3)],
 MinTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes},
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:[predicate(pred_1, [object_type(led),  object_type(led)]) | PredicateTypes], objects:[object(led, object_1) | Objects], typed_variables:TypedVariables},
-Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:150, max_theory_time:30000},
+Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time:3},
 Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
 theory_engine:theory(Template, Theory, Trace).
 */
@@ -44,7 +44,6 @@ Every varying, observed predicate must appear in the body of at least one causal
 :- chr_type static_constraint ---> one_relation(list(any)) ; one_related(any).
 :- chr_constraint deadline(+any),
                   max_rules(+rule_kind, +),
-                  max_elements(+int),
                   rules_count(+rule_kind, +int),
                   elements_count(+int),
                   max_body_predicates(+int),
@@ -109,8 +108,7 @@ Every varying, observed predicate must appear in the body of at least one causal
 
 % Time and complexity limits are singletons
 'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
-max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true. 
-max_elements(_) \ max_elements(_)#passive <=> true. 
+max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true.
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % UNUSED
@@ -145,7 +143,7 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
 % Positing rules, static and causal
- 'adding rule after deadline' @ deadline(Deadline) \ posited_rule(_, _, _)  <=> 
+'adding rule after deadline' @ deadline(Deadline) \ posited_rule(_, _, _)  <=> 
     after_deadline(Deadline) | fail.
 'enough rules' @ max_rules(Kind, Max) \ enough_rules(Kind), rules_count(Kind, Count)  <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
@@ -311,9 +309,9 @@ theory(Template, Theory, Trace) :-
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
     max_rules(static, Template.limits.max_static_rules),
-    max_rules(causal, Template.limits.max_causal_rules),
-    max_elements(Template.limits.max_elements).
+    max_rules(causal, Template.limits.max_causal_rules).
 
+% Maximum time allocated to search the template for theories
 theory_deadline(MaxTime) :-
     get_time(Now),
     Deadline is Now + MaxTime,
@@ -323,7 +321,7 @@ theory_deadline(MaxTime) :-
 after_deadline(Deadline) :-
     get_time(Now),
     Now > Deadline,
-    throw(error(time_expired, context(theory_engine, Deadline))).
+    throw(error(template_search_time_expired, context(theory_engine, Deadline))).
 
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-

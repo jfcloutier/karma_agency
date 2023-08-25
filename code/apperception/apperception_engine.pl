@@ -18,7 +18,7 @@
 set_log_level(note).
 sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 10},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -222,7 +222,7 @@ handle_theory_engine_reponse(no, _, _, _) :-
     log(info, apperception_engine, 'NO MORE THEORIES for the template'),
     fail.
 
-handle_theory_engine_reponse(exception(error(time_expired, context(theory_engine, _))), _, _, _) :-
+handle_theory_engine_reponse(exception(error(template_search_time_expired, context(theory_engine, _))), _, _, _) :-
     log(info, apperception_engine, 'Time expired getting a theory from a template.'),
     fail.
 

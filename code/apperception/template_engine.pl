@@ -4,7 +4,7 @@
 % Since it is not expected that there will be enough time to search each template for its implied theories,
 % the sequence of templates generated on demand is randomized, but favoring simple templates first.
 
-%% Limits --->* SignatureExtensionTuple --->* Template (ExtendedSignature + implied MaxTheoryComplexity) --->* Theory
+%% (vocabulary extension) Limits --->* SignatureExtensionTuple --->* Template (ExtendedSignature + implied MaxTheoryComplexity) --->* Theory
 %%
 %% Limits impose max object types, max objects and max predicate types on tuples tuple(NumObjectTypes, NumObjects, NumPredicateTypes).
 %% Produce all tuples, offered in semi-random order, favoring frugality.
@@ -98,14 +98,13 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
 theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
-    MaxConstraintElements is PredicateTypesCount * 2,
- %   UpperMaxRules is ObjectsCount * PredicateTypesCount, % Too big
+    % Max number of rules per theory
     UpperMaxRules is round(PredicateTypesCount * 1.5),
     between(1, UpperMaxRules, MaxCausalRules),
     between(1, UpperMaxRules, MaxStaticRules),
-    MaxStaticElements is MaxStaticRules * ObjectsCount * PredicateTypesCount,
-    MaxCausalElements is MaxCausalRules * ObjectsCount * PredicateTypesCount,
-    MaxElements is 2 * (MaxConstraintElements + MaxStaticElements + MaxCausalElements),
-    MaxTheoryTime is MaxElements * 0.15,
+    % The maximum number of predicates in the rule body of a theory (different from Evans' paper where it is the number of symbols in a rule)
+    MaxElements is ObjectsCount * PredicateTypesCount,
+    % Maximum number of seconds spent searching for theories in the template
+    MaxTheoryTime is MaxElements * 0.5,
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
-    log(info, template_engine, 'Template limits ~p', [Limits]).
+    log(note, template_engine, 'Template limits ~p', [Limits]).
