@@ -14,8 +14,8 @@
 
 /*
 [load].
-[code(logger), tests(apperception/leds_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
-sequence(leds_observations, Sequence), 
+[code(logger), tests(apperception/leds_observations), tests(apperception/eca_observations), apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine)].
+sequence(eca_observations, Sequence), 
 min_type_signature(Sequence, MinTypeSignature), 
 predicates_observed_to_vary(MinTypeSignature, Sequence, VaryingPredicateNames),
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:2},
@@ -98,10 +98,10 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
 theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
-    % Max number of rules per theory
+    % Max number of rules per theory - there might be no static rule but there must always be at least one causal rule
     UpperMaxRules is round(PredicateTypesCount * 1.5),
     between(1, UpperMaxRules, MaxCausalRules),
-    between(1, UpperMaxRules, MaxStaticRules),
+    between(0, UpperMaxRules, MaxStaticRules),
     % The maximum number of predicates in the rule body of a theory (different from Evans' paper where it is the number of symbols in a rule)
     MaxElements is ObjectsCount * PredicateTypesCount,
     % Maximum number of seconds spent searching for theories in the template

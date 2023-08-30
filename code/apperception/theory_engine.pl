@@ -19,11 +19,6 @@ Template = template{type_signature:TypeSignature, varying_predicate_names:[on], 
 theory_engine:theory(Template, Theory, Trace).
 */
 
-/* TODO -
-Every varying, observed predicate must appear in the head of at least one causal rule set ===> imposes minimum number of causal rules)
-Every varying, observed predicate must appear in the body of at least one causal rule set ===> imposes minimum number of causal rules)
-*/
-
 :- use_module(library(lists)).
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).

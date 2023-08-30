@@ -8,9 +8,9 @@
     predicates_observed_to_vary/3
     ]).
 /*
-[load].
-[code(logger), tests(apperception/leds_observations), apperception(domains), apperception(sequence), apperception(type_signature)].
-sequence(leds_observations, Sequence), min_type_signature(Sequence, MinTypeSignature), predicates_observed_to_vary(MinTypeSignature, Sequence, PredicateNames).
+[load, load_tests].
+[code(logger), tests(apperception/leds_observations), tests(apperception/eca_observations), apperception(domains), apperception(sequence), apperception(type_signature)].
+sequence(eca_observations, Sequence), min_type_signature(Sequence, MinTypeSignature), predicates_observed_to_vary(MinTypeSignature, Sequence, PredicateNames).
 */
 
 :- use_module(code(logger)).
@@ -18,9 +18,9 @@ sequence(leds_observations, Sequence), min_type_signature(Sequence, MinTypeSigna
 
 % The minimum type signature manifested by a sequence of obaservations.
 min_type_signature(Sequence, TypeSignature) :-
-    setof(object_type(ObjectType), Object^sequence_mentions_object(Sequence, object(ObjectType, Object)), ObjectTypes),
-    setof(object(ObjectType, Object), ObjectType^sequence_mentions_object(Sequence, object(ObjectType, Object)), Objects),
-    setof(PredicateType, sequence_implies_predicate_types(Sequence,  PredicateType), PredicateTypes),
+    observed_object_types(Sequence, ObjectTypes),
+    observed_objects(Sequence, Objects),
+    observed_predicate_types(Sequence, PredicateTypes),
     TypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}.
 
 % An extended type signature given a starting type signature, extension bounds, and a tuple with limits on the extensions that can be produced.
@@ -73,28 +73,49 @@ applicable_predicate_name(TypeSignature, ObjectType, PredicateName) :-
 binary_predicate_name(PredicateTypes, BinaryPredicateName) :-
     member(predicate(BinaryPredicateName, [object_type(_), object_type(_)]), PredicateTypes).
 
-sequence_mentions_object([State | _], Mention) :-
-    state_mentions_object(State, Mention).
-    
-sequence_mentions_object([_ | OtherStates], Mention) :-
-    sequence_mentions_object(OtherStates, Mention).
+% The set of observed object types
+observed_object_types(Sequence, ObjectTypes) :-
+    flatten(Sequence, AllObservations),
+    observed_object_types(AllObservations, [], ObjectTypes).
 
-state_mentions_object([Observation | _], Mention) :-
-    Observation =.. [_, _, Args, _],
-    memberchk(Mention, Args).
+% The set of observed objects
+observed_objects(Sequence, Objects) :-
+    flatten(Sequence, AllObservations),
+    observed_objects(AllObservations, [], Objects).
 
-sequence_implies_predicate_types([State | _], PredicateType) :-
-    state_implies_predicate_type(State, PredicateType).
+% The set of observed predicate types
+observed_predicate_types(Sequence, PredicateTypes) :-
+    flatten(Sequence, AllObservations),
+    observed_predicate_types(AllObservations, [], PredicateTypes).
 
-sequence_implies_predicate_types([_ | OtherStates], PredicateType) :-
-    sequence_implies_predicate_types(OtherStates, PredicateType).
+% sensed(on, [object(cell, c1), false], 1) =..  [sensed, on, [object(cell, c1), false], 1].
+observed_object_types([], ObjectTypes, ObjectTypes).
+observed_object_types([Observation | Others], Acc, ObjectTypes) :-
+    Observation =.. [_, _, [object(ObjectType, _), _], _],
+    (memberchk(object_type(ObjectType), Acc) -> 
+        observed_object_types(Others, Acc, ObjectTypes)
+        ;
+        observed_object_types(Others, [object_type(ObjectType) | Acc], ObjectTypes)
+    ).
 
-state_implies_predicate_type([Observation | _], PredicateType) :-
-    Observation =.. [_, Predicate, Args, _],
-    implied_predicate_type(Predicate, Args, PredicateType).
+observed_objects([], Objects, Objects).
+observed_objects([Observation | Others], Acc, Objects) :-
+    Observation =.. [_, _, [Object, _], _],
+    (memberchk(Object, Acc) -> 
+        observed_objects(Others, Acc, Objects)
+        ;
+        observed_objects(Others, [Object | Acc], Objects)
+    ).
 
-state_implies_predicate_type([_ | OtherObservations], PredicateType) :-
-    state_implies_predicate_type(OtherObservations, PredicateType).
+observed_predicate_types([], PredicateTypes, PredicateTypes).
+observed_predicate_types([Observation | Others], Acc, PredicateTypes) :-
+     Observation =.. [_, Predicate, Args, _],
+     implied_predicate_type(Predicate, Args, PredicateType),
+     (memberchk(PredicateType, Acc) ->
+        observed_predicate_types(Others, Acc, PredicateTypes)
+        ;
+        observed_predicate_types(Others, [PredicateType | Acc], PredicateTypes)
+     ).
 
 implied_predicate_type(Predicate, Args, PredicateType) :-
     types_from_args(Args, Types),

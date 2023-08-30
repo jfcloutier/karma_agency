@@ -1,4 +1,4 @@
-:- module(leds_observations, [sensed/3]).
+:- module(leds_observations, []).
 
 % sensed(What, About, When)
 sensed(on, [object(led, a), false], 1).
