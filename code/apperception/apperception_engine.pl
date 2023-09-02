@@ -16,7 +16,7 @@
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(note).
-sequence(eca_observations, Sequence), 
+sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
 ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
@@ -191,7 +191,7 @@ search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-
 
 % Find the best theories in a template within allowed limits
 find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, StartTime, BestTheories) :-
-    create_theory_engine(Template, TheoryEngine),
+    create_theory_engine(Template, SequenceAsTrace, TheoryEngine),
     best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, StartTime, [], BestTheories),
     log(info, apperception_engine, 'Best theories for template ~p are ~p', [Template, BestTheories]),
     destroy_engine(TheoryEngine).

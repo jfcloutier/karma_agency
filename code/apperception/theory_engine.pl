@@ -1,4 +1,4 @@
-:- module(theory_engine, [create_theory_engine/2]).
+:- module(theory_engine, [create_theory_engine/3]).
 
 % An engine that generates valid causal theories on demand,
 % given a minimal type signature (implied by the sequence of observations) 
@@ -7,6 +7,7 @@
 /*
 [load].
 [code(logger), code(global), apperception(type_signature), apperception(theory_engine)].
+[tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(info).
 ObjectTypes = [object_type(led)],
 PredicateTypes = [predicate(on, [object_type(led), value_type(boolean)])],
@@ -15,8 +16,10 @@ TypedVariables = [variables(led, 3)],
 MinTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes},
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:[predicate(pred_1, [object_type(led),  object_type(led)]) | PredicateTypes], objects:[object(led, object_1) | Objects], typed_variables:TypedVariables},
 Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time:3},
+sequence(leds_observations, Sequence),
+apperception_engine:sequence_as_trace(Sequence, SequenceAsTrace),
 Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
-theory_engine:theory(Template, Theory, Trace).
+theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
 */
 
 :- use_module(library(lists)).
@@ -53,6 +56,8 @@ theory_engine:theory(Template, Theory, Trace).
                   enough_rules(+rule_kind),
                   round(+round),
                   bump_round(-round),
+                  primed_fact(+fact),
+                  is_primed(+fact),
                   posited_fact(+fact),
                   posited_fact(+fact, +round),
                   related(+object, +object, +round),
@@ -180,11 +185,14 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
     after_deadline(Deadline) | fail.
 'posited fact in current round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
 'reflexive relation' @ posited_fact(fact(_, [A, A]), _) <=> fail.
-'duplicate fact' @ posited_fact(fact(N, As), Round)#passive \ posited_fact(fact(N, As), Round) <=> false.
+'duplicate fact' @ posited_fact(fact(N, As), Round)#passive \ posited_fact(fact(N, As), Round) <=> fail.
 'contradictory fact' @ posited_fact(fact(N, [O, V1]), Round)#passive \ posited_fact(fact(N, [O, V2]), Round) <=>  is_domain_value(V1), is_domain_value(V2) | fail.
 'fact breaks static contraint' @ posited_static_constraint(SC)#passive, posited_fact(fact(N1, As1), Round)#passive \ posited_fact(fact(N2, As2), Round)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | fail.
 
 %%% Initial conditions (round 1)
+'primed fact' @ primed_fact(F) ==> posited_fact(F).
+'is primed fact' @ primed_fact(F)#passive \ is_primed(F) <=> true.
+'is not primed fact' @ is_primed(_) <=> fail.
 'fact posited in wrong order' @ posited_fact(F1, 1)#passive \ posited_fact(F2, 1) <=> facts_out_of_order(F1, F2) | fail.
 
 % Accumulating object relations
@@ -287,17 +295,17 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'done extracting rules' @ extract_rule(_, _, _) <=> fail.
 
 % Create an engine that produces theories with their traces.
-create_theory_engine(Template, TheoryEngine) :-
-    engine_create(Theory-Trace, theory(Template, Theory, Trace), TheoryEngine), !.
+create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
+    engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
 
-theory(Template, Theory, Trace) :-
+theory(Template, SequenceAsTrace, Theory, Trace) :-
     theory_limits(Template),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
-    initial_conditions(Template),
+    initial_conditions(Template, SequenceAsTrace),
     trace(Trace),
     theory_with_trace(Theory, Trace).
                 
@@ -676,20 +684,67 @@ breaks_static_constraint(one_related(Name), fact(Name, [A1, A2]), fact(Name, [A3
 
 %%% INITIAL CONDITIONS
 
-initial_conditions(Template) :-
+initial_conditions(Template, SequenceAsTrace) :-
     log(info, theory_engine, 'Making initial conditions'),
     round(1),
+    random_permutation(SequenceAsTrace, RandSequenceAsTrace),
+    member(State, RandSequenceAsTrace),
+    prime_initial_conditions(State),
+    posit_unobserved_relations(Template.type_signature, RandSequenceAsTrace),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
-% Posit facts to the initial conditions until they are unified
+% Initialize initial conditions from an observed state
+prime_initial_conditions(State) :-
+    sort(0, @<, State, OrderedState),
+    log(info, theory_engine, 'Priming initial conditions with observed ~p', [OrderedState]),
+    posit_observations(OrderedState),
+    !.
+
+posit_observations([]).
+posit_observations([Observation | Others]) :-
+    posit_observation(Observation),
+    posit_observations(Others).
+
+posit_observation(Observation) :-
+    Observation =.. [PredicateName | Args],
+    Fact = fact(PredicateName, Args),
+    primed_fact(Fact),
+    log(debug, theory_engine, 'Posited observed fact ~p', [Fact]).
+
+% Premptively a coherent set of unobserved relations to the initial conditions to speed up getting to unified status.
+% Which set, if any, is added depends on the constraints and the type signature.
+posit_unobserved_relations(TypeSignature, SequenceAsTrace) :-
+    one_related_unique_latent(TypeSignature, SequenceAsTrace, PredicateType),
+    !,
+    posit_latent_related_objects(TypeSignature, PredicateType).
+posit_unobserved_relations(_).
+
+one_related_unique_latent(Objects, SequenceAsTrace, PredicateType) :-
+    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
+    constraints(Constraints),
+    member(one_related(ConstraintedPredicateName), Constraints),
+    is_unobserved_predicate(ConstraintedPredicateName, SequenceAsTrace).
+
+% Get posited constraints
+constraints(Constraints). % TODO
+
+% Whether a predicate is latent
+is_unobserved_predicate(PredicateName, SequenceAsTrace). % TODO
+
+% Create a circular chain of relations over all applicable objects
+posit_latent_related_objects(TypeSignature, PredicateName). % TODO
+
+
+% Posit facts to the primed initial conditions until they are unified
 % conditions that fail the unified_facts assumption
 %      1. Transitively unrelated objects
 %      2. Contradictory facts under static closure
-%      3. Under-described objects (a predicate applicable to an object is not applied)
+%      3. Unrepresented objects
+%      4. Under-described objects (a predicate applicable to an object is not applied)
 
 posit_initial_conditions(Template) :-
-    facts_unified(Template.type_signature), !.
+    facts_unified(Template.type_signature, Template.limits.max_static_rules), !.
 
 posit_initial_conditions(Template) :-
     posit_fact(Template),
@@ -698,7 +753,14 @@ posit_initial_conditions(Template) :-
 posit_fact(Template) :-
    member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
-   posited_fact(fact(PredicateName, Args)).
+   Fact = fact(PredicateName, Args),
+   posited_fact(Fact),
+   log(debug, theory_engine, 'Posited ~p', [Fact]).
+
+facts_out_of_order(Fact, OtherFact) :-
+    (is_primed(Fact) ; is_primed(OtherFact)),
+    !,
+    fail.
 
 facts_out_of_order(fact(PredicateTypeName1, _), fact(PredicateTypeName2, _)) :-
     compare((<), PredicateTypeName2, PredicateTypeName1), !.
@@ -723,15 +785,18 @@ ground_arg(value_type(Domain), _, Value) :-
 is_domain_value(Value) :-
     is_domain_value(_, Value).
 
-facts_unified(TypeSignature) :-
+facts_unified(TypeSignature, MaxStaticRules) :-
     % All objects are represented
     \+ unrepresented_object(TypeSignature.objects),
     % No under-described object
     \+ underdescribed_object(TypeSignature),
-    % The initial conditions are relevant to at least one static rule
-    relevant_rule(static),
-    % The static rules are applied, possibly positing new facts, without causing contradictions (else closure fails)
-    apply_rules(static),
+    % The initial conditions are relevant to at least one static rule - if there  are static rules
+    (MaxStaticRules > 0 -> 
+        relevant_rule(static),
+        % The static rules are applied, possibly positing new facts, without causing contradictions (else closure fails)
+        apply_rules(static)
+        ; 
+        true),
     % All objects are related directly or indirectly by the closed facts
     \+ unrelated_objects(TypeSignature),
     % The closed initial conditions are relevant to at least one causal rule
@@ -753,7 +818,8 @@ unrepresented_object(Objects) :-
 underdescribed_object(TypeSignature) :-
     member(object(ObjectType, ObjectName), TypeSignature.objects),
     applicable_predicate_name(TypeSignature, ObjectType, PredicateName),
-    \+ predicate_applied(PredicateName, ObjectName).
+    \+ predicate_applied(PredicateName, ObjectName),
+    log(debug, theory_engine, 'Under-described object ~p in facts', [ObjectName]).
 
 % Are there unrelated objects in the current round?
 unrelated_objects(TypeSignature) :-
