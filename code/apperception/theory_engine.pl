@@ -52,6 +52,7 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
                   collected_body_predicate(-fact),
                   posited_static_constraint(+static_constraint), 
                   static_constraint_covers(+predicate_name),
+                  read_constraint(+list(static_constraint), -static_constraint),
                   posited_rule(+rule_kind, +fact, +list(fact)),
                   enough_rules(+rule_kind),
                   round(+round),
@@ -128,6 +129,10 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'static constraint covers predicate' @ posited_static_constraint(SC) \ static_constraint_covers(BinaryPredicateName) <=> 
     static_constraint_about(SC, BinaryPredicateName) | true.
 'no static constraint covers predicate' @ static_constraint_covers(_) <=> fail.
+
+% Reading static constraints
+'read a constraint' @ posited_static_constraint(SC) \ read_constraint(AlreadyRead, Read) <=> \+ member(SC, AlreadyRead) | Read = SC.
+'done reading constraints' @ read_constraint(_, _) <=> fail.
 
 % Positing rule head and body predicates
 'one head predicate' @ posited_head_predicate(_) \ posited_head_predicate(_)#passive <=> true.
@@ -690,7 +695,7 @@ initial_conditions(Template, SequenceAsTrace) :-
     random_permutation(SequenceAsTrace, RandSequenceAsTrace),
     member(State, RandSequenceAsTrace),
     prime_initial_conditions(State),
-    posit_unobserved_relations(Template.type_signature, RandSequenceAsTrace),
+    prime_unobserved_relations(Template.type_signature, RandSequenceAsTrace),
     posit_initial_conditions(Template),
     log(info, theory_engine, 'Done making initial conditions').
 
@@ -712,29 +717,61 @@ posit_observation(Observation) :-
     primed_fact(Fact),
     log(debug, theory_engine, 'Posited observed fact ~p', [Fact]).
 
-% Premptively a coherent set of unobserved relations to the initial conditions to speed up getting to unified status.
-% Which set, if any, is added depends on the constraints and the type signature.
-posit_unobserved_relations(TypeSignature, SequenceAsTrace) :-
-    one_related_unique_latent(TypeSignature, SequenceAsTrace, PredicateType),
+% Premptively add a coherent set of constrained, unobserved relations 
+% to the initial conditions to speed up getting to unified status.
+prime_unobserved_relations(TypeSignature, SequenceAsTrace) :-
+    reflexive_one_related_latent(TypeSignature, SequenceAsTrace, PredicateName),
     !,
-    posit_latent_related_objects(TypeSignature, PredicateType).
-posit_unobserved_relations(_).
+    prime_latent_related_objects(TypeSignature, PredicateName).
+prime_unobserved_relations(_).
 
-one_related_unique_latent(Objects, SequenceAsTrace, PredicateType) :-
-    all_binary_predicate_names(TypeSignature, AllBinaryPredicateNames),
-    constraints(Constraints),
+% There is a latent relation between object of the same type
+reflexive_one_related_latent(TypeSignature, SequenceAsTrace, ConstraintedPredicateName) :-
+    read_constraints([], Constraints),
     member(one_related(ConstraintedPredicateName), Constraints),
+    is_reflexive_relation(ConstraintedPredicateName, TypeSignature),
     is_unobserved_predicate(ConstraintedPredicateName, SequenceAsTrace).
 
+% This is the name of a predicate relating objects of the smae type
+is_reflexive_relation(PredicateName, TypeSignature) :-
+    member(predicate(PredicateName, [object_type(ObjectType), object_type(ObjectType)]), TypeSignature.predicate_types).
+
 % Get posited constraints
-constraints(Constraints). % TODO
+read_constraints(Collected, Constraints) :-
+    read_constraint(Collected, ReadConstraint),
+    !,
+    read_constraints([ReadConstraint | Collected], Constraints).
+read_constraints(Constraints, Constraints).
 
 % Whether a predicate is latent
-is_unobserved_predicate(PredicateName, SequenceAsTrace). % TODO
+% [[on(c9, false), on(c8, false), on(c7, false),...],[...],...]
+is_unobserved_predicate(PredicateName, SequenceAsTrace) :-
+    flatten(SequenceAsTrace, AllStates),
+    \+ (member(Observation, AllStates), Observation =.. [PredicateName | _]).
 
 % Create a circular chain of relations over all applicable objects
-posit_latent_related_objects(TypeSignature, PredicateName). % TODO
+prime_latent_related_objects(TypeSignature, PredicateName) :-
+    member(predicate(PredicateName, [object_type(ObjectType), object_type(ObjectType)]), TypeSignature.predicate_types),
+    random_permutation(TypeSignature.objects, AllObjects),
+    findall(ObjectName, member(object(ObjectType, ObjectName), AllObjects), ChainObjects),
+    [First, _ | _] = ChainObjects,
+    last(ChainObjects, Last),
+    chained_related_pairs(ChainObjects, [Last-First], ObjectPairs),
+    prime_relations(PredicateName, ObjectPairs).
 
+chained_related_pairs([],ObjectPairs, ObjectPairs).
+chained_related_pairs([_],ObjectPairs, ObjectPairs).
+chained_related_pairs([From, To | Rest], Acc, ObjectPairs) :-
+    chained_related_pairs([To | Rest], [From-To |  Acc], ObjectPairs).
+
+prime_relations(_, []).
+prime_relations(PredicateName, [Pair | OtherPairs]) :-
+    prime_relation(PredicateName, Pair),
+    prime_relations(PredicateName, OtherPairs).
+
+prime_relation(PredicateName, FromObject-ToObject) :-
+    Fact = fact(PredicateName, [FromObject, ToObject]),
+    primed_fact(Fact).
 
 % Posit facts to the primed initial conditions until they are unified
 % conditions that fail the unified_facts assumption

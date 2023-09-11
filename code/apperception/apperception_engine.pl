@@ -16,9 +16,9 @@
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(note).
-sequence(leds_observations, Sequence), 
+sequence(eca_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 300},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 3000},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
