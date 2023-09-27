@@ -18,7 +18,7 @@
 set_log_level(note).
 sequence(eca_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 85, keep_n_theories: 3, time_secs: 3000},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, time_secs: 30},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 

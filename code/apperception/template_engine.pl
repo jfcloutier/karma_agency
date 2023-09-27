@@ -105,6 +105,6 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     % The maximum number of predicates in the rule body of a theory (different from Evans' paper where it is the number of symbols in a rule)
     MaxElements is ObjectsCount * PredicateTypesCount,
     % Maximum number of seconds spent searching for theories in the template
-    MaxTheoryTime is MaxElements * 0.5,
+    MaxTheoryTime is MaxElements, % * 0.5,
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
     log(note, template_engine, 'Template limits ~p', [Limits]).
