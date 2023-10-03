@@ -14,17 +14,17 @@ Rules (Left, Center Right)
 :- module(eca_observations, []).
 
 % sensed(What, About, When)
-sensed(next_to, [object(cell, c1), object(cell, c2)], 1).
-sensed(next_to, [object(cell, c2), object(cell, c3)], 1).
-sensed(next_to, [object(cell, c3), object(cell, c4)], 1).
-sensed(next_to, [object(cell, c4), object(cell, c5)], 1).
-sensed(next_to, [object(cell, c5), object(cell, c6)], 1).
-sensed(next_to, [object(cell, c6), object(cell, c7)], 1).
-sensed(next_to, [object(cell, c7), object(cell, c8)], 1).
-sensed(next_to, [object(cell, c8), object(cell, c9)], 1).
-sensed(next_to, [object(cell, c9), object(cell, c10)], 1).
-sensed(next_to, [object(cell, c10), object(cell, c11)], 1).
-sensed(next_to, [object(cell, c11), object(cell, c1)], 1).
+sensed(right_of, [object(cell, c1), object(cell, c11)], 1).
+sensed(right_of, [object(cell, c2), object(cell, c1)], 1).
+sensed(right_of, [object(cell, c3), object(cell, c2)], 1).
+sensed(right_of, [object(cell, c4), object(cell, c3)], 1).
+sensed(right_of, [object(cell, c5), object(cell, c4)], 1).
+sensed(right_of, [object(cell, c6), object(cell, c5)], 1).
+sensed(right_of, [object(cell, c7), object(cell, c6)], 1).
+sensed(right_of, [object(cell, c8), object(cell, c7)], 1).
+sensed(right_of, [object(cell, c9), object(cell, c8)], 1).
+sensed(right_of, [object(cell, c10), object(cell, c9)], 1).
+sensed(right_of, [object(cell, c11), object(cell, c10)], 1).
 
 sensed(on, [object(cell, c1), false], 1).
 sensed(on, [object(cell, c2), false], 1).

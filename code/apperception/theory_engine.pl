@@ -43,6 +43,7 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
 :- chr_type static_constraint ---> one_relation(list(any)) ; one_related(any).
 :- chr_constraint deadline(+any),
                   max_rules(+rule_kind, +),
+                  empty_rule_set(+rule_kind),
                   rules_count(+rule_kind, +int),
                   elements_count(+int),
                   max_body_predicates(+int),
@@ -151,8 +152,13 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Positing rules, static and causal
 'adding rule after deadline' @ deadline(Deadline) \ posited_rule(_, _, _)  <=> 
     after_deadline(Deadline) | fail.
+'when no rule is enough' @ max_rules(Kind, 0) \ enough_rules(Kind) <=> true.
 'enough rules' @ max_rules(Kind, Max) \ enough_rules(Kind), rules_count(Kind, Count)  <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
+
+% Checking if rule set is empty
+'empty rule set' @ max_rules(Kind, 0) \ empty_rule_set(Kind) <=> true.
+'not empty rule set' @ empty_rule_set(_) <=> fail.
 
 % Validating rules, static or causal
 'repeated rule' @ posited_rule(Kind, H1, B1)#passive \ posited_rule(Kind, H2, B2) <=>
@@ -551,6 +557,11 @@ idempotent_causal_rule(Head-BodyPredicates) :-
     memberchk_equal(Head, BodyPredicates).
 
 %%% VALIDATING A RULE SET
+
+% An empty rule set is always valid
+valid_rule_set(Kind, _) :-
+    empty_rule_set(Kind),
+    !.
 
 % A static rule set is valid if there are no unused predicate types
 valid_rule_set(static, Template) :-
