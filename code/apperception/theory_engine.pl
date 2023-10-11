@@ -742,7 +742,8 @@ read_constraints(Constraints, Constraints).
 %      4. Under-described objects (a predicate applicable to an object is not applied)
 
 posit_other_initial_conditions(Template) :-
-    facts_unified(Template.type_signature, Template.limits.max_static_rules), !.
+    facts_unified(Template.type_signature, Template.limits.max_static_rules), !,
+    log(info, theory_engine, 'Initial conditions are unified').
 
 posit_other_initial_conditions(Template) :-
     posit_fact(Template),

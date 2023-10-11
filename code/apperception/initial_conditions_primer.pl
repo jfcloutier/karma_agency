@@ -53,7 +53,8 @@ latent_related_objects(TypeSignature, PredicateName, Facts) :-
     [First, _ | _] = ChainObjects,
     last(ChainObjects, Last),
     chained_related_pairs(ChainObjects, [Last-First], ObjectPairs),
-    relations_to_facts(PredicateName, ObjectPairs, [], Facts).
+    relations_to_facts(PredicateName, ObjectPairs, [], Facts),
+    log(info, theory_engine, 'Priming initial conditions with unobserved relations ~p', [Facts]).
 
 chained_related_pairs([],ObjectPairs, ObjectPairs).
 chained_related_pairs([_],ObjectPairs, ObjectPairs).
