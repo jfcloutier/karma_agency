@@ -41,7 +41,7 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
 % :- chr_type arg ---> object ; value.
 :- chr_type fact ---> fact(predicate_name, list(any)). % I want it to be list(arg) but the CHR compiler complains
 :- chr_type static_constraint ---> one_relation(list(any)) ; one_related(any).
-:- chr_constraint deadline(+any),
+:- chr_constraint deadline(+any, +any),
                   max_rules(+rule_kind, +),
                   empty_rule_set(+rule_kind),
                   rules_count(+rule_kind, +int),
@@ -110,7 +110,7 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
 :- chr_option(debug, on).
 
 % Time and complexity limits are singletons
-'update deadline' @ deadline(_) \ deadline(_)#passive <=> true.
+'update deadline' @ deadline(_, _) \ deadline(_, _)#passive <=> true.
 max_rules(Kind, _) \ max_rules(Kind, _)#passive <=> true.
 max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
@@ -120,8 +120,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'timer not done' @ time_ended(_, _, B) <=> B = false | true.
 
 % Positing static constraints
-'static constraint after deadline' @ deadline(Deadline) \ posited_static_constraint(_)  <=> 
-     after_deadline(Deadline) | fail.
+'static constraint after deadline' @ deadline(Deadline, MaxTime) \ posited_static_constraint(_)  <=> 
+     after_deadline(Deadline, MaxTime) | fail.
 'constraints not in alpahbetical order' @ posited_static_constraint(one_related(P1))#passive \ posited_static_constraint(one_related(P2)) <=> 
     P2 @< P1 | fail.
 'duplicate static constraint' @ posited_static_constraint(SC1)#passive \ posited_static_constraint(SC2) <=> 
@@ -150,8 +150,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'done collecting body predicates' @  collected_body_predicate(_) <=> true.
 
 % Positing rules, static and causal
-'adding rule after deadline' @ deadline(Deadline) \ posited_rule(_, _, _)  <=> 
-    after_deadline(Deadline) | fail.
+'adding rule after deadline' @ deadline(Deadline, MaxTime) \ posited_rule(_, _, _)  <=> 
+    after_deadline(Deadline, MaxTime) | fail.
 'when no rule is enough' @ max_rules(Kind, 0) \ enough_rules(Kind) <=> true.
 'enough rules' @ max_rules(Kind, Max) \ enough_rules(Kind), rules_count(Kind, Count)  <=> Count == Max | true.
 'not enough rules' @ enough_rules(_) <=> fail.
@@ -193,8 +193,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'new round replaces previous round' @ round(_) \ round(_)#passive  <=> true.
 
 %%% Facts in rounds
-'adding fact after deadline' @ deadline(Deadline) \ posited_fact(_)  <=> 
-    after_deadline(Deadline) | fail.
+'adding fact after deadline' @ deadline(Deadline, MaxTime) \ posited_fact(_)  <=> 
+    after_deadline(Deadline, MaxTime) | fail.
 'posited fact in current round' @ round(Round)#passive \ posited_fact(F) <=> posited_fact(F, Round).
 'reflexive relation' @ posited_fact(fact(_, [A, A]), _) <=> fail.
 'duplicate fact' @ posited_fact(fact(N, As), Round)#passive \ posited_fact(fact(N, As), Round) <=> fail.
@@ -311,6 +311,7 @@ create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
 
 theory(Template, SequenceAsTrace, Theory, Trace) :-
+    found_theory(false),
     theory_limits(Template),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
@@ -319,7 +320,16 @@ theory(Template, SequenceAsTrace, Theory, Trace) :-
     rules(causal, Template, MaxCausalBodySize),
     initial_conditions(Template, SequenceAsTrace),
     trace(Trace),
-    theory_with_trace(Theory, Trace).
+    theory_with_trace(Theory, Trace),
+    found_theory(true).
+
+% Set a non-backtrackable global for the thread that a theory was found.
+found_theory(Found) :-
+    set_global(theory_engine, theory_was_found, Found).
+
+% Was a theory ever found in this thread?
+theory_found :- 
+    get_global(theory_engine, theory_was_found, true).
                 
 theory_limits(Template) :-
     theory_deadline(Template.limits.max_theory_time),
@@ -330,13 +340,23 @@ theory_limits(Template) :-
 theory_deadline(MaxTime) :-
     get_time(Now),
     Deadline is Now + MaxTime,
-    deadline(Deadline).
+    deadline(Deadline, MaxTime).
+
+% Throw an error if 25% toward deadline and no theory was ever found in this thread
+after_deadline(Deadline, MaxTime) :-
+    \+ theory_found,
+    get_time(Now),
+    TimeLeft is Deadline - Now,
+    TimeLeft < MaxTime * 0.75,
+    TimeSpent is round(MaxTime - TimeLeft),
+    log(note, theory_engine, 'Too much time spent not finding a theory: ~p out of ~p secs', [TimeSpent, MaxTime]),
+    throw(error(template_search_time_expired, context(theory_engine, 'deadline was reached'))).
 
 % Throw error when deadline is exceeded
-after_deadline(Deadline) :-
+after_deadline(Deadline, _) :-
     get_time(Now),
     Now > Deadline,
-    throw(error(template_search_time_expired, context(theory_engine, Deadline))).
+    throw(error(template_search_time_expired, context(theory_engine, 'too long without finding a theory'))).
 
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-

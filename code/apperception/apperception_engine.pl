@@ -223,8 +223,8 @@ handle_theory_engine_reponse(no, _, _, _) :-
     log(info, apperception_engine, 'NO MORE THEORIES for the template'),
     fail.
 
-handle_theory_engine_reponse(exception(error(template_search_time_expired, context(theory_engine, _))), _, _, _) :-
-    log(info, apperception_engine, 'Time expired getting a theory from a template.'),
+handle_theory_engine_reponse(exception(error(template_search_time_expired, context(theory_engine, Reason))), _, _, _) :-
+    log(info, apperception_engine, 'Time expired getting a theory from a template: ~p.', [Reason]),
     fail.
 
 % handle_theory_engine_reponse(exception(Exception), _, _, _) :-
