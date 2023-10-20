@@ -89,7 +89,7 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
                   remove_last_round/0,
                   remove_round(+round),
                   carry_over_unclosable_from(+round),
-                  static_rule_about(+predicate_name),
+                  rule_about(+rule_kind, +predicate_name),
                   carry_over_composable_from(+round),
                   redundant_fact_in_this_round(+fact),
                   contradicted_in_this_round(+fact),
@@ -207,10 +207,10 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'is not primed fact' @ is_primed(_) <=> fail.
 'fact posited in wrong order' @ posited_fact(F1, 1)#passive \ posited_fact(F2, 1) <=> facts_out_of_order(F1, F2) | fail.
 
-% Accumulating object relations
-'remove duplicate relations' @ related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
-'related objects' @ posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
-'transitive related' @ related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
+% Accumulating object relations in a round
+'remove duplicate relations' @ round(Round), related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
+'related objects' @ round(Round), posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
+'transitive related' @ round(Round), related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
 
 % Facts unified in a round?
 'object in a fact' @ round(Round), posited_fact(fact(_, A), Round) \ object_in_a_fact(O) <=>  member(O, A) | true.
@@ -275,8 +275,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'carry over unclosable' @ carry_over_unclosable_from(PreviousRound), round(Round), posited_fact(F, PreviousRound) ==>  
                                                                         fact_from_previous_round_unclosable(F), fact_from_previous_round_composable(F) | posited_fact(F, Round).
 'done carrying over unclosable' @ carry_over_unclosable_from(_) <=> true.
-'static rule about' @ posited_rule(static, fact(Name, _), _) \ static_rule_about(Name) <=> true.
-'no static rule about' @ static_rule_about(_) <=> false.
+'rule about' @ posited_rule(Kind, fact(Name, _), _) \ rule_about(Kind, Name) <=> true.
+'no rule about' @ rule_about(_, _) <=> false.
 
 % Carry over composable facts from previous round
 'carry over composable' @ carry_over_composable_from(PreviousRound), round(Round), posited_fact(F, PreviousRound) ==>  
@@ -288,8 +288,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'contradicted in round' @ round(Round), posited_fact(fact(N, [O, V2]), Round) \ contradicted_in_this_round(fact(N, [O, V1])) <=>  is_domain_value(V1), is_domain_value(V2), V1 \== V2 | true.
 'not contradicted in round' @ contradicted_in_this_round(_) <=> fail.
 
-'breaks static contraint in next round' @ breaks_static_constraint_in_this_round(fact(N1, As1)), posited_static_constraint(SC)#passive, round(Round)#passive \ posited_fact(fact(N2, As2), Round)  <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
-'does not break static contraint in next round' @ breaks_static_constraint_in_this_round(_) <=> fail.
+'breaks static contraint in this round' @  posited_static_constraint(SC)#passive, round(Round)#passive, posited_fact(fact(N2, As2), Round) \ breaks_static_constraint_in_this_round(fact(N1, As1)) <=> breaks_static_constraint(SC, fact(N1, As1), fact(N2, As2)) | true.
+'does not break static contraint in this round' @ breaks_static_constraint_in_this_round(_) <=> fail.
 
 % Validate trace
 'trace has many rounds' @ round(Round) \ many_rounds <=> Round > 1 | true.
@@ -319,7 +319,8 @@ theory(Template, SequenceAsTrace, Theory, Trace) :-
     rules(static, Template, MaxStaticBodySize),
     rules(causal, Template, MaxCausalBodySize),
     initial_conditions(Template, SequenceAsTrace),
-    trace(Trace),
+    length(SequenceAsTrace, SequenceLength),
+    trace(Trace, SequenceLength),
     theory_with_trace(Theory, Trace),
     found_theory(true).
 
@@ -370,7 +371,7 @@ max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     UpperLimit1 is min(UpperLimit, Total),
     LowerLimit1 is min(LowerLimit, UpperLimit1),
     choose_pair_in_range(LowerLimit1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
-    log(info, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
+    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
 
 %%% STATIC CONSTRAINTS
 
@@ -866,40 +867,72 @@ unsupported_body_predicate(Body) :-
     \+ fact_about(PredicateName).
 
 % Making a trace from a set of initial conditions.
+% Its length (number of rounds) is not to exceed twice  that of the initial conditions.
 % It fails if the trace has only one round (the initial conditions).
 
-trace(Trace) :-
-   log(info, theory_engine, 'Making trace'),
+trace(Trace, SequenceLength) :-
+   log(info, theory_engine, 'Making trace no longer than ~p', [SequenceLength]),
     % Grow a trace until it repeats
-    grow_trace,
+    grow_trace(SequenceLength),
     % Fail if making a trace did not produce rounds beyond initial conditions
     many_rounds, !,
     extract_trace(Trace),
     log(info, theory_engine, 'Made trace ~p', [Trace]).
 
-grow_trace :-
+grow_trace(SequenceLength) :-
      make_next_round,
      !,
-    (repeated_round -> remove_last_round ; grow_trace).
+    (done_growing_trace(SequenceLength) -> remove_last_round ; grow_trace(SequenceLength)).
 
-grow_trace.
+grow_trace(_).
+
+done_growing_trace(SequenceLength) :-
+    too_many_rounds(SequenceLength) ; repeated_round.
+
+too_many_rounds(SequenceLength) :-
+    MaxRounds is SequenceLength, % * 2,
+    last_round(LastRound),
+    LastRound > MaxRounds.
 
 % Can fail
 make_next_round :-
+    % Start populating the next round by adding those caused by the current round
     apply_rules(causal),
+    % Move to the next round
     bump_round(PreviousRound),
+    log(info, theory_engine, 'Made round ~p', [PreviousRound]),
     % carry over composable facts that can not be inferred via static rules
+    % so that static rules have all the facts they need to infer facts in the new round
+    log(info, theory_engine, 'carry_over_unclosable_from(~p)', [PreviousRound]),
     carry_over_unclosable_from(PreviousRound),
+    log(info, theory_engine, 'apply_rules(static)'),
     apply_rules(static),
+    % carry over all remaining composable facts now that the static rules have been applied
+    log(info, theory_engine, 'carry_over_composable_from(~p)', [PreviousRound]),
     carry_over_composable_from(PreviousRound).
 
+% A fact that can not be statically inferred or caused (it had to be primed) is always composable, if it is not redundant.
 fact_from_previous_round_composable(Fact) :-
+   constant_fact(Fact),
+   \+ redundant_fact_in_this_round(Fact),
+   !,
+   log(info, theory_engine, 'Constant fact ~p', [Fact]).
+
+fact_from_previous_round_composable(Fact) :-
+    log(info, theory_engine, 'fact_from_previous_round_composable(~p)', [Fact]),
     \+ redundant_fact_in_this_round(Fact),
     \+ contradicted_in_this_round(Fact),
-    \+ breaks_static_constraint_in_this_round(Fact).
+    \+ breaks_static_constraint_in_this_round(Fact),
+    log(info, theory_engine, 'composable ~p', [Fact]).
 
 fact_from_previous_round_unclosable(fact(PredicateName, _)) :-
-    \+ static_rule_about(PredicateName).
+    log(info, theory_engine, 'fact_from_previous_round_unclosable(~p)', [PredicateName]),
+    \+ rule_about(static, PredicateName).
+
+constant_fact(Fact) :-
+    fact(PredicateName, _) = Fact,
+    \+ rule_about(causal, PredicateName), 
+    \+ rule_about(static, PredicateName).
 
 % There is a prior round such that all facts in the round are repeated in the other round (i.e no fact in this round is unrepeated in the other round)
 repeated_round(Round) :-

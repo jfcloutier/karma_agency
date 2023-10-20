@@ -200,6 +200,7 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, St
     next_theory(TheoryEngine, StartTime, Theory, Trace),
     % Rate the theory
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
+    log(note, apperception_engine, 'with causal rules ~p', [Theory.causal_rules]),
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),
     !,
