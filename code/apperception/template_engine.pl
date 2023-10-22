@@ -37,7 +37,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
     engine_create(Template, theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template), TheoryTemplateEngine).
 
 %% For testing
-% theory_template(_, _, Template) :-
+% theory_template(_, _, _, Template) :-
 %     between(30, 50, N),
 %     Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},

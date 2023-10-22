@@ -16,9 +16,10 @@
 [apperception(sequence), apperception(type_signature), apperception(domains), apperception(template_engine), apperception(theory_engine), apperception(rating), apperception(apperception_engine)].
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(note).
-sequence(leds_observations, Sequence), 
+log_to('test.log').
+sequence(eca_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -192,21 +193,21 @@ search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-
 % Find the best theories in a template within allowed limits
 find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, StartTime, BestTheories) :-
     create_theory_engine(Template, SequenceAsTrace, TheoryEngine),
-    best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, StartTime, [], BestTheories),
+    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, [], BestTheories),
     log(info, apperception_engine, 'Best theories for template ~p are ~p', [Template, BestTheories]),
     destroy_engine(TheoryEngine).
    
- best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, StartTime, RatedTheories, BestTheories) :-
+ best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, RatedTheories, BestTheories) :-
     next_theory(TheoryEngine, StartTime, Theory, Trace),
     % Rate the theory
+    log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
-    log(note, apperception_engine, 'with causal rules ~p', [Theory.causal_rules]),
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),
     !,
-    best_theories_in_template(ApperceptionLimits, TheoryEngine, SequenceAsTrace, StartTime, KeptRatedTheories, BestTheories).
+    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, KeptRatedTheories, BestTheories).
 
-best_theories_in_template(_, _, _, _, BestTheories, BestTheories).
+best_theories_in_template(_, _, _,_ , _, BestTheories, BestTheories).
 
 % Get next theory and its trace from theory engine, unless time is expired.
 next_theory(TheoryEngine, StartTime, Theory, Trace) :-

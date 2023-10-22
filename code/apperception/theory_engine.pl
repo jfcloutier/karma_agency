@@ -63,7 +63,6 @@ theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
                   is_primed(+fact),
                   posited_fact(+fact),
                   posited_fact(+fact, +round),
-                  related(+object, +object, +round),
                   object_in_a_fact(+object),
                   predicate_applied(+predicate_name, +object),
                   predicate_caused(+predicate_name),
@@ -207,11 +206,6 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'is not primed fact' @ is_primed(_) <=> fail.
 'fact posited in wrong order' @ posited_fact(F1, 1)#passive \ posited_fact(F2, 1) <=> facts_out_of_order(F1, F2) | fail.
 
-% Accumulating object relations in a round
-'remove duplicate relations' @ round(Round), related(O1, O2, Round) \ related(O1, O2, Round) <=> true. 
-'related objects' @ round(Round), posited_fact(fact(_, [O1, O2]), Round) ==>  is_object(O1), is_object(O2) | related(O1, O2, Round).
-'transitive related' @ round(Round), related(O1, O2, Round),  related(O2, O3, Round) ==> related(O1, O3, Round).
-
 % Facts unified in a round?
 'object in a fact' @ round(Round), posited_fact(fact(_, A), Round) \ object_in_a_fact(O) <=>  member(O, A) | true.
 'object not in a fact' @ object_in_a_fact(_) <=> fail.
@@ -239,8 +233,8 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'cleanup evaluating rules' @ done_applying_rules \ evaluating_rule(_,_,_) <=> true.
 'done evaluating rules' @ done_applying_rules <=> true.
 
-% Spatial unity
-'are objects related?' @ round(Round), related(O1, O2, Round)#passive \ objects_related(O1, O2)  <=> true.
+% Are objects related in a round?
+'objects related?' @ round(Round), posited_fact(fact(_, [O1, O2]), Round) \ objects_related(O1, O2) <=> true.
 'objects are not related' @ objects_related(_, _) <=> fail.
 
 %%% Trace
@@ -267,7 +261,6 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 % Removing a round
 'remove last round' @ remove_last_round, round(Round)#passive <=> remove_round(Round).
 'remove facts from last round' @ remove_round(Round) \ posited_fact(_, Round)#passive <=> true.
-'remove related from last round' @ remove_round(Round) \ related(_, _, Round)#passive <=> true.
 'done removing round' @ remove_round(RemovedRound) <=> LastRound is RemovedRound - 1, round(LastRound).
 % Bump round
 'bump round' @ bump_round(PreviousRound), round(Round) <=> NextRound is Round + 1, PreviousRound = Round, round(NextRound).
@@ -348,7 +341,7 @@ after_deadline(Deadline, MaxTime) :-
     \+ theory_found,
     get_time(Now),
     TimeLeft is Deadline - Now,
-    TimeLeft < MaxTime * 0.75,
+    TimeLeft < MaxTime * 0.9, % 0.75,
     TimeSpent is round(MaxTime - TimeLeft),
     log(note, theory_engine, 'Too much time spent not finding a theory: ~p out of ~p secs', [TimeSpent, MaxTime]),
     throw(error(template_search_time_expired, context(theory_engine, 'deadline was reached'))).
@@ -841,22 +834,51 @@ underdescribed_object(TypeSignature) :-
     \+ predicate_applied(PredicateName, ObjectName),
     log(debug, theory_engine, 'Under-described object ~p in facts', [ObjectName]).
 
-% Are there unrelated objects in the current round?
+% There are unrelated objects in the current round
 unrelated_objects(TypeSignature) :-
-    object_name_pair(TypeSignature.objects, ObjectName1-ObjectName2),
-    \+ objects_related(ObjectName1, ObjectName2),
+    all_object_names(TypeSignature.objects, AllObjectNames),
+    \+ (
+        object_name_pair(AllObjectNames, ObjectName1-ObjectName2),
+        delete(AllObjectNames, ObjectName1, Remaining1),
+        delete(Remaining1, ObjectName2, Remaining2),
+        objects_transitively_related(ObjectName1, ObjectName2, Remaining2)
+    ),
     log(debug, unity, 'Unrelated objects ~p and ~p in facts!', [ObjectName1, ObjectName2]).
 
-related_in_fact(Fact, ObjectName, OtherObjectName) :-
-    Fact =.. [_ | Args], member(ObjectName, Args), member(OtherObjectName, Args).
+objects_transitively_related(ObjectName1, ObjectName2, _) :-
+    objects_directly_related(ObjectName1, ObjectName2), !.
+
+objects_transitively_related(SourceObjectName, TargetObjectName, ObjectNames) :-
+    % Looking for intermediaries, one directly related to source and one directly related to target (can be the same)
+    % And then going from there.
+    member(ObjectName1, ObjectNames),
+    objects_directly_related(SourceObjectName, ObjectName1),
+    select(ObjectName2, ObjectNames, Remaining1),
+    objects_directly_related(ObjectName2, TargetObjectName),
+    delete(Remaining1, ObjectName2, Remaining2),
+    objects_transitively_related(ObjectName1, ObjectName2, Remaining2),
+    !,
+    log(info, theory_engine, 'objects_tranisitively_related(~p, ~p)', [SourceObjectName, TargetObjectName]).
+
+objects_directly_related(ObjectName, ObjectName) :- !.
+
+ objects_directly_related(ObjectName1, ObjectName2) :-
+    objects_related(ObjectName1, ObjectName2), !.
+
+objects_directly_related(ObjectName1, ObjectName2) :-
+    objects_related(ObjectName2, ObjectName1), !.
 
 is_object(Name) :-
     \+ is_domain_value(Name).
 
-% Some pair of objects from the type signature
-object_name_pair(TypeSignatureObjects, ObjectName1-ObjectName2) :-
-    select(object(_, ObjectName1), TypeSignatureObjects, RemainingSignatureObjects),
-    member(object(_, ObjectName2), RemainingSignatureObjects).
+% All object names in the type signature
+all_object_names(TypeSignatureObjects, AllObjectNames) :-
+    setof(ObjectName, member(object(_, ObjectName), TypeSignatureObjects), AllObjectNames).
+
+% Some pair of objects
+object_name_pair(ObjectNames, ObjectName1-ObjectName2) :-
+    select(ObjectName1, ObjectNames, Remaining),
+    member(ObjectName2, Remaining).
 
 % A rule is supported if all of its body predicates have potentially matching facts (none of its body predicates are not supported by facts)
 supported_rule(_-Body) :-
@@ -903,30 +925,23 @@ make_next_round :-
     log(info, theory_engine, 'Made round ~p', [PreviousRound]),
     % carry over composable facts that can not be inferred via static rules
     % so that static rules have all the facts they need to infer facts in the new round
-    log(info, theory_engine, 'carry_over_unclosable_from(~p)', [PreviousRound]),
     carry_over_unclosable_from(PreviousRound),
-    log(info, theory_engine, 'apply_rules(static)'),
     apply_rules(static),
     % carry over all remaining composable facts now that the static rules have been applied
-    log(info, theory_engine, 'carry_over_composable_from(~p)', [PreviousRound]),
     carry_over_composable_from(PreviousRound).
 
 % A fact that can not be statically inferred or caused (it had to be primed) is always composable, if it is not redundant.
 fact_from_previous_round_composable(Fact) :-
    constant_fact(Fact),
    \+ redundant_fact_in_this_round(Fact),
-   !,
-   log(info, theory_engine, 'Constant fact ~p', [Fact]).
+   !.
 
 fact_from_previous_round_composable(Fact) :-
-    log(info, theory_engine, 'fact_from_previous_round_composable(~p)', [Fact]),
     \+ redundant_fact_in_this_round(Fact),
     \+ contradicted_in_this_round(Fact),
-    \+ breaks_static_constraint_in_this_round(Fact),
-    log(info, theory_engine, 'composable ~p', [Fact]).
+    \+ breaks_static_constraint_in_this_round(Fact).
 
 fact_from_previous_round_unclosable(fact(PredicateName, _)) :-
-    log(info, theory_engine, 'fact_from_previous_round_unclosable(~p)', [PredicateName]),
     \+ rule_about(static, PredicateName).
 
 constant_fact(Fact) :-
