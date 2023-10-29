@@ -200,7 +200,7 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, St
  best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, RatedTheories, BestTheories) :-
     next_theory(TheoryEngine, StartTime, Theory, Trace),
     % Rate the theory
-    log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
+    % log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),

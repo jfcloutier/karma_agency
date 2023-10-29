@@ -95,17 +95,20 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
     Frugality is NumObjectTypes + NumObjects + NumPredicateTypes,
     RandomOrder is Random * Frugality.
 
+% Come up with reasonable limits on the size, complexity and search time for theories in this template
 theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
     length(TypeSignature.predicate_types, PredicateTypesCount),
+    % Let's say that the max number of rules is twice the number of predicate types
+    UpperMaxRules is round(PredicateTypesCount * 2),
     % Max number of rules per theory - there might be no static rule but there must always be at least one causal rule
-    UpperMaxRules is round(PredicateTypesCount * 1.5),
     between(1, UpperMaxRules, MaxCausalRules),
     between(0, UpperMaxRules, MaxStaticRules),
     % The maximum number of predicates in the rule body of a theory (different from Evans' paper where it is the number of symbols in a rule)
-    MaxElements is ObjectsCount * PredicateTypesCount,
-    % Maximum number of seconds spent searching for theories in the template
-    MaxTheoryTime is round(MaxElements ** 1.5),
-    % MaxTheoryTime is MaxElements * 2, % * 0.5,
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: MaxElements, max_theory_time: MaxTheoryTime},
+    % is a function of the number of objects and predicate types
+    MaxElements is (ObjectsCount / PredicateTypesCount) + PredicateTypesCount,
+    % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
+    MaxTheoryTime is round((MaxElements * 3) + (MaxElements ** 2)),
+    round(MaxElements, RoundedMaxElements),
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_theory_time: MaxTheoryTime},
     log(note, template_engine, 'Template limits ~p', [Limits]).

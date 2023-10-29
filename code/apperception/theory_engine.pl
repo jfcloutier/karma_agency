@@ -355,16 +355,8 @@ after_deadline(Deadline, _) :-
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
     length(Template.type_signature.predicate_types, LowerLimit),
-    % length(Template.type_signature.objects, ObjectCount),
-    % LowerLimit is PredicateTypeCount + ObjectCount,
-    aggregate(sum(Count), PredicateType, predicate_instance_count(PredicateType, Template, Count), WorstCase),
-    Total is WorstCase div 2,
-    % "Worst case" is all unary predicates. max_elements is the maximum number of atoms in a rule body. A unary predicate has 2 atoms.
-    UpperLimit is div(Template.limits.max_elements, 2),
-    UpperLimit1 is min(UpperLimit, Total),
-    LowerLimit1 is min(LowerLimit, UpperLimit1),
-    choose_pair_in_range(LowerLimit1, UpperLimit1, MaxStaticBodySize-MaxCausalBodySize),
-    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p', [MaxStaticBodySize, MaxCausalBodySize]).
+    choose_pair_in_range(LowerLimit, Template.limits.max_elements, MaxStaticBodySize-MaxCausalBodySize),
+    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p from ~p', [MaxStaticBodySize, MaxCausalBodySize, LowerLimit-Template.limits.max_elements]).
 
 %%% STATIC CONSTRAINTS
 
@@ -419,7 +411,7 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 rules(Kind, Template, MaxBodySize) :-
     log(info, theory_engine, 'Making ~p rules', [Kind]),
     max_body_predicates(MaxBodySize),
-    distinct_typed_variables(Template.type_signature.typed_variables, [], DistinctVars), !,
+    distinct_typed_variables(Template.type_signature.typed_variables, MaxBodySize, [], DistinctVars), !,
     posit_rules(Kind, Template, DistinctVars),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
 
@@ -612,11 +604,14 @@ collect_body_predicates([BodyPredicate | OtherBodyPredicates]) :-
 
 collect_body_predicates([]).
 
-distinct_typed_variables([], DistinctVars, DistinctVars).
-distinct_typed_variables(TypedVariables, Acc, DistinctVars) :-
+distinct_typed_variables([], _, DistinctVars, DistinctVars).
+% Don't create more variables of a type than the body size can accomodate
+distinct_typed_variables(TypedVariables, MaxBodySize, Acc, DistinctVars) :-
     select(variables(Type, Count), TypedVariables, Rest),
-    distinct_vars(Count, Vars),
-    distinct_typed_variables(Rest, [vars(Type, Vars) | Acc], DistinctVars).
+    MaxVarCount is MaxBodySize + 1,
+    VarCount is min(Count, MaxVarCount),
+    distinct_vars(VarCount, Vars),
+    distinct_typed_variables(Rest, MaxBodySize, [vars(Type, Vars) | Acc], DistinctVars).
 
 distinct_vars(N, Vars) :-
     length(Vars, N),
