@@ -31,6 +31,8 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 :- use_module(apperception(rating)).
 :- use_module(library(chr)).
 
+:- dynamic best_rating/1.
+
 % Constraints
 
 :- chr_constraint deadline(+float),
@@ -91,7 +93,7 @@ set_deadline(ApperceptionLimits) :-
     Deadline is Now + ApperceptionLimits.time_secs,
     deadline(Deadline).
 
-% Throw an exception if time is expired
+% Throw an exception if apperception time is expired 
 check_time_expired :-
     get_time(Now),
     before_deadline(Now) -> true; abort_with_best_theories(time_expired).
@@ -193,11 +195,16 @@ search_templates(ApperceptionLimits, Templates, SequenceAsTrace, StartTime) :-
 % Find the best theories in a template within allowed limits
 find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, StartTime, BestTheories) :-
     create_theory_engine(Template, SequenceAsTrace, TheoryEngine),
-    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, [], BestTheories),
+    get_time(TemplateStartTime),
+    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, TemplateStartTime, [], BestTheories),
     log(info, apperception_engine, 'Best theories for template ~p are ~p', [Template, BestTheories]),
     destroy_engine(TheoryEngine).
    
- best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, RatedTheories, BestTheories) :-
+best_theories_in_template(_, Template, _, _, _, TemplateStartTime, BestTheories, BestTheories) :-
+    template_under_performing(Template.limits.max_theory_time, TemplateStartTime, BestTheories), 
+    !.
+
+best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, TemplateStartTime, RatedTheories, BestTheories) :-
     next_theory(TheoryEngine, StartTime, Theory, Trace),
     % Rate the theory
     % log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
@@ -205,9 +212,28 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, St
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
     maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),
     !,
-    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, KeptRatedTheories, BestTheories).
+    best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, TemplateStartTime, KeptRatedTheories, BestTheories).
 
-best_theories_in_template(_, _, _,_ , _, BestTheories, BestTheories).
+best_theories_in_template(_, _, _,_ , _, _, BestTheories, BestTheories).
+
+% No theory found by the template that has as good coverage as the best one found by other templates, after 50% of time allocated to the template
+template_under_performing(MaxTime, TemplateStartTime, BestTheories) :-
+    get_time(Now),
+    TimeLeft is TemplateStartTime + MaxTime - Now,
+    TimeLeft < MaxTime * 0.5,
+    TimeSpent is round(MaxTime - TimeLeft),
+    best_rating(BestCoverage-_),
+    AcceptableCoverage is BestCoverage, % / 2,
+    \+ acceptable_theory_found(BestTheories, AcceptableCoverage),
+    log(note, apperception_engine, 'Template is under-performing acceptable coverage ~p after ~p secs out of ~p', [AcceptableCoverage, TimeSpent, MaxTime]).
+
+% A theory was found with coverage that is close enough to the best coverage found so far
+acceptable_theory_found([Theory | Others], AcceptableCoverage) :-
+    (Coverage-_ = Theory.rating,
+    Coverage >= AcceptableCoverage)
+    ;
+    acceptable_theory_found(Others, AcceptableCoverage).
+
 
 % Get next theory and its trace from theory engine, unless time is expired.
 next_theory(TheoryEngine, StartTime, Theory, Trace) :-
@@ -222,11 +248,11 @@ handle_theory_engine_reponse(the(Theory-Trace), StartTime, FoundTheory, Trace) :
     put_dict(found_time, Theory, FoundTime, FoundTheory).
 
 handle_theory_engine_reponse(no, _, _, _) :- 
-    log(info, apperception_engine, 'NO MORE THEORIES for the template'),
+    log(info, apperception_engine, 'NO MORE THEORIES in this template'),
     fail.
 
 handle_theory_engine_reponse(exception(error(template_search_time_expired, context(theory_engine, Reason))), _, _, _) :-
-    log(info, apperception_engine, 'Time expired getting a theory from a template: ~p.', [Reason]),
+    log(info, apperception_engine, 'Time expired searching for theories in template: ~p.', [Reason]),
     fail.
 
 % handle_theory_engine_reponse(exception(Exception), _, _, _) :-
@@ -279,12 +305,15 @@ maybe_keep_theory(RatedTheory, _, KeptTheories, KeptTheories) :-
 maybe_keep_theory(RatedTheory, ApperceptionLimits, _, _) :-
     Coverage-_ = RatedTheory.rating,
     Coverage >= ApperceptionLimits.good_enough_coverage,
+    % Retain the theory before aborting search
     found_better_theory(RatedTheory),
     abort_with_best_theories(found_good_enough_theory).   
 
 maybe_keep_theory(RatedTheory, ApperceptionLimits, KeptTheories, [RatedTheory | KeptTheories]) :-
     length(KeptTheories, L),
     L < ApperceptionLimits.keep_n_theories, !,
+    % posit this the best rating found so far (probably is not)
+    maybe_best_rating(RatedTheory.rating),
     log(warn, apperception_engine, 'Keeping new theory with rating ~p (under quota)', [RatedTheory.rating]).
 
 maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
@@ -293,10 +322,23 @@ maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
 add_if_better(RatedTheory, BestTheoriesSoFar, [RatedTheory | Others]) :-
     find_worse(BestTheoriesSoFar, RatedTheory.rating, WorseTheory),
     !,
+    % posit this the best rating found so far (probably is not)
+    maybe_best_rating(RatedTheory.rating),
     log(info, apperception_engine, 'Keeping better theory with rating ~p (better one)', [RatedTheory.rating]),
     delete(BestTheoriesSoFar, WorseTheory, Others).
 
 add_if_better(_, BestTheoriesSoFar, BestTheoriesSoFar).
+
+maybe_best_rating(Rating) :-
+    \+ best_rating(_),
+    assert(best_rating(Rating)),
+    !.
+maybe_best_rating(Rating) :-
+    best_rating(BestRating),
+    better_rating(Rating, BestRating),
+    retractall(best_rating(_)),
+    assert(best_rating(Rating)).
+maybe_best_rating(_).
 
 % Worse coverage
 find_worse(BestTheoriesSoFar, Coverage-Cost, WorstTheory) :-

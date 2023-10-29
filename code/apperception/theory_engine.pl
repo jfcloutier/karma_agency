@@ -326,31 +326,32 @@ theory_found :-
     get_global(theory_engine, theory_was_found, true).
                 
 theory_limits(Template) :-
-    theory_deadline(Template.limits.max_theory_time),
+    template_deadline(Template.limits.max_theory_time),
     max_rules(static, Template.limits.max_static_rules),
     max_rules(causal, Template.limits.max_causal_rules).
 
 % Maximum time allocated to search the template for theories
-theory_deadline(MaxTime) :-
+template_deadline(MaxTime) :-
     get_time(Now),
     Deadline is Now + MaxTime,
     deadline(Deadline, MaxTime).
 
-% Throw an error if 25% toward deadline and no theory was ever found in this thread
+% Throw an error if 10% toward deadline and no theory was ever found in this thread
 after_deadline(Deadline, MaxTime) :-
     \+ theory_found,
     get_time(Now),
     TimeLeft is Deadline - Now,
-    TimeLeft < MaxTime * 0.9, % 0.75,
+    TimeLeft < MaxTime * 0.9,
     TimeSpent is round(MaxTime - TimeLeft),
-    log(note, theory_engine, 'Too much time spent not finding a theory: ~p out of ~p secs', [TimeSpent, MaxTime]),
-    throw(error(template_search_time_expired, context(theory_engine, 'deadline was reached'))).
+    log(note, theory_engine, 'Too much time spent without finding a theory in this template: ~p out of ~p secs', [TimeSpent, MaxTime]),
+    throw(error(template_search_time_expired, context(theory_engine, 'too long without finding any theory'))).
 
-% Throw error when deadline is exceeded
+% Throw error when template deadline is exceeded - stop searcing for theories in the template
 after_deadline(Deadline, _) :-
     get_time(Now),
     Now > Deadline,
-    throw(error(template_search_time_expired, context(theory_engine, 'too long without finding a theory'))).
+    log(note, theory_engine, 'Time expired searching for theories in this template'),
+    throw(error(template_search_time_expired, context(theory_engine, 'template deadline reached'))).
 
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
