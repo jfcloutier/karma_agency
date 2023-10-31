@@ -30,6 +30,7 @@ engine_destroy(TheoryTemplateEngine).
 :- use_module(code(logger)).
 :- use_module(apperception(type_signature)).
 :- use_module(apperception(domains)).
+:- use_module(library(uuid)).
 
 %% Create an engine that produces theory templates on request
 create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, TheoryTemplateEngine) :-
@@ -39,7 +40,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %% For testing
 % theory_template(_, _, _, Template) :-
 %     between(30, 50, N),
-%     Template = template{limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300}, varying_predicate_names:[on],
+%     Template = template{id: 'abc1234', limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
 %                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
 
@@ -53,7 +54,8 @@ theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, 
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
     log(info, template_engine, 'Template created with extension ~p and type signature ~p', [SignatureExtensionTuple, ExtendedTypeSignature]),
-    Template = template{type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
+    uuid(Id),
+    Template = template{id:Id, type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
                         limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
 
 allow_max_templates(MinTypeSignature, Tuple, Max) :-

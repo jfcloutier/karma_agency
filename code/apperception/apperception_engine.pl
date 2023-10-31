@@ -111,7 +111,9 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Theories) :-
          get_time(StartTime),
          search_for_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, StartTime),
          !,
-         log(note, apperception_engine, 'Done searching all templates'),
+         get_time(Now),
+         round(Now - StartTime, Elapsed),
+         log(note, apperception_engine, 'Done searching all templates after ~p secs', [Elapsed]),
          collect_best_theories(Theories)
         ),
         error(Thrown, Context),
@@ -221,7 +223,7 @@ best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAs
     % log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
     rate_theory(Theory, SequenceAsTrace, Trace, RatedTheory),
     log(info, apperception_engine, 'Found theory ~p', [RatedTheory]),
-    maybe_keep_theory(RatedTheory, ApperceptionLimits, RatedTheories, KeptRatedTheories),
+    maybe_keep_theory(RatedTheory, ApperceptionLimits, Template, RatedTheories, KeptRatedTheories),
     !,
     best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, StartTime, TemplateStartTime, KeptRatedTheories, BestTheories).
 
@@ -291,33 +293,36 @@ destroy_engine(Engine) :-
 % Never keep a theory with a rating of 0; count it as a dud.
 % If there are already the max number of kept theories, replace the lowest rated one
 % the theory has higher rating.
-maybe_keep_theory(RatedTheory, _, KeptTheories, KeptTheories) :-
+maybe_keep_theory(RatedTheory, _, _, KeptTheories, KeptTheories) :-
     Coverage-_ = RatedTheory.rating,
     Coverage == 0,
     log(info, apperception_engine, 'DUD!'),
     !.
 % Throw an exception if a perfect theory is found to halt search
-maybe_keep_theory(RatedTheory, ApperceptionLimits, _, _) :-
+maybe_keep_theory(RatedTheory, ApperceptionLimits, Template, _, _) :-
     Coverage-_ = RatedTheory.rating,
     Coverage >= ApperceptionLimits.good_enough_coverage,
-    abort_with_best_theories(found_good_enough_theory, [RatedTheory]).   
+    put_dict(template, RatedTheory, Template, RatedTheoryWithTemplate),
+    abort_with_best_theories(found_good_enough_theory, [RatedTheoryWithTemplate]).   
 
-maybe_keep_theory(RatedTheory, ApperceptionLimits, KeptTheories, [RatedTheory | KeptTheories]) :-
+maybe_keep_theory(RatedTheory, ApperceptionLimits, Template, KeptTheories, [RatedTheoryWithTemplate | KeptTheories]) :-
     length(KeptTheories, L),
     L < ApperceptionLimits.keep_n_theories, 
+    put_dict(template, RatedTheory, Template, RatedTheoryWithTemplate),
     !,
     log(warn, apperception_engine, 'Keeping new theory with rating ~p (under quota)', [RatedTheory.rating]).
 
-maybe_keep_theory(RatedTheory, _, KeptTheories, UpdatedKeptTheories) :-
-    add_if_better(RatedTheory, KeptTheories, UpdatedKeptTheories).
+maybe_keep_theory(RatedTheory, _, Template, KeptTheories, UpdatedKeptTheories) :-
+    add_if_better(RatedTheory, Template, KeptTheories, UpdatedKeptTheories).
 
-add_if_better(RatedTheory, BestTheoriesSoFar, [RatedTheory | Others]) :-
+add_if_better(RatedTheory, Template, BestTheoriesSoFar, [RatedTheoryWithTemplate | Others]) :-
     find_worse(BestTheoriesSoFar, RatedTheory.rating, WorseTheory),
     !,
+    put_dict(template, RatedTheory, Template, RatedTheoryWithTemplate),
     log(info, apperception_engine, 'Keeping better theory with rating ~p (better one)', [RatedTheory.rating]),
     delete(BestTheoriesSoFar, WorseTheory, Others).
 
-add_if_better(_, BestTheoriesSoFar, BestTheoriesSoFar).
+add_if_better(_, _, BestTheoriesSoFar, BestTheoriesSoFar).
 
 % Worse coverage
 find_worse(BestTheoriesSoFar, Coverage-Cost, WorstTheory) :-
