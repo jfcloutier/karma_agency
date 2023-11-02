@@ -55,6 +55,7 @@ theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, 
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
     log(info, template_engine, 'Template created with extension ~p and type signature ~p', [SignatureExtensionTuple, ExtendedTypeSignature]),
     uuid(Id),
+    log(note, template_engine, 'Template ~p has ~p', [Id, TheoryLimits]),
     Template = template{id:Id, type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
                         limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
 
@@ -112,5 +113,5 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
     MaxTheoryTime is round((MaxElements * 3) + (MaxElements ** 2)),
     round(MaxElements, RoundedMaxElements),
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_theory_time: MaxTheoryTime},
-    log(note, template_engine, 'Template limits ~p', [Limits]).
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_theory_time: MaxTheoryTime}.
+  
