@@ -35,12 +35,14 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 %% Each thread has its own CHR store which sits on the stack and is thus subjected to backtracking.
 
+% TODO - use chr_type
 :- chr_constraint deadline(+float),
                   before_deadline(+float),
                   templates_tuple(+any, +int),
                   tuple_templates_count(+int),
                   inc_templates_count,
                   max_theories_count(+int),
+                  get_max_theories_count(+any),
                   theories_count(+int),
                   better_theory(+any, +any, +any),
                   next_rating(+any, +any),
@@ -63,6 +65,8 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'max tuple template count reached' @ inc_templates_count <=> fail.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
+
+'get max theories count' @ max_theories_count(Max) \ get_max_theories_count(M) <=> Max = M, true.
 
 'accumulate and keep count of better theories' @ better_theory(_, _, _) \ theories_count(Count)#passive <=> Count1 is Count + 1 | theories_count(Count1).
 
@@ -131,7 +135,7 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, SearchedTempl
          get_time(Now),
          round(Now - StartTime, Elapsed),
          log(note, apperception_engine, 'Done searching all templates after ~p secs', [Elapsed]),
-         collect_better_templates([], Templates),
+         next_iteration(Templates),
          best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Templates, Theories)
         ),
         error(Thrown, Context),
@@ -146,6 +150,19 @@ handle_exception(Thrown, context(apperception_engine, Theories), Theories) :-
 
 handle_exception(Thrown, Context, []) :-
          log(note, apperception_engine, 'EXCEPTION ~p, in context ~p', [Thrown, Context]).
+
+next_iteration(Templates) :-
+    collect_better_templates([], Templates),
+    get_max_theories_count(Max),
+    (Max > 1 ->
+        Max1 is max(Max - 1, 1),
+        max_theories_count(Max1),
+        trim_theories
+        ;
+        true
+    ).
+    
+
 
 % List the unique templates of the better theories in the CHR store
 collect_better_templates(Acc,  Templates) :-
@@ -339,6 +356,9 @@ new_theories([RatedTheory | Others]) :-
 found_better_theory(RatedTheory) :-
     log(note, apperception_engine, 'Found better theory with rating ~p in template ~p', [RatedTheory.rating, RatedTheory.template.id]),
     better_theory(RatedTheory, RatedTheory.rating, RatedTheory.template.id),
+    trim_theories.
+
+trim_theories :-
     worst_rating(Rating),
     (duplicate_template_id(Id) ->
         trim_theory(Rating, Id)
