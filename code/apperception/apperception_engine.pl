@@ -17,9 +17,9 @@
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(note).
 log_to('test.log').
-sequence(eca_observations, Sequence), 
+sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, time_secs: 3600},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 101, keep_n_theories: 3, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -63,33 +63,23 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'max tuple template count reached' @ inc_templates_count <=> fail.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
-% 'theories count ceiling' @ max_theories_count(Max)#passive \ theories_count(Count) <=> Count > Max | theories_count(Max).
-
-% A theory is redundant if it another from the same template has a better rating.
-% 'keep better or just as good theory from same template' @ better_theory(Theory1, Rating1) \ better_theory(Theory2, Rating2) <=> Theory1.template.id == Theory2.template.id, better_or_same_rating(Rating1, Rating2) | true.
-% TODO- OOPS - If active better_theory replaced one from same template, it could also replace another better_theory from another template - we don't want that!
-% 'better or just as good theory exists over max count' @ max_theories_count(Max)#passive, theories_count(Count), better_theory(Theory1, Rating1) \ better_theory(Theory2, Rating2) <=> 
-%                                             Count >= Max, Theory1.template.id \== Theory2.template.id, better_or_same_rating(Rating1, Rating2) | true.
-
-% 'keep theory under max count' @ better_theory(_, _) \ max_theories_count(Max)#passive, theories_count(Count)#passive <=> Count < Max, Count1 is Count + 1 | theories_count(Count1).
-% TODO - OOPS - If an active better_theory is not consumed by the above, it is added to the store, in excess of max caout!
 
 'accumulate and keep count of better theories' @ better_theory(_, _, _) \ theories_count(Count)#passive <=> Count1 is Count + 1 | theories_count(Count1).
 
 'no need to trim theories' @ theories_count(Count), max_theories_count(Max) \ trim_theory(_, _) <=> Count =< Max | true.
 'trim a template-redundant theory' @ better_theory(_, R1, Id) \ trim_theory(_, Id), better_theory(_, R2, Id), theories_count(Count) <=>
                                        better_or_same_rating(R1, R2), Count1 is Count -1 | theories_count(Count1).
-'trim theory with worst rating' @ trim_theory(WorstRating, ''), better_theory(_, WorstRating, _), theories_count(Count) <=>  Count1 is Count -1 | theories_count(Count1).
+'trim theory with worst rating' @ trim_theory(WorstRating, ''), better_theory(_, WorstRating, _), theories_count(Count) <=>  Count1 is Count - 1 | theories_count(Count1).
 % Should not be needed
 'done trimming theories' @ trim_theory(_, _) <=> true.
 
-'collect theory' @ better_theory(T, _, _) \ collect_theory(Theory, Acc) <=> Theory = T, excluded(Theory, Acc) | true.
+'collect theory' @ better_theory(T, _, _) \ collect_theory(Theory, Acc) <=> excluded(T, Acc) | Theory = T, true.
 'done collecting theories' @ collect_theory(_, _) <=> true.
 
-'collect rating' @ better_theory(_, R, _) \ next_rating(Rating, Acc) <=> Rating = R, excluded(Rating, Acc) | true.
+'collect rating' @ better_theory(_, R, _) \ next_rating(Rating, Acc) <=> excluded(R, Acc) | Rating = R, true.
 'done collecting rating' @ next_rating(_, _) <=> true.
 
-'another better template' @ better_theory(Theory, _, _) \ better_template(Template, Acc) <=> Template = Theory.template, excluded(Template, Acc) | true.
+'another better template' @ better_theory(Theory, _, _) \ better_template(Template, Acc) <=> excluded(Theory.template, Acc) | Template = Theory.template, true.
 'done collecting better templates' @ better_template(_, _) <=> true.
 
 'collecting theories' @ collected_theory(Collected), better_theory(Theory, _, _) <=> Collected = Theory.
