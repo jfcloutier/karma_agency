@@ -92,11 +92,12 @@ rated_tuple(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObject
     random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder),
     IndexedTuple = indexed_tuple(RandomOrder, NumObjectTypes, NumObjects, NumPredicateTypes).
 
+% Some randomness in the oredring but keep a progression from simpler
 random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
-    random_between(1, 2, Random),
+    random_between(1, 3, Random),
     !,
     Frugality is NumObjectTypes + NumObjects + NumPredicateTypes,
-    RandomOrder is Random * Frugality.
+    RandomOrder is Random + Frugality.
 
 % Come up with reasonable limits on the size, complexity and search time for theories in this template
 theory_complexity_bounds(TypeSignature, Limits) :-
@@ -111,7 +112,8 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     % is a function of the number of objects and predicate types
     MaxElements is (ObjectsCount / PredicateTypesCount) + PredicateTypesCount,
     % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
-    MaxTheoryTime is round((MaxElements * 3) + (MaxElements ** 2)),
+    % MaxTheoryTime is round(2 * (MaxElements + (2.2 ** MaxElements))),
+    MaxTheoryTime is round(MaxElements + (2 ** MaxElements)),
     round(MaxElements, RoundedMaxElements),
     Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_theory_time: MaxTheoryTime}.
   

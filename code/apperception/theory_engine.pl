@@ -1,4 +1,4 @@
-:- module(theory_engine, [create_theory_engine/3]).
+:- module(theory_engine, [create_theory_engine/4]).
 
 % An engine that generates valid causal theories on demand,
 % given a minimal type signature (implied by the sequence of observations) 
@@ -19,7 +19,7 @@ Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_th
 sequence(leds_observations, Sequence),
 apperception_engine:sequence_as_trace(Sequence, SequenceAsTrace),
 Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
-theory_engine:theory(Template, SequenceAsTrace, Theory, Trace).
+theory_engine:theory(Template, SequenceAsTrace, 0, Theory, Trace).
 */
 
 :- use_module(library(lists)).
@@ -300,12 +300,12 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'done extracting rules' @ extract_rule(_, _, _) <=> fail.
 
 % Create an engine that produces theories with their traces.
-create_theory_engine(Template, SequenceAsTrace, TheoryEngine) :-
-    engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Theory, Trace), TheoryEngine), !.
+create_theory_engine(Template, SequenceAsTrace, Iteration, TheoryEngine) :-
+    engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Iteration, Theory, Trace), TheoryEngine), !.
 
-theory(Template, SequenceAsTrace, Theory, Trace) :-
+theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
     found_theory(false),
-    theory_limits(Template),
+    theory_limits(Template, Iteration),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
     max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
@@ -325,10 +325,17 @@ found_theory(Found) :-
 theory_found :- 
     get_global(theory_engine, theory_was_found, true).
                 
-theory_limits(Template) :-
-    template_deadline(Template.limits.max_theory_time),
+theory_limits(Template, Iteration) :-
+    iteration_template_deadline(Template, Iteration, Deadline),
+    template_deadline(Deadline),
     max_rules(static, Template.limits.max_static_rules),
     max_rules(causal, Template.limits.max_causal_rules).
+
+% Increase deadline by 50% with each iteration
+iteration_template_deadline(Template, Iteration, Deadline) :-
+    MaxTime = Template.limits.max_theory_time,
+    Deadline is round(MaxTime +(MaxTime * Iteration / 2)),
+    log(note, apperception_engine, 'Max time for template ~p is ~p', [Template.id, Deadline]).
 
 % Maximum time allocated to search the template for theories
 template_deadline(MaxTime) :-
@@ -411,22 +418,41 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 
 rules(Kind, Template, MaxBodySize) :-
     log(info, theory_engine, 'Making ~p rules', [Kind]),
-    max_body_predicates(MaxBodySize),
-    distinct_typed_variables(Template.type_signature.typed_variables, MaxBodySize, [], DistinctVars), !,
-    posit_rules(Kind, Template, DistinctVars),
+    posit_rules(Kind, Template, MaxBodySize, 0),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
 
 % There is enough rules and there are no unused predicates in them.
-posit_rules(Kind, Template, _) :-
+posit_rules(Kind, Template, _, _) :-
     enough_rules(Kind),
     valid_rule_set(Kind, Template).
 
 % There are not enough rules and more can be added
-posit_rules(Kind, Template, DistinctVars) :-
+posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
     \+ enough_rules(Kind),
+    % Build a rule that doe not exceed max body size
+    min_body_size(Template, RuleCount, MaxBodySize, MinBodySize),
+    between(MinBodySize, MaxBodySize, BodySize),
+    max_body_predicates(BodySize),
+    distinct_typed_variables(Template.type_signature.typed_variables, BodySize, [], DistinctVars),
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     posited_rule(Kind, Head, BodyPredicates),
-    posit_rules(Kind, Template, DistinctVars).
+    RuleCount1 is RuleCount + 1,
+    posit_rules(Kind, Template, DistinctVars, RuleCount1).
+
+% The first rule must be of at least max body size
+min_body_size(Template, RuleCount, MaxBodySize, MinBodySize) :-
+    RuleCount == 0 -> 
+        MinBodySize = MaxBodySize
+        ;
+        length(Template.type_signature.predicate_types, MinBodySize).
+
+% reverse_between(Low, Low, Low).
+% reverse_between(Low, High, High) :-
+%     Low < High.
+% reverse_between(Low, High, N) :-
+%     Low < High,
+%     High1 is High - 1,
+%     reverse_between(Low, High1, N).
 
 %%% VALIDATING A RULE
 
@@ -612,6 +638,7 @@ distinct_typed_variables(TypedVariables, MaxBodySize, Acc, DistinctVars) :-
     MaxVarCount is MaxBodySize + 1,
     VarCount is min(Count, MaxVarCount),
     distinct_vars(VarCount, Vars),
+    !,
     distinct_typed_variables(Rest, MaxBodySize, [vars(Type, Vars) | Acc], DistinctVars).
 
 distinct_vars(N, Vars) :-
