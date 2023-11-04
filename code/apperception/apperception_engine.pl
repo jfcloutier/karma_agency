@@ -10,6 +10,12 @@
 %% For each template, the apperception engine iterates through theories specified by the template and evaluates them.
 %% It rejects those that are not unified and retains the highest rated ones found so far.
 
+%% Appercetpion is given a number of limits (constraints)
+    %% max_signature_extension: How many object types, objects  and predicate types can be abduced (imagined)
+    %% good_enough_coverage:(Percent, e.g. 87) When a theory with at least this trace coverage is found, the search is terminated with this theory as the sole answer.
+    %% keep_n_theories: (Number) How many theories a template can contribute as candidates for the best overall theories on each iteration
+    %% funnel: (FromNumber-ToNumber) How many (most promising) templates are retained to be searched again on each iteration. The FromNumber is reduced by one after each iteration and never goes under ToNumber.
+
 /*
 [load].
 [code(logger)].
@@ -19,7 +25,7 @@ set_log_level(note).
 log_to('test.log').
 sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 5, time_secs: 60},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 60},
 apperceive(Sequence, ApperceptionLimits, Theories).
 */
 
@@ -106,7 +112,8 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
 % Initialize apperception
 init(ApperceptionLimits, Now) :-
     set_deadline(ApperceptionLimits, Now),
-    max_theories_count(ApperceptionLimits.keep_n_theories),
+    FunnelFrom-_ = ApperceptionLimits.funnel,
+    max_theories_count(FunnelFrom),
     theories_count(0).
 
 % Set the deadline for apperception
@@ -135,7 +142,7 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, SearchedTempl
          get_time(Now),
          round(Now - StartTime, Elapsed),
          log(note, apperception_engine, 'Done searching all templates after ~p secs', [Elapsed]),
-         next_iteration(Templates),
+         next_iteration(ApperceptionLimits,Templates),
          Iteration1 is Iteration + 1,
          best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Templates, Iteration1, Epoch, Theories)
         ),
@@ -152,18 +159,17 @@ handle_exception(Thrown, context(apperception_engine, Theories), Theories) :-
 handle_exception(Thrown, Context, []) :-
     log(note, apperception_engine, 'EXCEPTION ~p, in context ~p', [Thrown, Context]).
 
-next_iteration(Templates) :-
+next_iteration(ApperceptionLimits, Templates) :-
     collect_better_templates([], Templates),
     get_max_theories_count(Max),
     (Max > 1 ->
-        Max1 is max(Max - 1, 1),
+        _-FunnelTo = ApperceptionLimits.funnel,
+        Max1 is max(Max - 1, FunnelTo),
         max_theories_count(Max1),
         trim_theories
         ;
         true
     ).
-    
-
 
 % List the unique templates of the better theories in the CHR store
 collect_better_templates(Acc,  Templates) :-
@@ -294,9 +300,9 @@ find_best_theories_in_template(ApperceptionLimits, Template, SequenceAsTrace, St
     log(info, apperception_engine, 'Best theories for template ~p are ~p', [Template, BestTheories]),
     destroy_engine(TheoryEngine).
 
-best_theories_in_template(ApperceptionLimts, _, _, _, _, StartTime, _, BestTheories, BestTheories) :-
+best_theories_in_template(ApperceptionLimits, _, _, _, _, StartTime, _, BestTheories, BestTheories) :-
     get_time(Now),
-    EndTime is StartTime + ApperceptionLimts.time_secs,
+    EndTime is StartTime + ApperceptionLimits.time_secs,
     Now > EndTime,
     log(note, apperception_engine, 'Time is up!'),
     !.

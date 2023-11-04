@@ -40,7 +40,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %% For testing
 % theory_template(_, _, _, Template) :-
 %     between(30, 50, N),
-%     Template = template{id: 'abc1234', limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_theory_time:300}, varying_predicate_names:[on],
+%     Template = template{id: 'abc1234', limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_search_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
 %                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
 
@@ -112,8 +112,8 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     % is a function of the number of objects and predicate types
     MaxElements is (ObjectsCount / PredicateTypesCount) + PredicateTypesCount,
     % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
-    % MaxTheoryTime is round(2 * (MaxElements + (2.2 ** MaxElements))),
-    MaxTheoryTime is round(MaxElements + (2 ** MaxElements)),
+    % MaxSearchTime is round(2 * (MaxElements + (2.2 ** MaxElements))),
+    MaxSearchTime is round(MaxElements + (2 ** MaxElements)),
     round(MaxElements, RoundedMaxElements),
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_theory_time: MaxTheoryTime}.
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime}.
   

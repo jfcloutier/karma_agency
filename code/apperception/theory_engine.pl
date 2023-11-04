@@ -15,7 +15,7 @@ Objects = [object(led, a), object(led, b)],
 TypedVariables = [variables(led, 3)],
 MinTypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes},
 TypeSignature = type_signature{object_types:ObjectTypes, predicate_types:[predicate(pred_1, [object_type(led),  object_type(led)]) | PredicateTypes], objects:[object(led, object_1) | Objects], typed_variables:TypedVariables},
-Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_theory_time:3},
+Limits = limits{max_static_rules:1, max_causal_rules: 1, max_elements:15, max_search_time:3},
 sequence(leds_observations, Sequence),
 apperception_engine:sequence_as_trace(Sequence, SequenceAsTrace),
 Template = template{type_signature:TypeSignature, varying_predicate_names:[on], min_type_signature:MinTypeSignature, limits:Limits},
@@ -333,7 +333,7 @@ theory_limits(Template, Iteration) :-
 
 % Increase deadline by 50% with each iteration
 iteration_template_deadline(Template, Iteration, Deadline) :-
-    MaxTime = Template.limits.max_theory_time,
+    MaxTime = Template.limits.max_search_time,
     Deadline is round(MaxTime +(MaxTime * Iteration / 2)),
     log(note, apperception_engine, 'Max time for template ~p is ~p', [Template.id, Deadline]).
 
