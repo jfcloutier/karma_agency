@@ -23,9 +23,9 @@ min_type_signature(Sequence, TypeSignature) :-
     observed_predicate_types(Sequence, PredicateTypes),
     TypeSignature = type_signature{object_types:ObjectTypes, objects:Objects, predicate_types:PredicateTypes}.
 
-% An extended type signature given a starting type signature, extension bounds, and a tuple with limits on the extensions that can be produced.
+% An extended type signature given a starting type signature, extension bounds, and a region with limits on the extensions that can be produced.
 extended_type_signature(TypeSignature,
-                        tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
+                        region(NumObjectTypes, NumObjects, NumPredicateTypes),
                         ExtendedTypeSignature) :-
     extended_object_types(TypeSignature.object_types, NumObjectTypes, ExtendedObjectTypes),
     extended_objects(TypeSignature.objects, ExtendedObjectTypes, NumObjects, ExtendedObjects),
@@ -228,13 +228,13 @@ max_template_count_reached :-
 max_template_count_reached(Reached) :-
     catch(
         (
-            engine_fetch(max_tuple_templates_reached(Reached)), 
+            engine_fetch(max_region_templates_reached(Reached)), 
             Reached == true ->
-                log(warn, template_engine, 'FETCHED max_tuple_templates_reached(~p)', [Reached])
+                log(warn, template_engine, 'FETCHED max_region_templates_reached(~p)', [Reached])
         ),
         _,
         (
-            log(debug, template_engine, 'FAILED TO FETCH max_tuple_templates_reached/1'),
+            log(debug, template_engine, 'FAILED TO FETCH max_region_templates_reached/1'),
             Reached = false
         )
         ).

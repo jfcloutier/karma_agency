@@ -50,8 +50,8 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 % TODO - use chr_type
 :- chr_constraint deadline(+float),
                   before_deadline(+float),
-                  templates_tuple(+any, +int),
-                  tuple_templates_count(+int),
+                  templates_region(+any, +int),
+                  region_templates_count(+int),
                   inc_templates_count,
                   max_theories_count(+int),
                   get_max_theories_count(+any),
@@ -69,12 +69,12 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 'time is up' @ deadline(T1) \ before_deadline(T2) <=> T1 < T2 | fail.
 'time is not up' @ before_deadline(_) <=> true.
 
-'new templates tuple' @ templates_tuple(Tuple1, _) \ templates_tuple(Tuple2, _)#passive <=> Tuple1 \== Tuple2 | tuple_templates_count(0).
-'same template tuple' @ templates_tuple(_, _) \ templates_tuple(_, _)#passive <=> true.
-'one templates count' @ tuple_templates_count(_) \ tuple_templates_count(_)#passive <=> true.
-'increment tuple templates count' @ templates_tuple(_, Max)#passive \ tuple_templates_count(Count)#passive, inc_templates_count <=> 
-                                        Count < Max | Count1 is Count + 1, tuple_templates_count(Count1).
-'max tuple template count reached' @ inc_templates_count <=> fail.
+'new templates region' @ templates_region(Region1, _) \ templates_region(Region2, _)#passive <=> Region1 \== Region2 | region_templates_count(0).
+'same template region' @ templates_region(_, _) \ templates_region(_, _)#passive <=> true.
+'one templates count' @ region_templates_count(_) \ region_templates_count(_)#passive <=> true.
+'increment region templates count' @ templates_region(_, Max)#passive \ region_templates_count(Count)#passive, inc_templates_count <=> 
+                                        Count < Max | Count1 is Count + 1, region_templates_count(Count1).
+'max region template count reached' @ inc_templates_count <=> fail.
 
 'max theories count' @ max_theories_count(_) \ max_theories_count(_)#passive <=> true.
 
@@ -108,7 +108,7 @@ apperceive(Sequence, ApperceptionLimits, Theories) :-
     min_type_signature(Sequence, MinTypeSignature),
     predicates_observed_to_vary(MinTypeSignature, Sequence, VaryingPredicateNames),
     sequence_as_trace(Sequence, SequenceAsTrace),
-    tuple_templates_count(0),
+    region_templates_count(0),
     create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, ApperceptionLimits.max_signature_extension, TemplateEngine),
     !,
     best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, first_iteration, 0, Now, Theories),
@@ -261,21 +261,21 @@ next_template_from_engine(TemplateEngine, Template) :-
     handle_template_engine_answer(Answer, Template),
     got_template_from(TemplateEngine).
 
-% Restart the count of templates if the template was generated from a new tuple
+% Restart the count of templates if the template was generated from a new region
 handle_template_engine_answer(the(Template), Template) :-
-    templates_tuple(Template.tuple, Template.max_tuple_templates).
+    templates_region(Template.region, Template.max_region_templates).
 handle_template_engine_answer(no, _) :- fail.
 handle_template_engine_answer(throw(Exception), _) :-
     log(note, apperception_engine, 'Template engine threw ~p', [Exception]),
     fail.
 
-% Let the Template Engine know whether we've obtained the maximum number of templates for the current tuple.
+% Let the Template Engine know whether we've obtained the maximum number of templates for the current region.
 got_template_from(TemplateEngine) :-
     inc_templates_count ->
-        safe_engine_post(TemplateEngine, max_tuple_templates_reached(false))
+        safe_engine_post(TemplateEngine, max_region_templates_reached(false))
         ;
-        log(warn, apperception_engine, 'Max templates reached for tuple'),
-        safe_engine_post(TemplateEngine, max_tuple_templates_reached(true)).
+        log(warn, apperception_engine, 'Max templates reached for region'),
+        safe_engine_post(TemplateEngine, max_region_templates_reached(true)).
 
 % Ignore permission errors if previous post has not yet been fetched in the engine
 safe_engine_post(Engine, Term) :-

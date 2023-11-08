@@ -4,12 +4,12 @@
 % Since it is not expected that there will be enough time to search each template for its implied theories,
 % the sequence of templates generated on demand is randomized, but favoring simple templates first.
 
-%% (vocabulary extension) Limits --->* SignatureExtensionTuple --->* Template (ExtendedSignature + implied MaxTheoryComplexity) --->* Theory
+%% (vocabulary extension) Limits --->* SignatureExtensionRegion --->* Template (ExtendedSignature + implied MaxTheoryComplexity) --->* Theory
 %%
-%% Limits impose max object types, max objects and max predicate types on tuples tuple(NumObjectTypes, NumObjects, NumPredicateTypes).
-%% Produce all tuples, offered in semi-random order, favoring frugality.
-%% Limit the number of templates generated per tuple so that any one tuple does not hog template generation
-%% For each tuple, generate templates.
+%% Limits impose max object types, max objects and max predicate types on regions region(NumObjectTypes, NumObjects, NumPredicateTypes).
+%% Produce all regions, offered in semi-random order, favoring frugality.
+%% Limit the number of templates generated per region so that any one region does not hog template generation
+%% For each region, generate templates.
 
 
 /*
@@ -47,20 +47,20 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template) :-
     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),
     % generated
-    signature_extension_tuple(MaxSignatureExtension, SignatureExtensionTuple),
-    allow_max_templates(MinTypeSignature, SignatureExtensionTuple, Max),
+    signature_extension_region(MaxSignatureExtension, SignatureExtensionRegion),
+    allow_max_templates(MinTypeSignature, SignatureExtensionRegion, Max),
     % generated
-    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionTuple, ExtendedTypeSignature),
+    extended_type_signature(ScrambledMinTypeSignature, SignatureExtensionRegion, ExtendedTypeSignature),
     % implied
     theory_complexity_bounds(ExtendedTypeSignature, TheoryLimits),
-    log(info, template_engine, 'Template created with extension ~p and type signature ~p', [SignatureExtensionTuple, ExtendedTypeSignature]),
+    log(info, template_engine, 'Template created with extension ~p and type signature ~p', [SignatureExtensionRegion, ExtendedTypeSignature]),
     uuid(Id),
     log(note, template_engine, 'Template ~p has ~p', [Id, TheoryLimits]),
     Template = template{id:Id, type_signature:ExtendedTypeSignature, min_type_signature:MinTypeSignature, varying_predicate_names:VaryingPredicateNames,
-                        limits:TheoryLimits, tuple:SignatureExtensionTuple, max_tuple_templates: Max}.
+                        limits:TheoryLimits, region:SignatureExtensionRegion, max_region_templates: Max}.
 
-allow_max_templates(MinTypeSignature, Tuple, Max) :-
-    tuple(NumObjectTypes, NumObjects, NumPredicateTypes) = Tuple,
+allow_max_templates(MinTypeSignature, Region, Max) :-
+    region(NumObjectTypes, NumObjects, NumPredicateTypes) = Region,
     length(MinTypeSignature.object_types, MinObjectTypes),
     length(MinTypeSignature.objects,MinObjects),
     length(MinTypeSignature.predicate_types, MinPredicates),
@@ -68,7 +68,7 @@ allow_max_templates(MinTypeSignature, Tuple, Max) :-
     ObjectsCount is MinObjects + NumObjects,
     PredicatesCount is MinPredicates + NumPredicateTypes,
     Max is ObjectTypesCount * ObjectsCount * PredicatesCount,
-    log(warn, template_engine, 'Max ~p templates allowed for tuple ~p', [Max, Tuple]).
+    log(warn, template_engine, 'Max ~p templates allowed for region ~p', [Max, Region]).
 
 scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     random_permutation(TypeSignature.object_types, ScrambledObjectTypes),
@@ -77,20 +77,20 @@ scramble_signature(TypeSignature, ScrambledTypeSignature) :-
     !,
     ScrambledTypeSignature = type_signature{object_types:ScrambledObjectTypes, objects:ScrambledObjects, predicate_types:ScrambledPredicateTypes}.
 
-signature_extension_tuple(MaxSignatureExtension, Tuple) :-
-    findall(RatedTuple, rated_tuple(MaxSignatureExtension, RatedTuple), RatedTuples),
-    sort(1, @=<, RatedTuples, Tuples),
+signature_extension_region(MaxSignatureExtension, Region) :-
+    findall(RatedRegion, rated_region(MaxSignatureExtension, RatedRegion), RatedRegions),
+    sort(1, @=<, RatedRegions, Regions),
     !,
-    member(indexed_tuple(_, NumObjectTypes, NumObjects, NumPredicateTypes), Tuples),
-    Tuple = tuple(NumObjectTypes, NumObjects, NumPredicateTypes),
-    log(info, template_engine, '****TUPLE ~p', [Tuple]).
+    member(indexed_region(_, NumObjectTypes, NumObjects, NumPredicateTypes), Regions),
+    Region = region(NumObjectTypes, NumObjects, NumPredicateTypes),
+    log(info, template_engine, '****REGION ~p', [Region]).
 
-rated_tuple(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObjects, max_predicate_types:MaxPredicateTypes}, IndexedTuple) :-
+rated_region(max_extension{max_object_types:MaxObjectTypes, max_objects:MaxObjects, max_predicate_types:MaxPredicateTypes}, IndexedRegion) :-
     between(0, MaxObjectTypes, NumObjectTypes),
     between(0, MaxObjects, NumObjects),
     between(0, MaxPredicateTypes, NumPredicateTypes),
     random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder),
-    IndexedTuple = indexed_tuple(RandomOrder, NumObjectTypes, NumObjects, NumPredicateTypes).
+    IndexedRegion = indexed_region(RandomOrder, NumObjectTypes, NumObjects, NumPredicateTypes).
 
 % Some randomness in the oredring but keep a progression from simpler
 random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
