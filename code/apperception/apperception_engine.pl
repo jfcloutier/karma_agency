@@ -11,7 +11,7 @@
 %% It rejects those that are not unified and retains the highest rated ones found so far.
 
 %% Appercetpion is given a number of limits (constraints)
-    %% max_signature_extension: How many object types, objects  and predicate types can be abduced (imagined)
+    %% max_signature_extension: (max_extension{max_object_types:1, max_objects:1, max_predicate_types:1}) How many object types, objects  and predicate types can be abduced (imagined)
     %% good_enough_coverage:(Percent, e.g. 87) When a theory with at least this trace coverage is found, the search is terminated with this theory as the sole answer.
     %% keep_n_theories: (Number) How many theories a template can contribute as candidates for the best overall theories on each iteration
     %% funnel: (FromNumber-ToNumber) How many (most promising) templates are retained to be searched again on each iteration. The FromNumber is reduced by one after each iteration and never goes under ToNumber.
@@ -27,6 +27,12 @@ sequence(leds_observations, Sequence),
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
 ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 60},
 apperceive(Sequence, ApperceptionLimits, Theories).
+
+sequence(eca_observations, Sequence), 
+MaxSignatureExtension = max_extension{max_object_types:0, max_objects:0, max_predicate_types:0},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 90, keep_n_theories: 3, funnel: 10-5, time_secs: 30},
+apperceive(Sequence, ApperceptionLimits, Theories).
+
 */
 
 
