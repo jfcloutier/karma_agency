@@ -343,7 +343,7 @@ template_deadline(MaxTime) :-
     Deadline is Now + MaxTime,
     deadline(Deadline, MaxTime).
 
-% Throw an error if 10% toward deadline and no theory was ever found in this thread
+% Throw an error if 10 percent toward deadline and no theory was ever found in this thread
 after_deadline(Deadline, MaxTime) :-
     \+ theory_found,
     get_time(Now),
@@ -437,7 +437,7 @@ posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
     rule_from_template(Template, DistinctVars, Head-BodyPredicates),
     posited_rule(Kind, Head, BodyPredicates),
     RuleCount1 is RuleCount + 1,
-    posit_rules(Kind, Template, DistinctVars, RuleCount1).
+    posit_rules(Kind, Template, MaxBodySize, RuleCount1).
 
 % The first rule must be of at least max body size
 min_body_size(Template, RuleCount, MaxBodySize, MinBodySize) :-

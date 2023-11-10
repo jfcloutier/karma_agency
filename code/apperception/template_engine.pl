@@ -43,6 +43,25 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %     Template = template{id: 'abc1234', limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_search_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
 %                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
+   
+%% For testing
+
+
+%  theory_template(_, _, MaxSignatureExtension, Template) :-
+%      TypeSignature = type_signature{object_types:[object_type(cell)],
+%                                                       objects:[object(cell,c1),object(cell,c2),object(cell,c3),object(cell,c4),object(cell,c5),object(cell,c6),object(cell,c7),object(cell,c8),object(cell,c9),object(cell,c10),object(cell,c11)],
+%                                                       predicate_types:[predicate(on,[object_type(cell),value_type(boolean)]),predicate(right_of,[object_type(cell),object_type(cell)])],
+%                                                       typed_variables:[variables(cell,3)]},
+%     signature_extension_region(MaxSignatureExtension, SignatureExtensionRegion),
+%     allow_max_templates(TypeSignature, SignatureExtensionRegion, Max),
+%     Template = template{id: 'abc1234', 
+%             type_signature: TypeSignature,
+%             min_type_signature: TypeSignature,
+%             varying_predicate_names:[on],
+%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_search_time:30}, 
+%             region: SignatureExtensionRegion, 
+%             max_region_templates: Max}.
+
 
 theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template) :-
     scramble_signature(MinTypeSignature, ScrambledMinTypeSignature),

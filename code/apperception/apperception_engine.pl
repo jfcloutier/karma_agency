@@ -30,7 +30,7 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 sequence(eca_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:0, max_objects:0, max_predicate_types:0},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 90, keep_n_theories: 3, funnel: 10-5, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 10-5, time_secs: 300},
 apperceive(Sequence, ApperceptionLimits, Theories).
 
 */
