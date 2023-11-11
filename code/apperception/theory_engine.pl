@@ -308,9 +308,8 @@ theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
     theory_limits(Template, Iteration),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
-    max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize),
-    rules(static, Template, MaxStaticBodySize),
-    rules(causal, Template, MaxCausalBodySize),
+    rules(static, Template),
+    rules(causal, Template),
     initial_conditions(Template, SequenceAsTrace),
     length(SequenceAsTrace, SequenceLength),
     trace(Trace, SequenceLength),
@@ -360,12 +359,6 @@ after_deadline(Deadline, _) :-
     log(note, theory_engine, 'Time expired searching for theories in this template'),
     throw(error(template_search_time_expired, context(theory_engine, 'template deadline reached'))).
 
-% A number between the number of predicate types and the greatest possible number of predicates in any rule
-max_rule_body_sizes(Template, MaxStaticBodySize, MaxCausalBodySize) :-
-    length(Template.type_signature.predicate_types, LowerLimit),
-    choose_pair_in_range(LowerLimit, Template.limits.max_elements, MaxStaticBodySize-MaxCausalBodySize),
-    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p from ~p', [MaxStaticBodySize, MaxCausalBodySize, LowerLimit-Template.limits.max_elements]).
-
 %%% STATIC CONSTRAINTS
 
 % Unary constraints are implicit in value domains (an led's "on" property can not be both true and false at the same time).
@@ -390,7 +383,7 @@ maybe_posit_static_constraint(Kind, AllBinaryPredicateNames) :-
 
 % Uniqueness constraint:  For any X, there is one and only one Y such that r(X, Y).
 static_constraint(one_related, AllBinaryPredicateNames, StaticConstraint) :-
-    member(BinaryPredicateName, AllBinaryPredicateNames),
+    member_rand(BinaryPredicateName, AllBinaryPredicateNames),
     StaticConstraint =.. [one_related, BinaryPredicateName].
 
 % Exclusion constraint: There must one and only one relation r1(X, Y), r2(X, Y), r3(X, Y)
@@ -416,10 +409,17 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 
 %%% POSITING RULES
 
-rules(Kind, Template, MaxBodySize) :-
-    log(info, theory_engine, 'Making ~p rules', [Kind]),
+rules(Kind, Template) :-
+    max_body_size(static, Template, MaxBodySize),
+    log(info, theory_engine, 'Making ~p rules with max body size ~p', [Kind, MaxBodySize]),    
     posit_rules(Kind, Template, MaxBodySize, 0),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
+
+max_body_size(static, Template, Size) :-
+    Size = Template.limits.max_static_rule_body_size.
+
+max_body_size(causal, Template, Size) :-
+    Size = Template.limits.max_causak_rule_body_size.
 
 % There is enough rules and there are no unused predicates in them.
 posit_rules(Kind, Template, _, _) :-
@@ -712,7 +712,7 @@ make_body_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     member_rand(Arg, Values).
 
 take_typed_var(Type, [vars(Type, Vars) | OtherTypedVars], [vars(Type, UnusedVars) | OtherTypedVars], Arg) :-
-    select(Arg, Vars, UnusedVars).
+    select_rand(Arg, Vars, UnusedVars).
 
 take_typed_var(Type, [TypedVar | OtherTypedVars], [TypedVar | UnusedTypedVars], Arg) :-
     TypedVar = vars(OtherType, _),
@@ -787,7 +787,7 @@ posit_other_initial_conditions(Template) :-
     posit_other_initial_conditions(Template).
 
 posit_fact(Template) :-
-   member(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
+   member_rand(predicate(PredicateName, ArgTypes), Template.type_signature.predicate_types),
    ground_args(ArgTypes, Template.type_signature.objects, Args),
    Fact = fact(PredicateName, Args),
    posited_fact(Fact),
@@ -810,7 +810,7 @@ ground_args([ArgType | OtherArgTypes], Objects, [Arg | OtherArgs]) :-
     ground_args(OtherArgTypes, Objects, OtherArgs).
 
 ground_arg(object_type(ObjectType), Objects, ObjectName) :-
-    member(object(ObjectType, ObjectName), Objects).
+    member_rand(object(ObjectType, ObjectName), Objects).
 
 ground_arg(value_type(Domain), _, Value) :-
     domain_is(Domain, Values),
@@ -1135,16 +1135,6 @@ can_unify(GroundArgs, Args) :-
 say(What, About) :-
     log(info, theory_engine, What, About).    
 
-% First choose pairs with lowest sum (favor simplicity)
-choose_pair_in_range(Low, High, E1-E2) :-
-    bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
-    predsort(ord_pair, Pairs, Sorted),
-    member(E1-E2, Sorted).
-
-ord_pair(Comparison, X1-Y1, X2-Y2) :-
-    S1 is X1 + Y1,
-    S2 is X2 + Y2,
-    (S1 =< S2 -> Comparison = '<' ; Comparison = '>').
 
 % Get member of a randomly permuted list
 member_rand(X, List) :-
@@ -1158,6 +1148,11 @@ member_rand(X, Preferred, All) :-
     random_permutation(Rest, Rest1),
     append(Preferred1, Rest1, List),
     member(X, List).
+
+% Select randomly from a list
+select_rand(X, List, Rest) :-
+    random_permutation(List, RandList),
+    select(X, RandList, Rest).
 
 %%%% UNUSED
 

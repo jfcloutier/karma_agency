@@ -23,14 +23,15 @@
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(note).
 log_to('test.log').
+
 sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 60},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 30},
 apperceive(Sequence, ApperceptionLimits, Theories).
 
 sequence(eca_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:0, max_objects:0, max_predicate_types:0},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 10-5, time_secs: 300},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 10-5, time_secs: 3600},
 apperceive(Sequence, ApperceptionLimits, Theories).
 
 */
@@ -148,7 +149,7 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, SearchedTempl
          get_time(Now),
          round(Now - StartTime, Elapsed),
          log(note, apperception_engine, 'Done searching all templates after ~p secs', [Elapsed]),
-         next_iteration(ApperceptionLimits,Templates),
+         next_iteration(ApperceptionLimits, Templates),
          Iteration1 is Iteration + 1,
          best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Templates, Iteration1, Epoch, Theories)
         ),

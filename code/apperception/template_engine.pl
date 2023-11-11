@@ -58,7 +58,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %             type_signature: TypeSignature,
 %             min_type_signature: TypeSignature,
 %             varying_predicate_names:[on],
-%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_search_time:30}, 
+%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:5, max_causal_rule_body_size:5, max_search_time:1}, 
 %             region: SignatureExtensionRegion, 
 %             max_region_templates: Max}.
 
@@ -118,6 +118,7 @@ random_order(NumObjectTypes, NumObjects, NumPredicateTypes, RandomOrder) :-
     Frugality is NumObjectTypes + NumObjects + NumPredicateTypes,
     RandomOrder is Random + Frugality.
 
+
 % Come up with reasonable limits on the size, complexity and search time for theories in this template
 theory_complexity_bounds(TypeSignature, Limits) :-
     length(TypeSignature.objects, ObjectsCount),
@@ -132,7 +133,25 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     MaxElements is (ObjectsCount / PredicateTypesCount) + PredicateTypesCount,
     % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
     % MaxSearchTime is round(2 * (MaxElements + (2.2 ** MaxElements))),
-    MaxSearchTime is round(MaxElements + (2 ** MaxElements)),
+    % MaxSearchTime is round(MaxElements + (2 ** MaxElements)),
+    MaxSearchTime is round(1.2 ** MaxElements),
     round(MaxElements, RoundedMaxElements),
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime}.
-  
+    max_rule_body_sizes(TypeSignature, RoundedMaxElements, MaxStaticBodySize, MaxCausalBodySize),
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_static_rule_body_size: MaxStaticBodySize, max_causal_rule_body_size: MaxCausalBodySize, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime}.
+
+% A number between the number of predicate types and the greatest possible number of predicates in any rule
+max_rule_body_sizes(TypeSignature, MaxElements, MaxStaticBodySize, MaxCausalBodySize) :-
+    length(TypeSignature.predicate_types, LowerLimit),
+    choose_pair_in_range(LowerLimit, MaxElements, MaxStaticBodySize-MaxCausalBodySize),
+    log(note, theory_engine, 'Max static body size = ~p, max causal body size = ~p from ~p', [MaxStaticBodySize, MaxCausalBodySize, LowerLimit-MaxElements]).
+
+ % First choose pairs with lowest sum (favor simplicity)
+choose_pair_in_range(Low, High, E1-E2) :-
+    bagof(N1-N2, (between(Low, High, N1), between(Low, High, N2)), Pairs),
+    predsort(ord_pair, Pairs, Sorted),
+    member(E1-E2, Sorted).
+
+ord_pair(Comparison, X1-Y1, X2-Y2) :-
+    S1 is X1 + Y1,
+    S2 is X2 + Y2,
+    (S1 =< S2 -> Comparison = '<' ; Comparison = '>'). 
