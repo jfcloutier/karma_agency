@@ -64,7 +64,8 @@ apperceive(Sequence, ApperceptionLimits, Theories).
                   better_template(+any, +any),
                   collected_theory(-any),
                   template_exhausted(+any),
-                  is_template_exhausted(+any).
+                  is_template_exhausted(+any),
+                  clear_exhausted_templates.
 
 :- chr_option(check_guard_bindings, on).
 
@@ -108,6 +109,9 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 'collecting theories' @ collected_theory(Collected), better_theory(Theory, _, _) <=> Collected = Theory.
 'done collecting theories' @ collected_theory(_) <=> true.
+
+'clear exhausted templates' @ clear_exhausted_templates \ template_exhausted(_) <=> true.
+'done clearing exhausted templates' @ clear_exhausted_templates <=> true.
 
 % Given a sequence of observations and some limits, find good causal theories.
 apperceive(Sequence, ApperceptionLimits, Theories) :-
@@ -202,7 +206,8 @@ collect_better_templates(Acc,  Templates) :-
     ;
     Templates = Acc,
     findall(Id, (member(Template, Templates), Id = Template.id), Ids),
-    log(note, apperception_engine, 'Searching again the best templates: ~p', [Ids])
+    log(note, apperception_engine, 'Searching again the best templates: ~p', [Ids]),
+    clear_exhausted_templates
     ).
 
 worst_rating(Rating) :-
