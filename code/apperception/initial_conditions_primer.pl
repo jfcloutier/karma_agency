@@ -6,6 +6,7 @@
 facts_from_observations(SequenceAsTrace, Facts) :-
     random_permutation(SequenceAsTrace, RandSequenceAsTrace),
     member(State, RandSequenceAsTrace),
+    % [State | _] = SequenceAsTrace, % REMOVE THIS
     sort(0, @<, State, OrderedState),
     log(info, theory_engine, 'Priming initial conditions with observed ~p', [OrderedState]),
     observations(OrderedState, [], Facts).

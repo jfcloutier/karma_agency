@@ -58,7 +58,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %             type_signature: TypeSignature,
 %             min_type_signature: TypeSignature,
 %             varying_predicate_names:[on],
-%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:5, max_causal_rule_body_size:5, max_search_time:1}, 
+%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:1, max_causal_rule_body_size:5, max_search_time:300}, 
 %             region: SignatureExtensionRegion, 
 %             max_region_templates: Max}.
 

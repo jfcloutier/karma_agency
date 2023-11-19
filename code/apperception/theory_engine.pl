@@ -161,11 +161,11 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 
 % Validating rules, static or causal
 'repeated rule' @ posited_rule(Kind, H1, B1)#passive \ posited_rule(Kind, H2, B2) <=>
-    rule_repeats(H1-B1, H2-B2) | fail.
-'ungroundable head' @ posited_rule(_, H, B) <=> ungroundable_head(H-B) | fail.
-'unrelated vars' @ posited_rule(_, H, B) <=> unrelated_vars(H-B) | fail.
+    rule_repeats(H1-B1, H2-B2) | say('repeated rules ~p and ~p', [H1-B1,H2-B2]), fail.
+'ungroundable head' @ posited_rule(_, H, B) <=> ungroundable_head(H-B) | say('ungrounded head ~p', [H-B]), fail.
+'unrelated vars' @ posited_rule(_, H, B) <=> unrelated_vars(H-B) | say('unrelated vars ~p', [H-B]), fail.
 'predicate used in rule' @ posited_rule(Kind, H, B) \ predicate_type_used_in_rule(Kind, Name) <=>  memberchk(fact(Name, _), [H | B]) | true.
-'predicate not used in rule' @ predicate_type_used_in_rule(_,_) <=> fail.
+'predicate not used in rule' @ predicate_type_used_in_rule(_,Name) <=> say('predicate not used in rule ~p', [Name]), fail.
 
 % Validating static rules
 'static rule head contradicted in body' @ posited_rule(static, Head, Body) <=> contradicted_head(Head, Body) | fail.
@@ -176,11 +176,11 @@ max_body_predicates(_) \ max_body_predicates(_)#passive <=> true.
 'static rules recurse' @ posited_rule(static, H1, B1)#passive \ posited_rule(static, H2, B2) <=> recursion_in_static_rules([H1-B1, H2-B2]) | fail.
 
 % Validating causal rules
-'idempotent causal rule' @ posited_rule(causal, H, B) <=> idempotent_causal_rule(H-B) | fail.
+'idempotent causal rule' @ posited_rule(causal, H, B) <=> idempotent_causal_rule(H-B) | say('idempotent ~p', [H-B]), fail.
 'predicate caused' @ posited_rule(causal, fact(N, _), _) \ predicate_caused(N) <=> true.
-'predicate not caused' @ predicate_caused(_) <=> false.
+'predicate not caused' @ predicate_caused(_) <=> fail.
 'predicate causing' @ posited_rule(causal, _, B) \ predicate_causing(N) <=> memberchk(fact(N, _), B) | true.
-'predicate not causing' @ predicate_causing(_) <=> false.
+'predicate not causing' @ predicate_causing(_) <=> fail.
 
 
 % Keeping and counting a rule
@@ -410,7 +410,7 @@ static_constraint_about(one_relation(PredicateNames), PredicateName) :-
 %%% POSITING RULES
 
 rules(Kind, Template) :-
-    max_body_size(static, Template, MaxBodySize),
+    max_body_size(Kind, Template, MaxBodySize),
     log(info, theory_engine, 'Making ~p rules with max body size ~p', [Kind, MaxBodySize]),    
     posit_rules(Kind, Template, MaxBodySize, 0),
     log(info, theory_engine, 'Done making ~p rules', [Kind]).
@@ -419,7 +419,7 @@ max_body_size(static, Template, Size) :-
     Size = Template.limits.max_static_rule_body_size.
 
 max_body_size(causal, Template, Size) :-
-    Size = Template.limits.max_causak_rule_body_size.
+    Size = Template.limits.max_causal_rule_body_size.
 
 % There is enough rules and there are no unused predicates in them.
 posit_rules(Kind, Template, _, _) :-
@@ -434,8 +434,10 @@ posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
     between(MinBodySize, MaxBodySize, BodySize),
     max_body_predicates(BodySize),
     distinct_typed_variables(Template.type_signature.typed_variables, BodySize, [], DistinctVars),
-    rule_from_template(Template, DistinctVars, Head-BodyPredicates),
+    rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates),
+    log(debug, theory_engine, 'Rule from template is ~p', [Head-BodyPredicates]),
     posited_rule(Kind, Head, BodyPredicates),
+    log(debug, theory_engine, 'Posited rule ~p', [Head-BodyPredicates]),
     RuleCount1 is RuleCount + 1,
     posit_rules(Kind, Template, MaxBodySize, RuleCount1).
 
@@ -619,8 +621,8 @@ uncausing_varying_predicate(Template) :-
 
 %%% MAKING RULES
 
-rule_from_template(Template, DistinctVars, Head-BodyPredicates) :-
-    posit_head_predicate(Template, DistinctVars, Head),
+rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates) :-
+    posit_head_predicate(Kind, Template, DistinctVars, Head),
     posit_body_predicates(Template, DistinctVars),
     collect_body_predicates(BodyPredicates).
 
@@ -656,11 +658,20 @@ distinguish_from(Var, [Other | Rest]) :-
     dif(Var, Other),
     distinguish_from(Var, Rest).
 
-% Make a predicate for the rule's head, preferring predicates made from the type signature of the observations
-posit_head_predicate(Template, DistinctVars, HeadPredicate) :-
+% Make a predicate for the static rule's head, preferring predicates made from the type signature of the observations
+posit_head_predicate(static, Template, DistinctVars, HeadPredicate) :-
     all_predicate_names(Template.type_signature, AllPredicateNames),
     all_predicate_names(Template.min_type_signature, PreferredPredicateNames),
     member_rand(Name, PreferredPredicateNames, AllPredicateNames),
+    member(predicate(Name, TypedArgs), Template.type_signature.predicate_types),
+    make_head_args(TypedArgs, DistinctVars, Args), 
+    HeadPredicate =.. [fact, Name , Args],
+    posited_head_predicate(HeadPredicate).
+
+% Make a predicate for the causal rule's preferring observed varying predicates
+posit_head_predicate(causal, Template, DistinctVars, HeadPredicate) :-
+    all_predicate_names(Template.type_signature, AllPredicateNames),
+    member_rand(Name, Template.varying_predicate_names, AllPredicateNames),
     member(predicate(Name, TypedArgs), Template.type_signature.predicate_types),
     make_head_args(TypedArgs, DistinctVars, Args), 
     HeadPredicate =.. [fact, Name , Args],
@@ -1133,7 +1144,7 @@ can_unify(GroundArgs, Args) :-
     unifiable(GroundArgs, Args, _).
 
 say(What, About) :-
-    log(info, theory_engine, What, About).    
+    log(debug, theory_engine, What, About).    
 
 
 % Get member of a randomly permuted list
