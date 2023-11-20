@@ -37,16 +37,14 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
     log(info, template_engine, 'Creating template engine'),
     engine_create(Template, theory_template(MinTypeSignature, VaryingPredicateNames, MaxSignatureExtension, Template), TheoryTemplateEngine).
 
-%% For testing
+%% For testing LEDS
 % theory_template(_, _, _, Template) :-
 %     between(30, 50, N),
 %     Template = template{id: 'abc1234', limits:limits{max_elements:N,max_causal_rules:1,max_static_rules:1, max_search_time:300}, varying_predicate_names:[on],
 %                         type_signature:type_signature{object_types:[object_type(led)],objects:[object(led,object_1),object(led,b),object(led,a)],predicate_types:[predicate(on,[object_type(led),value_type(boolean)]),predicate(pred_1,[object_type(led),object_type(led)])],typed_variables:[variables(led,3)]},
 %                         min_type_signature: type_signature{object_types:[object_type(led)], objects:[object(led, a), object(led, b)], predicate_types:[predicate(on, [object_type(led), value_type(boolean)])]}}.
    
-%% For testing
-
-
+%% For testing ECA
 %  theory_template(_, _, MaxSignatureExtension, Template) :-
 %      TypeSignature = type_signature{object_types:[object_type(cell)],
 %                                                       objects:[object(cell,c1),object(cell,c2),object(cell,c3),object(cell,c4),object(cell,c5),object(cell,c6),object(cell,c7),object(cell,c8),object(cell,c9),object(cell,c10),object(cell,c11)],
@@ -58,7 +56,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %             type_signature: TypeSignature,
 %             min_type_signature: TypeSignature,
 %             varying_predicate_names:[on],
-%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:1, max_causal_rule_body_size:5, max_search_time:300}, 
+%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:1, max_causal_rule_body_size:5, max_theories: 50, max_search_time:30}, 
 %             region: SignatureExtensionRegion, 
 %             max_region_templates: Max}.
 
@@ -134,10 +132,11 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     % Maximum number of seconds spent searching for theories in the template grows geometrically with the max complexity of rules
     % MaxSearchTime is round(2 * (MaxElements + (2.2 ** MaxElements))),
     % MaxSearchTime is round(MaxElements + (2 ** MaxElements)),
-    MaxSearchTime is round(1.2 ** MaxElements),
+    MaxSearchTime is round((1.2 ** MaxElements) + (MaxElements / 2)),
     round(MaxElements, RoundedMaxElements),
     max_rule_body_sizes(TypeSignature, RoundedMaxElements, MaxStaticBodySize, MaxCausalBodySize),
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_static_rule_body_size: MaxStaticBodySize, max_causal_rule_body_size: MaxCausalBodySize, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime}.
+    % TODO - compute max_theories
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_static_rule_body_size: MaxStaticBodySize, max_causal_rule_body_size: MaxCausalBodySize, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime, max_theories: 100}.
 
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(TypeSignature, MaxElements, MaxStaticBodySize, MaxCausalBodySize) :-

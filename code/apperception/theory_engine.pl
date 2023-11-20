@@ -304,7 +304,7 @@ create_theory_engine(Template, SequenceAsTrace, Iteration, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Iteration, Theory, Trace), TheoryEngine), !.
 
 theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
-    found_theory(false),
+    found_theory(Template, Iteration, false),
     theory_limits(Template, Iteration),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
@@ -314,11 +314,18 @@ theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
     length(SequenceAsTrace, SequenceLength),
     trace(Trace, SequenceLength),
     theory_with_trace(Theory, Trace),
-    found_theory(true).
+    found_theory(Template, Iteration, true).
 
 % Set a non-backtrackable global for the thread that a theory was found.
-found_theory(Found) :-
-    set_global(theory_engine, theory_was_found, Found).
+% Set or do a count down on the number of theories (more with each iteration), throwing an error if too many found.
+found_theory(Template, Iteration, Found) :-
+    set_global(theory_engine, theory_was_found, Found),
+    (Found -> 
+        (count_down(theory_count) -> true ;  throw(error(max_found_theories, context(theory_engine, 'max theories reached'))))
+        ; 
+        MaxTheories is round(Template.limits.max_theories + (Iteration * Template.limits.max_theories / 2)),
+        reset_counter(theory_count, MaxTheories)
+    ).
 
 % Was a theory ever found in this thread?
 theory_found :- 
@@ -431,13 +438,13 @@ posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
     \+ enough_rules(Kind),
     % Build a rule that doe not exceed max body size
     min_body_size(Template, RuleCount, MaxBodySize, MinBodySize),
-    between(MinBodySize, MaxBodySize, BodySize),
+    between_rand(MinBodySize, MaxBodySize, BodySize),
     max_body_predicates(BodySize),
     distinct_typed_variables(Template.type_signature.typed_variables, BodySize, [], DistinctVars),
     rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates),
-    log(debug, theory_engine, 'Rule from template is ~p', [Head-BodyPredicates]),
+    log(debug, theory_engine, 'Rule ~p from template is ~p', [RuleCount, Head-BodyPredicates]),
     posited_rule(Kind, Head, BodyPredicates),
-    log(debug, theory_engine, 'Posited rule ~p', [Head-BodyPredicates]),
+    log(info, theory_engine, 'Posited rule ~p ~p', [RuleCount, Head-BodyPredicates]),
     RuleCount1 is RuleCount + 1,
     posit_rules(Kind, Template, MaxBodySize, RuleCount1).
 
@@ -455,6 +462,11 @@ min_body_size(Template, RuleCount, MaxBodySize, MinBodySize) :-
 %     Low < High,
 %     High1 is High - 1,
 %     reverse_between(Low, High1, N).
+
+between_rand(Low, High, N) :-
+    bagof(N, between(Low, High,N),L), 
+    random_permutation(L, P), 
+    !, member(N, P).
 
 %%% VALIDATING A RULE
 

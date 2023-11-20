@@ -377,6 +377,9 @@ handle_theory_engine_response(no, no_more, _, _) :-
 handle_theory_engine_response(exception(error(template_search_time_expired, context(theory_engine, Reason))), stopped, _, _) :-
     log(info, apperception_engine, 'Time expired searching for theories in template: ~p.', [Reason]).
 
+handle_theory_engine_response(exception(error(max_found_theories, context(theory_engine, Reason))), stopped, _, _) :-
+    log(note, apperception_engine, 'Found enough theories in template: ~p.', [Reason]).
+
 abort_with_best_theories(Cause, BestTheories) :-
     throw(error(Cause, context(apperception_engine, BestTheories))).
 
