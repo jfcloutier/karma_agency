@@ -304,7 +304,7 @@ create_theory_engine(Template, SequenceAsTrace, Iteration, TheoryEngine) :-
     engine_create(Theory-Trace, theory(Template, SequenceAsTrace, Iteration, Theory, Trace), TheoryEngine), !.
 
 theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
-    found_theory(Template, Iteration, false),
+    found_theory(false),
     theory_limits(Template, Iteration),
     static_constraints(Template.type_signature),
     % Do iterative deepening on rule sizes favoring simplicity
@@ -314,18 +314,11 @@ theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
     length(SequenceAsTrace, SequenceLength),
     trace(Trace, SequenceLength),
     theory_with_trace(Theory, Trace),
-    found_theory(Template, Iteration, true).
+    found_theory(true).
 
 % Set a non-backtrackable global for the thread that a theory was found.
-% Set or do a count down on the number of theories (more with each iteration), throwing an error if too many found.
-found_theory(Template, Iteration, Found) :-
-    set_global(theory_engine, theory_was_found, Found),
-    (Found -> 
-        (count_down(theory_count) -> true ;  throw(error(max_found_theories, context(theory_engine, 'max theories reached'))))
-        ; 
-        MaxTheories is round(Template.limits.max_theories + (Iteration * Template.limits.max_theories / 2)),
-        reset_counter(theory_count, MaxTheories)
-    ).
+found_theory(Found) :-
+    set_global(theory_engine, theory_was_found, Found).
 
 % Was a theory ever found in this thread?
 theory_found :- 
@@ -428,25 +421,59 @@ max_body_size(static, Template, Size) :-
 max_body_size(causal, Template, Size) :-
     Size = Template.limits.max_causal_rule_body_size.
 
-% There is enough rules and there are no unused predicates in them.
+% There is enough rules and the rule set is valid.
 posit_rules(Kind, Template, _, _) :-
     enough_rules(Kind),
     valid_rule_set(Kind, Template).
 
-% There are not enough rules and more can be added
+% There are not enough rules; more are needed
 posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
     \+ enough_rules(Kind),
-    % Build a rule that doe not exceed max body size
-    min_body_size(Template, RuleCount, MaxBodySize, MinBodySize),
-    between_rand(MinBodySize, MaxBodySize, BodySize),
-    max_body_predicates(BodySize),
-    distinct_typed_variables(Template.type_signature.typed_variables, BodySize, [], DistinctVars),
-    rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates),
-    log(debug, theory_engine, 'Rule ~p from template is ~p', [RuleCount, Head-BodyPredicates]),
-    posited_rule(Kind, Head, BodyPredicates),
-    log(info, theory_engine, 'Posited rule ~p ~p', [RuleCount, Head-BodyPredicates]),
-    RuleCount1 is RuleCount + 1,
-    posit_rules(Kind, Template, MaxBodySize, RuleCount1).
+    % restrict the number of alternate Nth rules explored 
+    reset_rule_search_breadth_counter(Template, RuleCount),
+    catch(
+        (
+            % Build a rule that doe not exceed max body size
+            min_body_size(Template, RuleCount, MaxBodySize, MinBodySize),
+            between_rand(MinBodySize, MaxBodySize, BodySize),
+            max_body_predicates(BodySize),
+            distinct_typed_variables(Template.type_signature.typed_variables, BodySize, [], DistinctVars),
+            rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates),
+            log(debug, theory_engine, 'Rule ~p from template is ~p', [RuleCount, Head-BodyPredicates]),
+            posited_rule(Kind, Head, BodyPredicates),
+            log(info, theory_engine, 'Posited rule ~p ~p', [RuleCount, Head-BodyPredicates]),
+            % Check if too many alternate Nth rule have been tried. If so, throw an error.
+            count_down_rule_breadth(RuleCount),
+            RuleCount1 is RuleCount + 1,
+            posit_rules(Kind, Template, MaxBodySize, RuleCount1)
+        ),
+        error(rule_breadth_exceeded, _),
+        (
+            log(note, theory_engine, 'Max rule breadth at ~p exceeded', [RuleCount]),
+            fail
+        )
+    ).
+
+reset_rule_search_breadth_counter(_, 0).
+
+reset_rule_search_breadth_counter(Template, RuleCount) :-
+    RuleCount >  0,
+    max_breadth_path(RuleCount, Path),
+    reset_counter(Path, Template.limits.max_rule_search_breadth).
+
+count_down_rule_breadth(0).
+
+count_down_rule_breadth(RuleCount) :-
+    RuleCount >  0,
+    max_breadth_path(RuleCount, Path),
+    (count_down(Path) -> 
+        true 
+        ; 
+        throw(error(rule_breadth_exceeded, context(theory_engine, RuleCount)))
+    ).
+
+max_breadth_path(RuleCount, Path) :-
+    atomic_list_concat(['rule_breadth_', RuleCount], Path).
 
 % The first rule must be of at least max body size
 min_body_size(Template, RuleCount, MaxBodySize, MinBodySize) :-
