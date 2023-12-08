@@ -316,6 +316,13 @@ theory(Template, SequenceAsTrace, Iteration, Theory, Trace) :-
     theory_with_trace(Theory, Trace),
     found_theory(true).
 
+% If the search for a theory in the template completed (was not time-expired) but was truncated (the breadth search limit reached was reached),
+% throw an error to indicate an incomplete search, so that the search within the template is not considered exhausted.
+theory(Template, _, _, _, _) :-
+    is_search_truncated,
+    log(note, theory_engine, 'Search of template ~p was truncated', [Template.id]),
+    throw(error(template_search_truncated, context(theory_engine, 'search terminated but was truncated'))).
+
 % Set a non-backtrackable global for the thread that a theory was found.
 found_theory(Found) :-
     set_global(theory_engine, theory_was_found, Found).
@@ -323,7 +330,15 @@ found_theory(Found) :-
 % Was a theory ever found in this thread?
 theory_found :- 
     get_global(theory_engine, theory_was_found, true).
-                
+
+% Persist in the thread that the search was truncated somewhere
+search_truncated(Template) :-
+    log(note, theory_engine, 'Search truncated for template ~p!', [Template.id]),
+    set_global(theory_engine, search_truncated, true).
+
+is_search_truncated :-
+    get_global(theory_engine, search_truncated, true), !.
+
 theory_limits(Template, Iteration) :-
     iteration_template_deadline(Template, Iteration, Deadline),
     template_deadline(Deadline),
@@ -441,7 +456,7 @@ posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
             rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates),
             log(debug, theory_engine, 'Rule ~p from template is ~p', [RuleCount, Head-BodyPredicates]),
             posited_rule(Kind, Head, BodyPredicates),
-            log(info, theory_engine, 'Posited rule ~p ~p', [RuleCount, Head-BodyPredicates]),
+            log(debug, theory_engine, 'Posited rule ~p ~p', [RuleCount, Head-BodyPredicates]),
             % Check if too many alternate Nth rule have been tried. If so, throw an error.
             count_down_rule_breadth(RuleCount),
             RuleCount1 is RuleCount + 1,
@@ -450,6 +465,7 @@ posit_rules(Kind, Template, MaxBodySize, RuleCount) :-
         error(rule_breadth_exceeded, _),
         (
             log(note, theory_engine, 'Max rule breadth at ~p exceeded', [RuleCount]),
+            search_truncated(Template),
             fail
         )
     ).
@@ -662,7 +678,7 @@ uncausing_varying_predicate(Template) :-
 
 rule_from_template(Kind, Template, DistinctVars, Head-BodyPredicates) :-
     posit_head_predicate(Kind, Template, DistinctVars, Head),
-    posit_body_predicates(Template, DistinctVars),
+    posit_body_predicates(Kind, Template, DistinctVars),
     collect_body_predicates(BodyPredicates).
 
 collect_body_predicates([BodyPredicate | OtherBodyPredicates]) :-
@@ -730,21 +746,30 @@ make_head_arg(value_type(Domain), DistinctVars, DistinctVars, Arg) :-
     domain_is(Domain,Values),
     member_rand(Arg, Values).
 
-posit_body_predicates(_, _) :-
+posit_body_predicates(_, _, _) :-
     enough_body_predicates, !.
 
-posit_body_predicates(Template, DistinctVars) :-
-    PredicateTypes = Template.type_signature.predicate_types,
-    posit_body_predicate(PredicateTypes, DistinctVars),
-    posit_body_predicates(Template, DistinctVars).   
+posit_body_predicates(Kind, Template, DistinctVars) :-
+    posit_body_predicate(Kind, Template, DistinctVars),
+    posit_body_predicates(Kind, Template, DistinctVars).   
 
-posit_body_predicate(PredicateTypes, DistinctVars) :-
-    body_predicate(PredicateTypes, DistinctVars, BodyPredicate),
+posit_body_predicate(static, Template, DistinctVars) :-
+    PredicateTypes = Template.type_signature.predicate_types,
+    member_rand(predicate(Name, TypedArgs), PredicateTypes),
+    body_predicate(predicate(Name, TypedArgs), DistinctVars, BodyPredicate),
     posited_body_predicate(BodyPredicate).
 
-
-body_predicate(PredicateTypes, DistinctVars, BodyPredicate) :-
+% Favor varying predicates in causal rule bodies
+posit_body_predicate(causal, Template, DistinctVars) :-
+    PredicateTypes = Template.type_signature.predicate_types,
+    all_predicate_names(Template.type_signature, AllPredicateNames),
+    member_rand(Name, Template.varying_predicate_names, AllPredicateNames),
     member_rand(predicate(Name, TypedArgs), PredicateTypes),
+    body_predicate(predicate(Name, TypedArgs), DistinctVars, BodyPredicate),
+    posited_body_predicate(BodyPredicate).
+
+body_predicate(PredicateType, DistinctVars, BodyPredicate) :-
+    predicate(Name, TypedArgs) = PredicateType,
     make_body_args(TypedArgs, DistinctVars, Args),
     BodyPredicate =.. [fact, Name , Args].
 

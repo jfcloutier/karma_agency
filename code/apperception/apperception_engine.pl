@@ -26,7 +26,7 @@ log_to('test.log').
 
 sequence(leds_observations, Sequence), 
 MaxSignatureExtension = max_extension{max_object_types:1, max_objects:1, max_predicate_types:1},
-ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 30},
+ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 3-2, time_secs: 60},
 apperceive(Sequence, ApperceptionLimits, Theories).
 
 sequence(eca_observations, Sequence), 
@@ -115,6 +115,7 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 % Given a sequence of observations and some limits, find good causal theories.
 apperceive(Sequence, ApperceptionLimits, Theories) :-
+    log(error, apperception_engine, 'STARTING'),
     get_time(Now),
     init(ApperceptionLimits, Now),
     min_type_signature(Sequence, MinTypeSignature),
@@ -169,7 +170,7 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, SearchedTempl
     ).
 
 handle_exception(Thrown, context(apperception_engine, Theories), Theories) :-
-    member(Thrown, [found_good_enough_theory, time_expired, search_completed]),
+    member(Thrown, [found_good_enough_theory, time_expired, search_completed, template_exhausted, stopped]),
     !,
     log(note, apperception_engine, 'Search terminated by ~p', [Thrown]).
 
@@ -343,7 +344,7 @@ best_theories_in_template(ApperceptionLimits, Template, TheoryEngine, SequenceAs
 handle_next_theory(no_more, _, _, Template, _, _, _, _, _, template_exhausted, BestTheories, BestTheories) :-
     log(note, apperception_engine, 'Template exhausted ~p', [Template.id]), !.
 
-handle_next_theory(stopped, _, _,  _, _, _, _, _, _, time_expired, BestTheories, BestTheories) :- !.
+handle_next_theory(stopped, _, _,  _, _, _, _, _, _, stopped, BestTheories, BestTheories) :- !.
 handle_next_theory(Theory, Trace, ApperceptionLimits, Template, TheoryEngine, SequenceAsTrace, Epoch, StartTime, TemplateStartTime, Status, RatedTheories, BestTheories) :-
     % Rate the theory
     % log(note, apperception_engine, 'Max static=~p, Max causal=~p, and causal rules ~p', [Template.limits.max_static_rules, Template.limits.max_causal_rules, Theory.causal_rules]),
@@ -377,8 +378,8 @@ handle_theory_engine_response(no, no_more, _, _) :-
 handle_theory_engine_response(exception(error(template_search_time_expired, context(theory_engine, Reason))), stopped, _, _) :-
     log(info, apperception_engine, 'Time expired searching for theories in template: ~p.', [Reason]).
 
-handle_theory_engine_response(exception(error(max_found_theories, context(theory_engine, Reason))), stopped, _, _) :-
-    log(note, apperception_engine, 'Found enough theories in template: ~p.', [Reason]).
+handle_theory_engine_response(exception(error(template_search_truncated, context(theory_engine, Reason))), stopped, _, _) :-
+    log(note, apperception_engine, 'Search in template completed but it was truncated: ~p.', [Reason]).
 
 abort_with_best_theories(Cause, BestTheories) :-
     throw(error(Cause, context(apperception_engine, BestTheories))).

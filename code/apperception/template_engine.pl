@@ -56,7 +56,7 @@ create_theory_template_engine(MinTypeSignature, VaryingPredicateNames, MaxSignat
 %             type_signature: TypeSignature,
 %             min_type_signature: TypeSignature,
 %             varying_predicate_names:[on],
-%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:1, max_causal_rule_body_size:5, max_rule_search_breadth: 50, max_search_time:30}, 
+%             limits:limits{max_elements:5,max_causal_rules:2,max_static_rules:0, max_static_rule_body_size:1, max_causal_rule_body_size:5, max_rule_search_breadth: 160, max_search_time:30}, 
 %             region: SignatureExtensionRegion, 
 %             max_region_templates: Max}.
 
@@ -135,8 +135,8 @@ theory_complexity_bounds(TypeSignature, Limits) :-
     MaxSearchTime is round((1.2 ** MaxElements) + (MaxElements / 2)),
     round(MaxElements, RoundedMaxElements),
     max_rule_body_sizes(TypeSignature, RoundedMaxElements, MaxStaticBodySize, MaxCausalBodySize),
-    % TODO - compute max_rule_search_breadth
-    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_static_rule_body_size: MaxStaticBodySize, max_causal_rule_body_size: MaxCausalBodySize, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime, max_rule_search_breadth: 100}.
+    MaxRuleSearchBreadth is round(MaxElements * 2 ** MaxElements),
+    Limits = limits{max_causal_rules: MaxCausalRules, max_static_rules: MaxStaticRules, max_static_rule_body_size: MaxStaticBodySize, max_causal_rule_body_size: MaxCausalBodySize, max_elements: RoundedMaxElements, max_search_time: MaxSearchTime, max_rule_search_breadth: MaxRuleSearchBreadth}.
 
 % A number between the number of predicate types and the greatest possible number of predicates in any rule
 max_rule_body_sizes(TypeSignature, MaxElements, MaxStaticBodySize, MaxCausalBodySize) :-
