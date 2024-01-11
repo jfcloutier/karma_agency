@@ -1,6 +1,6 @@
 # Umwelt and causation
 
-The umwelt of a GM actor is the set of latent objects presumed responsible for its sensations.
+The umwelt of a GM actor is the set of observed and latent objects presumed responsible for its sensations.
 
 The GM actor's perception of the umwelt (what the GM actor believes about latent objects given past and present sensations, in the context of feeling dynamics) is relativistic. There is no (a priori) external frame of reference in which the agent and latent object are positioned.
 
