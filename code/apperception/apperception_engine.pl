@@ -1,8 +1,8 @@
 :- module(apperception_engine, [apperceive/3]).
 
 /* 
-   An apperception engine re-implementing the Apperception Engine described in "Making sense of sensory input" by Richard Evans, Jose Hernandez-Orallo, Johannes Welbl, Pushmeet Kohli, Marek Sergot (https://arxiv.org/abs/1910.02227)
-   Our implementation is optimized to find, quickly enough, good enough causal theories (coherent logic programs) that explain past observations. 
+   A re-implementation of the Apperception Engine described in "Making sense of sensory input" by Richard Evans, Jose Hernandez-Orallo, Johannes Welbl, Pushmeet Kohli, Marek Sergot (https://arxiv.org/abs/1910.02227)
+   Our implementation is optimized to find good enough causal theories quickly enough to satisfy the needs of Cognition Actors forming a Society of Mind.
 
    How an apperception engine works:
   
