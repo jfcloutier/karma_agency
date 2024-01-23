@@ -1,20 +1,34 @@
 :- module(apperception_engine, [apperceive/3]).
 
-%% An apperception engine.
+/* 
+   An apperception engine re-implementing the Apperception Engine described in "Making sense of sensory input" by Richard Evans, Jose Hernandez-Orallo, Johannes Welbl, Pushmeet Kohli, Marek Sergot (https://arxiv.org/abs/1910.02227)
+   Our implementation is optimized to find, quickly enough, good enough causal theories (coherent logic programs) that explain past observations. 
 
-%% Given a sequence of observations, it searches for theories (a logic program) best explaining the sequence.
-%% The search completes after a preset amount of time or when a great theory is found.
+   How an apperception engine works:
+  
+        Given a sequence of observations, it searches for causal theories (tiny logic programs) best explaining the sequence.
+        The search completes after a preset amount of time or as soon as a good enough theory is found.
+        A causal theory can then be used to predict incoming observations.
+  
+   The apperception engine searches by iterating through "regions"" of roughly increasing solution complexity,
+   each region specifying templates (vocabularies of identical complexity) with which to express causal theories.
+   The set of all templates defines the search space for causal theories.
 
-%% The apperception engine searches by iterating through theory templates of roughly increasing complexity,
-%% each template specifying a region of the search space of theories.
-%% For each template, the apperception engine iterates through theories specified by the template and evaluates them.
-%% It rejects those that are not unified and retains the highest rated ones found so far.
+   For each template, the apperception engine constructs theories specified by the templates on offer and evaluates them for Kantian unity, for accuracy and complexity.
+   It rejects those that are not unified and retains the highest rated ones found so far.
 
-%% Appercetpion is given a number of limits (constraints)
-    %% max_signature_extension: (max_extension{max_object_types:1, max_objects:1, max_predicate_types:1}) How many object types, objects  and predicate types can be abduced (imagined)
-    %% good_enough_coverage:(Percent, e.g. 87) When a theory with at least this trace coverage is found, the search is terminated with this theory as the sole answer.
-    %% keep_n_theories: (Number) How many theories a template can contribute as candidates for the best overall theories on each iteration
-    %% funnel: (FromNumber-ToNumber) How many (most promising) templates are retained to be searched again on each iteration. The FromNumber is reduced by one after each iteration and never goes under ToNumber.
+   The search is restrained by a number of parameters:
+
+      max_signature_extension: (max_extension{max_object_types:1, max_objects:1, max_predicate_types:1}) How many object types, objects  and predicate types can be abduced (imagined)
+      good_enough_coverage:(Percent, e.g. 87) When a theory with at least this trace coverage is found, the search is terminated with this theory as the sole answer.
+      keep_n_theories: (Number) How many theories a template can contribute as candidates for the best overall theories on each iteration
+      funnel: (FromNumber-ToNumber) How many (most promising) templates are retained to be searched again on each iteration. The FromNumber is reduced by one after each iteration and never goes under ToNumber.
+
+    The Apperception Engine applies a variety of heuristics and induction biases to improve the odds of finding a good enough sollution in good time,
+    if not on the current attempt then perhaps on the next one.
+
+    See https://zenodo.org/records/10325868
+*/
 
 /*
 [load].
