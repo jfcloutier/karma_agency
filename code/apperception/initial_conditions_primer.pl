@@ -2,6 +2,8 @@
 
 :- module(initial_conditions_primer, [facts_from_observations/2, facts_from_unobserved/4]).
 
+:- use_module(code(logger)).
+
 % Initialize initial conditions from an observed state within the observed sequence.
 facts_from_observations(SequenceAsTrace, Facts) :-
     random_permutation(SequenceAsTrace, RandSequenceAsTrace),
