@@ -6,7 +6,7 @@
 
 /*
 [load].
-[code(logger), code(global), apperception(type_signature), apperception(theory_engine)].
+[apperception(theory_engine), apperception(sequence), code(logger)].
 [tests(apperception/leds_observations), tests(apperception/eca_observations)].
 set_log_level(info).
 ObjectTypes = [object_type(led)],
@@ -24,6 +24,7 @@ theory_engine:theory(Template, SequenceAsTrace, 0, Theory, Trace).
 
 :- use_module(library(lists)).
 :- use_module(library(aggregate)).
+:- use_module(apperception(type_signature)).
 :- use_module(code(logger)).
 :- use_module(apperception(domains)).
 :- use_module(apperception(initial_conditions_primer)).
