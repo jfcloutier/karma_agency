@@ -80,7 +80,7 @@ singleton_thread_name(Module, Name) :-
 % If it is, then its supervised children might also be restarted.
 run_supervised(Options, ParentSupervisor) :-
     option(restarting(Restarting), Options, false),
-    Restarting -> maybe_restart_children(); true,
+    Restarting -> maybe_restart_children; true,
     delete(Options, restarting(_), RestOptions),
     catch(run(RestOptions), Exit, process_exit(Exit, ParentSupervisor)).
 
@@ -146,7 +146,7 @@ do_kill_child(Module, Name) :-
     catch(call(ModuleGoal), Exception, format("Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])),
     forget_child(Module, Name).
 
-maybe_restart_children() :-
+maybe_restart_children :-
     thread_self(Supervisor),
     foreach(
         child(Supervisor, Module, Name, Goal, Restart), 

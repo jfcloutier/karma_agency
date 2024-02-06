@@ -24,8 +24,8 @@
 start(Name, Options, Supervisor) :-
     option(handler(Handler), Options),
     option(topics(Topics), Options, []),
-    option(init(Init), Options, worker:noop()),
-    option(terminate(Terminate), Options, worker:noop()),
+    option(init(Init), Options, worker:noop),
+    option(terminate(Terminate), Options, worker:noop),
     % Topics, Init, Handler
     format("[worker] Creating worker ~w~n", [Name]),
     start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
@@ -55,7 +55,7 @@ start_worker(Name, Topics, Init, Handler, Supervisor) :-
 
 process_exit(Name, Exit, Supervisor) :-
     format("[worker] Exit ~p of ~w~n", [Exit, Name]),
-    unsubscribe_all(),
+    unsubscribe_all,
     thread_detach(Name), 
     notify_supervisor(Supervisor, Name, Exit),
     thread_exit(true).
@@ -93,5 +93,5 @@ notify_supervisor(Supervisor, Name, Exit) :-
     send_message(Supervisor, exited(worker, Name, Exit)).
 
 % Just succeed
-noop().
+noop.
 

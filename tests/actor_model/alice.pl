@@ -18,15 +18,15 @@ start_alice(Supervisor) :-
       handler(alice:handle)]
       ).
 
-stop_alice() :-
+stop_alice :-
    worker:stop(alice).
 
 %% Callbacks
 
-init() :-
+init :-
     writeln("[alice] Initializing").
 
-terminate() :-
+terminate :-
    writeln("[alice] Terminating").
 
 % Ignore all events from self

@@ -19,15 +19,15 @@ start_bob(Supervisor) :-
       restart(permanent)]
       ).
 
-stop_bob() :-
+stop_bob :-
    worker:stop(bob).
 
 %% Callbacks
 
-init() :-
+init :-
     writeln("[bob] Initializing").
 
-terminate() :-
+terminate :-
    writeln("[bob] Terminating").
 
 % Ignore all events from self

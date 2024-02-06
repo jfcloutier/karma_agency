@@ -15,11 +15,11 @@ start(pubsub, _, Supervisor) :-
 
 stop(pubsub) :-
     writeln("[pubsub] Stopping"),
-    send_message(pubsub, stop()).
+    send_message(pubsub, stop).
 
 kill(pubsub) :-
     writeln("[pubsub] Dying"),
-    send_message(pubsub, die()).
+    send_message(pubsub, die).
 
 % Singleton thread's name
 name(pubsub).
@@ -36,7 +36,7 @@ subscribe(Topic) :-
    thread_self(Name),
    send_message(pubsub, subscribe(Name, Topic)).
 
-unsubscribe_all() :-
+unsubscribe_all :-
     thread_self(Name),
     send_message(pubsub, unsubscribe(Name)).
 
@@ -47,11 +47,11 @@ publish(Topic, Payload) :-
 %% Private
 
 start_pubsub(Supervisor) :-
-    catch(start_run(), Exit, process_exit(Exit, Supervisor)).
+    catch(start_run, Exit, process_exit(Exit, Supervisor)).
 
-start_run() :-
+start_run :-
     % Do some initializations here
-    run().
+    run.
 
 process_exit(Exit, Supervisor) :-
     format("[pubsub] Exit ~p~n", [Exit]),
@@ -61,11 +61,11 @@ process_exit(Exit, Supervisor) :-
     thread_exit(true).
 
 
-run() :-
+run :-
     writeln("[pubsub] Waiting..."),
     thread_get_message(Message),
     process_message(Message),
-    run().
+    run.
 
 process_message(subscribe(Name, Topic)) :-
     format("[pubsub] Subscribing ~w to topic ~w~n", [Name, Topic]),
@@ -74,12 +74,12 @@ process_message(subscribe(Name, Topic)) :-
 process_message(unsubscribe(Name)) :-
     retractall(subscription(Name, _)).
 
-process_message(stop()) :-
+process_message(stop) :-
     writeln("[pubsub] Stopping"),
     retractall(subscription/2),
     throw(exit(normal)).
 
-process_message(die()) :-
+process_message(die) :-
     writeln("[pubsub] Dying"),
     retractall(subscription/2),
     thread_detach(pubsub), 
