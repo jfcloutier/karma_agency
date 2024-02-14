@@ -38,21 +38,3 @@ See [erl_pengines](https://github.com/Limmen/erl_pengine)
 
     # Terminate the pengine
     {:pengine_destroyed, _message} = :pengine.destroy(pid)
-
-## Calls from Andy
-
-### Assertions
-
-    latest_completed_round(RoundIndex) % Communicated by a GM in Andy at the end of a round
-                                       % Inferred round_data is asserted and added to the communicated data for the completed round
-    round_data(RoundIndex, Data) % round data as it is being communicated by other GMs (data is a sent_prediction or received_prediction error as string)
-
-Round Index is the index of the round where the belief etc. is held, e.g. `5`
-The data is either a belief, a prediction, prediction error or action
-
-### Queries
-
-    current_beliefs(Beliefs) % What are the GM's current beliefs based on current perceptions?
-    predictions_to_send(Predictions) % What are the GM's current predictions based on beliefs?
-    prediction_errors_to_send(PredictionErrors) % What are the GM's current prediction errors based on current beliefs and received predictions?
-    actions_to_take(Actions) % What actions does the theory recommend to achieve sent goal beliefs and test current opinion beliefs?

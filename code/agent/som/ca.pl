@@ -1,0 +1,5 @@
+/*
+Cognition actor.
+*/
+
+:- module(ca, []).

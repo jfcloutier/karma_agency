@@ -4,43 +4,58 @@ Author: Jean-François Cloutier
 
 Research project: Symbolic Cognitive Robotics, Active Inference Institute
 
-Last updated: January 19 2024
+Last updated: February 6 2024
 
-**Pre-implementation notes on the next iteration of a cognitive architecture for Lego robots.**
+**Design notes on the next iteration of a cognitive architecture for Lego robots.**
 
 ## Formative concepts
 
 * Active Inference (an agent actively minimizes surprise to survive)
 * Enactivism (an agent's perceptions and actions are constructively co-dependent)
 * Apperception (predictive sense-making from the discovery of unified causal theories)
-* Mortal Computing (meaning is grounded in the agent's drive to survive)
-* Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the environment)
-* Constraint Closure (the cognition actors constrain how the Society of Mind can change, and vice-versa)
+* Mortal Computing (meaning is intrinsically grounded in the agent's drive to survive)
+* Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the agent's environment)
+* Constraint Closure (the cognition actors constrain how the Society of Mind as a whole can change, and vice-versa)
 * Kantian Whole (the parts -cognition actors- exist for and by means of the whole -the Society of Mind-)
 
 ## Society of Mind (SOM)
 
-* An agent grows and evolves a Society of Mind from its experiences
+* An agent grows and evolves a Society of Mind from its engagement and experiences
 * A SOM is a "connectome" of Cognition Agents (CAs)
-* Each CA has an umwelt consisting of other CAs
+* Each CA has an umwelt consisting of other CAs or some aspects of the agent's environment
+* A SOM starts with a priori constituents
+  * The a priori objects are `self`, `world` and `ground`
+  * The a priori relations is `in`
+    * objects `ground` and `self` are `in` world
+  * The a priori value domains are
+    * boolean - [true, false]
+    * percent - 0..100
+  * Detectors and effectors are exposed as a priori CAs
+    * Each defines an priori vocabulary of
+      * beliefs (e.g. `color`, `distance`, `touched`)
+        * with value domains (e.g. [red, blue, green...], 0..100, etc.)
+      * actions (e.g. `spin`, `reverse spin`)
+  * Metacongnition actors have a priori capabilities and each CA has a priori, shared introspective belief voacabulary (see below)
 
 ## Introspection vs extrospection
 
 * Extrospection => Cognition of (more or less abstracted) sensations from the external world
-  * The objects named "world" and "ground" are primordial
-  * object ground is `in` world
-* Introspection => Cognition of sensations from the computations by **Cognition Actors (CAs)**
-  * The object named "self" (self is `in` world) is primordial
-    * self is in world
-* Detectors and effectors are exposed as extrospective primitive CAs
+* Introspection => Cognition of sensations about computations by **Cognition Actors (CAs)**
+  * Perceived by Metacognition actors
 * Every other CA can be coopted into one or more umwelts as a source of introspective or extrospective sensations, and as an effector of actions
 
 ## The umwelt of a Cognition Actor (CA)
 
-* A set of other CAs are seen by others through what they expose (their API)
+* The (immediate) umwelt of a CA is a (small) fixed set (fixed at instantiation) of other CAs
+  * The CAs in an umwelt also have CAs int their own umwelts
+    * All the way down to a priori CAs
+  * The transitive umwelt of a CA is the CAs in its immediate umwelt plus the CAs in their transitive umwelts
+  * The level of abstraction of a CA is the maximal depth of its transitive umwelt
+  * A CA's builds its umwelt from CAs of equal levels of abstraction 
+* CAs are seen by others through what they expose (their API)
   * What a CA exposes to all other CAs
     * the vocabulary of their beliefs (what others can make predictions about)
-      * extant, latent and synthetic objects (typed with extant or latent object types),
+      * extant (observed), latent (imagined) and synthetic (derived) objects,
       * extant, latent and synthetic relations/properties
         * a latent or synthetic property is always boolean-valued
       * all CAs have a common vocabulary of meta-cognition beliefs
@@ -54,7 +69,7 @@ Last updated: January 19 2024
 ## A CA's perceptions
 
 * A CA processes perceptions one discrete time slice after another
-  * its duration is constant and proportional to the CA's abstraction level
+  * the time slice duration is constant and proportional to the CA's abstraction level
     * i.e. the depth of its umwelt
 * Perceiving is making predictions about about the beliefs of CAs in its umwelt
   * and getting prediction errors or not
@@ -63,7 +78,7 @@ Last updated: January 19 2024
   * Uncontradicted predictions
   * Prediction errors can be emitted in response to predictions, with attached precision
     * If multiple CAs respond to a prediction with prediction errors
-      * The prediction error with the highest precision is picked
+      * The prediction error with the highest precision has sway
       * Tie-breaking is random
 
 * The precision of a prediction error (a float between 0 and 1) is a function of:
@@ -74,19 +89,19 @@ Last updated: January 19 2024
 
 ## A CA's beliefs
 
-* What's imagined, analyzed, partitioned and categorized by the CA
+* What's imagined, derived, partitioned and categorized by the CA
   * from its perceptions
     * unrefuted predictions + prediction errors about the beliefs of CAs in its immediate umwelt
 * Beliefs are available to other CA's as *synthetic or latent* and thus *novel* perceptions
 * Beliefs are abduced predicates
   * needed to formulate a causal theory (latent)
-  * needed to label significant perceptual trends (synthetic)
+  * or needed to label significant perceptual trends (synthetic)
 * Beliefs have associated normativity (pleasant vs unpleasant vs indifferent beliefs)
 * "Thin now" vs. "thick now" beliefs
   * Thin now beliefs
     * Unobserved but imagined/abduced properties/relations/objects to (causally) make sense of observations - the thin now -
   * Thick now beliefs
-  * Synthetic. induced from, and thus supported by, perceptual trends - the thick now -
+  * Synthetic, induced from, and thus supported by, perceptual trends - the thick now -
 
 ### Perceptual trends support synthetic beliefs
 
@@ -105,7 +120,7 @@ Last updated: January 19 2024
     * and associated with past beliefs (that the trends supported)
   * Uncompressed trends represent short-term memory (developing trends)
 
-#### Inducing beliefs from trends
+#### Inducing/deriving beliefs from trends
 
 * By association
   * Synthetic properties/relations are supported by attention-worthy (strongly felt or surprising) trends
