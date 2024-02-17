@@ -1,6 +1,6 @@
 # System
 
-## Components
+## Notes
 
 * karma system
   * karma_agent (prolog)
@@ -32,38 +32,67 @@
       * SOM state
       * Events
 
-## Diagrams
+## Karma system
 
 ```mermaid
 ---
-title: System
+title: Networking
 ---
 
 graph LR;
-agent("`**agent**
-*prolog*`")==>|HTTP|body("`**body**
-*phoenix*`") & observer("`**observer**
-*liveview*`")
+agency("`**agency**
+*prolog on PC*`")==>|HTTP|body("`**body**
+*elixir*`") & observer("`**observer**
+*elixir*`")
 observer("`**observer**
-*liveview*`")==>|HTTP|body("`**body**
-*phoenix*`") 
+*elixir on PC*`")==>|HTTP|body("`**body**
+*elixir on PC or robot*`") 
 ```
 
 ----
 
 ``` mermaid
 ---
-title: Behaviours
+title: System components
 ---
 
 classDiagram
+  Agency
+  Observer
   Body <|-- LegoBody
   Body <|-- SimulatedBody
+  Observer <--> Agency
+  Observer --> Body
+  Body <--> Agency
+  class Agency {
+    on PC
+    Prolog app
+    apperception()
+    fitness()
+    som()
+    pubsub()
+    body_interface()
+  }
+  class Observer {
+    on PC
+    Elixir web ppp
+    monitor()
+    virtual_world()
+  }
   class Body {
-    +sensors()
-    +actuators()
-    +sense(sensor)
-    +actuate(actuator, action)
+    API
+    sensors()
+    actuators()
+    sense(sensor)
+    actuate(actuator, action)
+  }
+  class LegoBody {
+    on BrickPi3 - Lego robot
+    Elixir web app
+  }
+  class SimulatedBody {
+    on PC
+    Elixir web app
   }
 ```
 
@@ -71,19 +100,21 @@ classDiagram
 
 ```mermaid
 ---
-title: Interactions
+title: System interactions
 ---
 
 sequenceDiagram;
-    participant agent
+    participant agency
     participant body
     participant observer
-    agent-->>+body: ask for actuators/sensors
-    body-->>-agent: answer actuator/sensors
-    agent-->>+body: sense/actuate
-    body-->>-agent: sensed/actuated
+    agency-->>+body: ask for actuators/sensors
+    body-->>-agency: answer actuator/sensors
+    agency-->>+body: sense/actuate
+    body-->>-agency: sensed/actuated
     observer-->>+body: ask for actuators/sensors
     body-->>-observer: answer actuator/sensors
-    agent-->>observer: event
-    agent-->>agent: event
+    agency-->>observer: SOM or fitness event
+    agency-->>agency: SOM or fitness event
 ```
+
+----
