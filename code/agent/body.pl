@@ -16,33 +16,25 @@ start_supervisor(Parent) :-
     supervisor:start_child(Parent, supervisor, body, [restart(transient)]).
 
 get_sensors(Host, Sensors) :-
-    format(atom(Url), 'http://~w/api/sensors', [Host]),
+    api_url(Host, sensors, Url),
     http_get(Url, Response, []),
-    sensors_from_response(Response, Sensors).
-
-sensors_from_response(json([sensors=JsonSensors]), Sensors) :-
-    sensors_from_json(JsonSensors, Sensors).
-
-sensors_from_json([], []).
-sensors_from_json([JsonSensor | Others], [Sensor | OtherSensors]) :-
-    sensor_from_json(JsonSensor, Sensor),
-    sensors_from_json(Others, OtherSensors).
-
-sensor_from_json(json(KVPairs), Sensor) :-
-    Sensor = sensor{}.put(KVPairs).
+    devices_from_response(Response, sensor, Sensors).
 
 get_actuators(Host, Actuators) :-
-    format(atom(Url), 'http://~w/api/actuators', [Host]),
+    api_url(Host, actuators, Url),
     http_get(Url, Response, []),
-    actuators_from_response(Response, Actuators).
+    devices_from_response(Response, actuator, Actuators).
 
-actuators_from_response(json([actuators=JsonActuators]), Actuators) :-
-    actuators_from_json(JsonActuators, Actuators).
+api_url(Host, Query, Url) :-
+    format(atom(Url), 'http://~w/api/~w', [Host, Query]).
 
-actuators_from_json([], []).
-actuators_from_json([JsonActuator | Others], [Actuator | OtherActuators]) :-
-    actuator_from_json(JsonActuator, Actuator),
-    actuators_from_json(Others, OtherActuators).
+devices_from_response(json([_=Json]), Tag, Devices) :-
+    devices_from_json(Json, Tag, Devices).
 
-actuator_from_json(json(KVPairs), Actuator) :-
-    Actuator = actuator{}.put(KVPairs).
+devices_from_json([], _, []).
+devices_from_json([JsonDevice | Others], Tag, [Device | OtherDevices]) :-
+    device_from_json(JsonDevice, Tag, Device),
+    devices_from_json(Others, Tag, OtherDevices).
+
+device_from_json(json(KVPairs), Tag, Device) :-
+    dict_create(Device, Tag, KVPairs).
