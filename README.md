@@ -1,15 +1,8 @@
-# Notes
+# Karma Agency
 
-```prolog
-?- [load].
-```
+**UNDER CONSTRUCTION**
 
-```prolog
-?- [load_tests].
-?- run_tests.
-```
-
-## Requirements
+## Getting started
 
 Use the development version of SWI-PROLOG (https://www.swi-prolog.org/build/PPA.html)
 
@@ -38,6 +31,17 @@ ttrace(Thread) :-
 
 tnotrace(Thread) :-
     thread_signal(Thread, (attach_console, notrace)).
+```
+
+## Running the app
+
+```prolog
+?- [load].
+```
+
+```prolog
+?- [load_tests].
+?- run_tests.
 ```
 
 ## Tools
