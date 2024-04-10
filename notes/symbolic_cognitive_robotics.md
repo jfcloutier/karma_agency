@@ -4,17 +4,17 @@ Author: Jean-François Cloutier
 
 Research project: Symbolic Cognitive Robotics, Active Inference Institute
 
-Last updated: February 6 2024
+Last updated: April 10 2024
 
 **Design notes on the next iteration of a cognitive architecture for Lego robots.**
 
 ## Formative concepts
 
 * Active Inference (an agent actively minimizes surprise to survive)
-* Enactivism (an agent's perceptions and actions are constructively co-dependent)
-* Apperception (predictive sense-making from the discovery of unified causal theories)
-* Mortal Computing (meaning is intrinsically grounded in the agent's drive to survive)
-* Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the agent's environment)
+* Enactivism (an embodied agent's perceptions and actions are constructively co-dependent)
+* Apperception (predictive sense-making comes from the discovery of unified causal theories)
+* Biosemiotics (sense-making and sign-acting are intrinsically grounded in the agent's drive to survive)
+* Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the world)
 * Constraint Closure (the cognition actors constrain how the Society of Mind as a whole can change, and vice-versa)
 * Kantian Whole (the parts -cognition actors- exist for and by means of the whole -the Society of Mind-)
 
@@ -22,57 +22,66 @@ Last updated: February 6 2024
 
 * An agent grows and evolves a Society of Mind from its engagement and experiences
 * A SOM is a "connectome" of Cognition Agents (CAs)
-* Each CA has an umwelt consisting of other CAs or some aspects of the agent's environment
-* A SOM starts with a priori constituents
-  * The a priori objects are `self`, `world` and `ground`
-  * The a priori relations is `in`
+* Each CA has an umwelt consisting of other CAs or some sensed aspects of the agent's environment
+* A SOM starts with _a priori_ constituents
+  * The _a priori_ objects are `self`, `world` and `ground`
+  * The _a priori_ relations is `in`
     * objects `ground` and `self` are `in` world
-  * The a priori value domains are
+  * The _a priori_ value domains are
     * boolean - [true, false]
-    * percent - 0..100
-  * Detectors and effectors are exposed as a priori CAs
-    * Each defines an priori vocabulary of
+    * integer ranges, including percentage
+    * colors - [unknown, black, blue, green, yellow, red, white, brown]
+  * Detectors and effectors are exposed as _a priori_ CAs
+    * Each defines an _a priori_ vocabulary of
       * beliefs (e.g. `color`, `distance`, `touched`)
-        * with value domains (e.g. [red, blue, green...], 0..100, etc.)
+        * with value domains (e.g. colors, 0..100, etc.)
       * actions (e.g. `spin`, `reverse spin`)
-  * Metacongnition actors have a priori capabilities and each CA has a priori, shared introspective belief voacabulary (see below)
+  * Metacongnition actors have _a priori_ capabilities and each CA has _a priori_, shared introspective belief voacabulary (see below)
 
-## Introspection vs extrospection
+## Exteroception vs interoception vs introspection
 
-* Extrospection => Cognition of (more or less abstracted) sensations from the external world
+* Exteroception => Cognition of (more or less abstracted) sensations from the external world
+  * e.g. the distance to an obstacle
+* Interoception => Cognition of (more or less abstracted) bodily sensations
+  * e.g. a motor is stalled
 * Introspection => Cognition of sensations about computations by **Cognition Actors (CAs)**
-  * Perceived by Metacognition actors
-* Every other CA can be coopted into one or more umwelts as a source of introspective or extrospective sensations, and as an effector of actions
+  * perceived by Metacognition actors
+  * e.g. a CA has low predictive capability
+* A CA can non-exclusively coopt other CAs into its umwelt as sources of interoceptive or exteroceptive sensations, and as effectors of actions
 
 ## The umwelt of a Cognition Actor (CA)
 
 * The (immediate) umwelt of a CA is a (small) fixed set (fixed at instantiation) of other CAs
-  * The CAs in an umwelt also have CAs int their own umwelts
-    * All the way down to a priori CAs
+  * The CAs in an umwelt also have CAs in their own umwelts
+    * All the way down to _a priori_ CAs
   * The transitive umwelt of a CA is the CAs in its immediate umwelt plus the CAs in their transitive umwelts
   * The level of abstraction of a CA is the maximal depth of its transitive umwelt
-  * A CA's builds its umwelt from CAs of equal levels of abstraction 
-* CAs are seen by others through what they expose (their API)
-  * What a CA exposes to all other CAs
-    * the vocabulary of their beliefs (what others can make predictions about)
+  * A CA builds its umwelt from CAs of lower and uniform levels of abstraction
+* CA Interfaces
+  * A CA's interface is what it exposes to other CAs, namely
+    * The vocabulary of its beliefs (what others can make predictions about), composed of
       * extant (observed), latent (imagined) and synthetic (derived) objects,
       * extant, latent and synthetic relations/properties
         * a latent or synthetic property is always boolean-valued
-      * all CAs have a common vocabulary of meta-cognition beliefs
-
-    * what they emit when prompted by predictions about their beliefs:
-      * prediction errors from their beliefs
-        * from perceiving other CAs
-        * from their cognitive self-assessments/beliefs (from introspection)
+    * The actions it affords
+      * either _a priri_ actions (e.g. spin and reverse spin of motors) or synthetic actions
+  * All CAs have a common vocabulary of meta-cognition beliefs
+    * exposed to meta-cognition actors
+* CA events
+  * A CA emits events listened to by the CAs tp which unwelts it belongs, and by the meta-cognition actor overseeing it
+    * when prompted by predictions about its beliefs, a CA emits
+      * prediction errors given its currently held beliefs
         * with varying precision
+        * from perceiving other CAs
+        * or from cognitive self-assessments/beliefs (from introspection)
 
 ## A CA's perceptions
 
 * A CA processes perceptions one discrete time slice after another
-  * the time slice duration is constant and proportional to the CA's abstraction level
-    * i.e. the depth of its umwelt
+  * the time slice duration is constant for the CA and proportional to the CA's abstraction level
+    * i.e. the depth of its transitive umwelt
 * Perceiving is making predictions about about the beliefs of CAs in its umwelt
-  * and getting prediction errors or not
+  * possibly corrected by prediction errors emitted by CAs in its umwelt
 
 * Perceptions are
   * Uncontradicted predictions
@@ -81,78 +90,86 @@ Last updated: February 6 2024
       * The prediction error with the highest precision has sway
       * Tie-breaking is random
 
-* The precision of a prediction error (a float between 0 and 1) is a function of:
+* The precision of a prediction error (0% to 100%) is a function of:
   * The confidence of the emitting CA in the contradicting belief, which is a function of:
-    * The accuracy of the supporting causal model
-    * The duration of the supporting trend modulated by
-      * the average precision and variance of the perceptions aggregated by the trend
+    * The accuracy of the supporting causal model behind the belief (see below)
+    * The duration of the perceptual trend supporting the belief, modulated by (see below)
+      * the average precision and variance of the perceptions aggregated by the trend (see below)
 
 ## A CA's beliefs
 
-* What's imagined, derived, partitioned and categorized by the CA
+* Abelief is what's imagined (latent) or synthesized by the CA
   * from its perceptions
-    * unrefuted predictions + prediction errors about the beliefs of CAs in its immediate umwelt
-* Beliefs are available to other CA's as *synthetic or latent* and thus *novel* perceptions
+    * which are unrefuted predictions + prediction errors about the beliefs of CAs in its immediate umwelt
+* Beliefs are available to other CA's as _synthetic or latent_ and thus _novel_ perceptions
 * Beliefs are abduced predicates
   * needed to formulate a causal theory (latent)
   * or needed to label significant perceptual trends (synthetic)
-* Beliefs have associated normativity (pleasant vs unpleasant vs indifferent beliefs)
+* Beliefs have associated normativity (pleasant vs unpleasant vs indifferent beliefs) from ambient feelings
 * "Thin now" vs. "thick now" beliefs
-  * Thin now beliefs
-    * Unobserved but imagined/abduced properties/relations/objects to (causally) make sense of observations - the thin now -
-  * Thick now beliefs
-  * Synthetic, induced from, and thus supported by, perceptual trends - the thick now -
+  * Thin now beliefs are
+    * unobserved but imagined/abduced properties/relations/objects to (causally) make sense of observations
+  * Thick now beliefs are
+    * synthetic beliefs, induced from, and thus supported by, perceptual trends
 
 ### Perceptual trends support synthetic beliefs
 
-* Trends support the synthesis of beliefs in the thick now
-* A trend is given a value
-  * one of stable, unstable, up or down
-* Specific vs generic trend
-  * Specific trend-
-    * `trend(<predicate name>(<object name>, <object name> | <domain value>), <trend value>, <since>)` - a trend on an instance of a property/relation (stable, unstable)
-  * Generic trend - `trend(<predicate name>(<object name>), <trend value>, <since>)` - a trends on a type of property/relation for an object (stable, unstable, up, down)
+* Perceptual trends (from the analysis of past perceptions) support synthetic beliefs
+* A trend is about the relation or property of a given object
+  * A relation associates two objects
+  * A property associates an object and a value from a defined domain of values
+* A trend is itself given a value
+  * a trend is either stable, unstable, up, down
+    * `trend(<predicate name>(<object name>), <trend value>, <since>)`
     * for relations, up/down describes a count of related objects,
-    * for properties, up/down describes the rise/fall in values (property value domains are ordered from lesser to greater)
+    * for properties, up/down describes the rise/fall in values
+      * property value domains are ordered from lesser to greater
 * Memorizing trends
-  * A compressed trend and associated normativity can be preserved as long-term memory
+  * A CA keeps a limited history of past perceptions
+    * It is the CA's short-term memory (developing trends)
+    * Individual, past perceptions are eventually forgotten
+  * A "compressed" trend (a trend about now forgotten perceptions) can be preserved as long-term memory
     * `compressed(<trend>, <time interval>)`
-    * and associated with past beliefs (that the trends supported)
-  * Uncompressed trends represent short-term memory (developing trends)
+    * It is associated with remembered past beliefs (that the trends supported)
+      * When past beliefs are forgotten so are their associated compressed trends
+    * Compressed trends represent the CA's long-term memory
 
-#### Inducing/deriving beliefs from trends
+#### Inducing beliefs from trends
 
-* By association
-  * Synthetic properties/relations are supported by attention-worthy (strongly felt or surprising) trends
-    * `<synthetic property name>(<object_name>, true | false)`
-    * `<synthetic relation name>(<object name>, <object name>)`
-* By partition
-  * Parts-whole beliefs are induced by detecting boundaries in an observed object.
-    * `in(<new object name>, <object name>)`
-  * How are boundaries detected?
-    * An object has differentiable, stable sub-trends that coincide in time
-    * This might indicate that different parts of the object were being observed at different times
-      * e.g. "patch of food" in the "ground" in the "world" ("self" is always in the "world")
-  * A part is not of the same object type as the whole (assuming no fractal objects)
-* By categorization
-  * Beliefs about partition cause the abduction of new objects (the parts)
-  * The "part" object ia assigned a new (abduced) object type
-  * `is_a(<object_name>, <new object_type>)`
+* Beliefs are induced from the analysis of trends, themsleves produced from analyzing a perceptual history.
+  * A belief induced form the analysis of a trend is then supported by that trend.
+  * Induction can result from
+    * Associating
+      * Synthetic properties/relations are supported by attention-worthy (strongly felt or surprising) trends
+        * `<synthetic property name>(<object_name>, true | false)`
+        * `<synthetic relation name>(<object name>, <object name>)`
+    * Partitioning
+      * Parts-whole beliefs are induced by detecting boundaries in an observed object.
+        * `in(<new object name>, <object name>)`
+      * How are boundaries detected?
+        * An object has differentiable, stable sub-trends that coincide in time
+        * This might indicate that different parts of the object were being observed at different times
+          * e.g. "patch of food" in the "ground" in the "world" ("self" is always in the "world")
+      * A part is not of the same object type as the whole (assuming no fractal objects)
+    * Categorizing
+      * Beliefs about partition cause the abduction of new objects (the parts)
+      * The "part" object is assigned a new (abduced) object type
+      * `is_a(<object_name>, <new object_type>)`
+* A trend is **significant** and worthy of belief induction if
+  * it breaks surprisingly from a previous trend
+  * or if correlates with a change in feelings
 
 #### Trends, feelings and the normativity of beliefs
 
-* Normativity (from association with current feelings) is **always** about trends
+* Normativity (something being good, bad or indifferent) is **always** about trends
   * It exists in the "thick now"
 * Normative valuation comes from associating trends with feelings (see below)
-* A trend takes its (normative) value from the intensity of concurrent feelings
+* A trend takes its (normative) value from the intensity of concurrent, ambient feelings
   * `trend_value(<trend>, good | bad | neutral)`
 * A belief supported by a trend takes the normative value of that trend
   * A belief associated with a bad feeling is unpleasant, else it's pleasant (good) or indifferent (neutral)
   * Since trends have lengths, the normative values of trends have duration
     * e.g. a long-lasting unpleasant belief are worse than a short-lasting one
-  * A trend is **significant** (and worthy of belief synthesis) if
-    * it breaks surprisingly from a previous trend
-    * or if correlates with a change in feelings
 
 ## CA actions
 
@@ -175,16 +192,16 @@ Last updated: February 6 2024
     * an action can be repeated
   * a synthetic action is, via closure, a sequence of atomic actions
 
-### Why does a CA synthesize a new action?
+### Why does a CA defines a new action?
 
-* Because a sequence of actions is empirically associated with a significant belief change
-* Belief changes
+* A CA synthesize a new action because a sequence of actions is empirically associated with a significant belief change
+* Belief changes that may lead to action synthesis are
   * Abduced object, property or relation from a causal model (thin now belief)
   * Correlation with a belief-supporting trend starting/ending/enduring (long now belief)
     * The sequence of actions that runs before/through the trend is extracted
   * Babbling
     * A CA synthesizes an action to see what would happen if executed
-      * As a variation on an action already n the repertoire
+      * As a variation on an action already in its repertoire
         * Amplify sub-sequences via action duplication
         * Tone down sub-sequences by reducing duplication
         * Splice and recombine a synthetic action
@@ -195,14 +212,14 @@ Last updated: February 6 2024
   * A CA can intend any action in its repertoire
 * What motivates action intents by a CA (from less to most motivated)
   * Babbling
-    * to maybe cause a "random" belief
+    * to maybe cause a "chance" belief
   * Evidencing
     * to impact confidence in a belief (thus the precsion of reported prediction errors)
   * Eliminating
     * to terminate an unpleasant belief
 * A CA intends at most one action per time slice
   * It intends the most motivated action in its repertoire
-    * favoring, but not always, actions of the most successful policies (seebleow)
+    * favoring, but not always, actions of the most successful policies (see below)
   * If multiple actions are considered
     * A motivation tie is randomly broken
 
@@ -255,16 +272,15 @@ Last updated: February 6 2024
 ## Constraints
 
 * Umwelts (when closed) must be acyclic directed graphs but not necessarily trees
-* Abstraction must be monotonic
-  * A CA must not include a CA in its immediate umwelt if the latter is already in its transitiveumwelt.
+* A CA must not include a CA in its immediate umwelt if the latter is already in its transitive umwelt.
 * A CA must be either cognitive or meta-cognitive, never both
 * Only one synthetic action in a conflicting set can be executing at any given point in time
   * A synthetic action conflicts with another if their closed sequences have any simple action type  * incommon.
   * Practically speaking, only one synthetic action is allowed to execute at any time
-* A  * CA must not remove an element from its API if it is used by another CA
+* A CA must not remove an element from its interface if it is used by another CA
   * to formulate a causal theory
   * to synthesize a belief or action
-* If a CA must archive a belief (without normativity) or action and its (compressed - abstracted )support when the support is gone but the belief or action is still used by other CAs
+* A CA must archive a belief (without normativity) or action and its (compressed - abstracted ) support when the support is gone but the belief or action is still used by other CAs
 * A new belief must not be created if its support is subsumed by the compressed support of an archivedbelief
   * The archive belief is ressucitated and given the current support
 * An archived belief/action must be deleted if the belief/action is no longer used by another CA.
@@ -273,7 +289,7 @@ Last updated: February 6 2024
 
 * Initial CAs
   * One primitive CA per effector (wheel_1, wheel_2)
-  * One primitive CA per detector (color_sensor, touch_sensor, obstacle_sensor, beam_sensor)
+  * One primitive CA per detector (color_sensor, touch_sensor, obstacle_sensor, beam_sensor, etc.)
   * One meta-cognition CA with as umwelt all the primitive CAs
 *Initial steady state variables (sources of feelings)
   * Integrity 100%
@@ -285,7 +301,7 @@ Last updated: February 6 2024
 * Every CA of level N belongs to the umwelt of one MCA associated to that level
   * The level of a CA is the number of edges from the CA to primitive CAs
   * For a Society of Mind (SOM) with N levels, there must be one MCA per level 1..N, plus one MCA for level N+1 with an empty umwelt
-  * Once a CA is added at level N + 1, an MCA is immediately created for the empty level N + 2etc.
+  * Once a CA is added at level N + 1, an MCA is immediately created for the empty level N + 2 etc.
 * An MCA observes only cognitive sensations from its umwelt
 
 ### Meta-cognitive actions
