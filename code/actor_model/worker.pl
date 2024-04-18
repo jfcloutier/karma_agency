@@ -12,6 +12,8 @@
 %   handler - the fully qualified name of the clause header handling events (required)
 %   init - the fully qualified name of the clause called when initiating the agent (defaults to worker:noop/0)
 %   terminate - the fully qualified name of the clause called when terminating the agent (defaults to worker:noop/0)
+%
+% A worker holds a state that is updated from processing messages.
 %%%
 :- module(worker, [send/2]).
 
@@ -31,7 +33,7 @@ start(Name, Options, Supervisor) :-
     log(debug, worker, "Creating worker ~w~n", [Name]),
     start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
 
-stop(Name) :
+stop(Name) :-
     log(debug, worker, "Stopping worker ~w~n", [Name]),
     % Cause a normal exit
     send_message(Name, control(stop)),

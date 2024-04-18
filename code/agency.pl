@@ -3,9 +3,9 @@ Agency is the top level module.
 
 It integrates
 
-* Self-maintenance risks assessment and consequent feeling broadcasting (feelings)
-* The dynamic collective of cognition actors (som)
-* The interface to the body's effectors and detectors (body)
+* Body: The interface to effectors and detectors
+* Fitness: Self-maintenance risks assessment and consequent broadcasting of feelings
+* SOM: The dynamic collective of cognition and metacognition actors
 */
 
 :- module(agency, []).
@@ -19,9 +19,9 @@ It integrates
 start :-
     start_supervisor(Supervisor),
     supervisor:start_child(Supervisor, pubsub, [restart(transient)]),
-    body:start(Supervisor),
+    body:capabilities(Sensors, Effectors),
     fitness:start(Supervisor),
-    som:start(Supervisor).
+    som:start(Supervisor, Sensors, Effectors).
 
 start_supervisor(agency) :-
     supervisor:start(agency).

@@ -1,29 +1,27 @@
 /*
-The two-way interface between the SOM and the robot's effectors and actuators.
+The interface to the robot's effectors and sensors.
 */
 
-:- module(body, [get_sensors/2, get_actuators/2]).
+:- module(body, [get_sensors/2, get_effectors/2]).
 
-:- use_module(actor_model(supervisor)).
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_json)).
 
-
-start(Parent) :-
-    start_supervisor(Parent).
     
-start_supervisor(Parent) :-
-    supervisor:start_child(Parent, supervisor, body, [restart(transient)]).
+capabilities(Sensors, Effectors) :-
+    host(Host),
+    sensors(Host, Sensors),
+    effectors(Host, Effectors).
 
-get_sensors(Host, Sensors) :-
+sensors(Host, Sensors) :-
     api_url(Host, sensors, Url),
     http_get(Url, Response, []),
     devices_from_response(Response, sensor, Sensors).
 
-get_actuators(Host, Actuators) :-
-    api_url(Host, actuators, Url),
+effectors(Host, Effectors) :-
+    api_url(Host, effectors, Url),
     http_get(Url, Response, []),
-    devices_from_response(Response, actuator, Actuators).
+    devices_from_response(Response, effector, Effectors).
 
 api_url(Host, Query, Url) :-
     format(atom(Url), 'http://~w/api/~w', [Host, Query]).

@@ -76,6 +76,8 @@ kill_child(Supervisor, Module, Name) :-
 singleton_thread_name(Module, Name) :-
     ModuleGoal =.. [:, Module, name(Name)],
     catch(call(ModuleGoal), Exception, (log(debug, supervisor, "[supervisor] Failed to get the singleton thread name of ~w: ~p~n", [Module, Exception]), fail)).
+    
+%%% In thread
 
 % Supervisor is running supervised, so it might be restarted on exit.
 % If it is, then its supervised children might also be restarted.
