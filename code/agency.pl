@@ -1,14 +1,14 @@
 /*
-The agent is the top level module.
+Agency is the top level module.
 
-It encompasses
+It integrates
 
-* Homeostatic risks assessment and feeling broadcasting
-* The evolving Society of Mind
-* The interface to the body's effectors and detectors
+* Self-maintenance risks assessment and consequent feeling broadcasting (feelings)
+* The dynamic collective of cognition actors (som)
+* The interface to the body's effectors and detectors (body)
 */
 
-:- module(agent, []).
+:- module(agency, []).
 
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
@@ -23,5 +23,5 @@ start :-
     fitness:start(Supervisor),
     som:start(Supervisor).
 
-start_supervisor(agent) :-
-    supervisor:start(agent).
+start_supervisor(agency) :-
+    supervisor:start(agency).

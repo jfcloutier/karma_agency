@@ -37,9 +37,11 @@ tnotrace(Thread) :-
 
 ```prolog
 ?- [load].
+?- agency:start.
 ```
 
 ```prolog
+?- [load].
 ?- [load_tests].
 ?- run_tests.
 ```

@@ -15,6 +15,7 @@
 
 :- use_module(library(option)).
 :- use_module(actor_utils).
+:- use_module(code(logger)).
 
 % Dynamic so that children survive the exit of supervisor threads and can be restarted if the supervisor thread is restarted.
 :- dynamic child/5.
@@ -24,16 +25,16 @@ start(Supervisor) :-
     start(Supervisor, []).
 
 start(Supervisor, Options) :-
-    format("[supervisor] Starting supervisor ~w~n", [Supervisor]),
+    log(debug, supervisor, "[supervisor] Starting supervisor ~w~n", [Supervisor]),
     start_actor(Supervisor, supervisor:run(Options)).
 
 % Start a supervised supervisor thread
 start(Supervisor, Options, ParentSupervisor) :-
-    format("[supervisor] Starting supervisor ~w under ~w~n", [Supervisor, ParentSupervisor]),
+    log(debug, supervisor, "[supervisor] Starting supervisor ~w under ~w~n", [Supervisor, ParentSupervisor]),
     start_actor(Supervisor, supervisor:run_supervised(Options, ParentSupervisor)).
 
 stop(Supervisor) :- 
-    format("[supervisor] Stopping supervisor ~w~n", [Supervisor]),
+    log(debug, supervisor, "[supervisor] Stopping supervisor ~w~n", [Supervisor]),
     send_message(Supervisor, control(stop)),
     wait_for_actor_stopped(Supervisor).
 
@@ -55,7 +56,7 @@ start_child(Supervisor, Module, Name, Options) :-
 
 % Starting a supervised named module thread
 starting_child(Supervisor, Module, Name, Options) :-
-    format("[supervisor] Starting supervised child ~w ~w with ~p under ~w~n", [Module, Name, Options, Supervisor]),
+    log(debug, supervisor, "[supervisor] Starting supervised child ~w ~w with ~p under ~w~n", [Module, Name, Options, Supervisor]),
     option(restart(Restart), Options, transient),
     Goal =.. [start, Name, Options, Supervisor],
     ModuleGoal =.. [:, Module, Goal],
@@ -67,14 +68,14 @@ kill_child(Supervisor, Module) :-
     kill_child(Supervisor, Module, Name).
 
 kill_child(Supervisor, Module, Name) :-
-    format("[supervisor] Stop child ~w ~w of ~w~n", [Module, Name, Supervisor]),
+    log(debug, supervisor, "[supervisor] Stop child ~w ~w of ~w~n", [Module, Name, Supervisor]),
     send_message(Supervisor, stop_child(Module, Name)).
 
 %%% Private 
 
 singleton_thread_name(Module, Name) :-
     ModuleGoal =.. [:, Module, name(Name)],
-    catch(call(ModuleGoal), Exception, (format("[supervisor] Failed to get the singleton thread name of ~w: ~p~n", [Module, Exception]), fail)).
+    catch(call(ModuleGoal), Exception, (log(debug, supervisor, "[supervisor] Failed to get the singleton thread name of ~w: ~p~n", [Module, Exception]), fail)).
 
 % Supervisor is running supervised, so it might be restarted on exit.
 % If it is, then its supervised children might also be restarted.
@@ -86,7 +87,7 @@ run_supervised(Options, ParentSupervisor) :-
 
 process_exit(Exit, ParentSupervisor) :-
     thread_self(Supervisor),
-    format("[supervisor] Exit ~p of ~w~n", [Exit, Supervisor]),
+    log(warn, supervisor, "[supervisor] Exit ~p of ~w~n", [Exit, Supervisor]),
     kill_all_children(Supervisor),
     thread_detach(Supervisor), 
     notify_supervisor(ParentSupervisor, Supervisor, Exit),
@@ -105,9 +106,9 @@ run(Options) :-
 
 % Process start, stop and exit messages
 process_message(start_child(Module, Name, Goal, Restart)) :-
-    format("[supervisor] Starting child ~w ~w by calling ~p~n", [Module, Name, Goal]),
+    log(debug, supervisor, "[supervisor] Starting child ~w ~w by calling ~p~n", [Module, Name, Goal]),
     forget_child(Module, Name),
-    catch(do_start_child(Module, Name, Goal, Restart), Exception, format("Failed to start child ~w ~w: ~p~n", [Module, Name, Exception])).
+    catch(do_start_child(Module, Name, Goal, Restart), Exception, log(debug, supervisor, "Failed to start child ~w ~w: ~p~n", [Module, Name, Exception])).
 
 process_message(stop_child(Module, Name)) :-
     do_kill_child(Module, Name).
@@ -115,15 +116,14 @@ process_message(stop_child(Module, Name)) :-
 process_message(exited(Module, Name, Exit)) :-
     thread_self(Supervisor),
     child(Supervisor, Module, Name, Goal, Restart),
-    thread_self(Supervisor),
-    format("[supervise] Child ~w ~w exited with ~p. Restart is ~w~n", [Module,Name,Exit,Restart]),
+    log(debug, supervisor, "[supervise] Child ~w ~w exited with ~p. Restart is ~w~n", [Module,Name,Exit,Restart]),
     !,
     % avoid race condition by letting the exiting thread complete its exit
     sleep(1),
     maybe_restart(Supervisor, Module, Name, Goal, Exit, Restart).
 
 process_message(exited(Module, Name, Exit)) :-
-    format("[supervisor] Unsupervised child ~w ~w (~p)~n", [Module, Name, Exit]).
+    log(debug, supervisor, "[supervisor] Unsupervised child ~w ~w (~p)~n", [Module, Name, Exit]).
 
 process_message(control(stop)) :-
     thread_self(Supervisor),
@@ -132,7 +132,7 @@ process_message(control(stop)) :-
     thread_exit(true).
 
 kill_all_children(Supervisor) :-
-    format("Killing all children of ~w~n", [Supervisor]),
+    log(debug, supervisor, "Killing all children of ~w~n", [Supervisor]),
     foreach(child(Supervisor, Module, Name, _, _), do_kill_child(Module, Name)).
 
 do_start_child(Module, Name, Goal, Restart) :-
@@ -140,10 +140,10 @@ do_start_child(Module, Name, Goal, Restart) :-
     remember_child(Module, Name, Goal, Restart).
 
 do_kill_child(Module, Name) :-
-    format("Killing child ~w ~w~n", [Module, Name]),
+    log(debug, supervisor, "Killing child ~w ~w~n", [Module, Name]),
     Goal =.. [kill, Name],
     ModuleGoal =.. [:, Module, Goal],
-    catch(call(ModuleGoal), Exception, format("Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])),
+    catch(call(ModuleGoal), Exception, log(debug, supervisor, "Failed to kill child ~w ~w: ~p~n", [Module, Name, Exception])),
     forget_child(Module, Name).
 
 maybe_restart_children :-
@@ -171,16 +171,16 @@ restarting_goal(ModuleGoal, RestartingModuleGoal) :-
     RestartingModuleGoal =.. [:, Module, RestartingGoal].
 
 forget_all_children(Supervisor) :-
-    format("Forgetting all children of ~w~n", [Supervisor]),
+    log(debug, supervisor, "Forgetting all children of ~w~n", [Supervisor]),
     retractall(child(Supervisor, _,_,_,_)).
 
 forget_child(Module, Name) :-
     thread_self(Supervisor),
-    format("Forgetting ~w ~w child of ~w~n", [Module, Name, Supervisor]),
+    log(debug, supervisor, "Forgetting ~w ~w child of ~w~n", [Module, Name, Supervisor]),
     retractall(child(Supervisor, Module, Name, _, _)).
 
 remember_child(Module, Name, Goal, Restart) :-
     thread_self(Supervisor),
     Child = child(Supervisor, Module, Name, Goal, Restart),
-    format("Remembering ~p~n", [Child]),
+    log(debug, supervisor, "Remembering ~p~n", [Child]),
     assert(Child).

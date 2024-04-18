@@ -16,6 +16,7 @@
 :- module(worker, [send/2]).
 
 :- use_module(library(option)).
+:- use_module(code(logger)).
 :- use_module(actor_utils).
 :- use_module(pubsub).
 
@@ -27,17 +28,17 @@ start(Name, Options, Supervisor) :-
     option(init(Init), Options, worker:noop),
     option(terminate(Terminate), Options, worker:noop),
     % Topics, Init, Handler
-    format("[worker] Creating worker ~w~n", [Name]),
+    log(debug, worker, "Creating worker ~w~n", [Name]),
     start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
 
-stop(Name) :-
-    format("[worker] Stopping worker ~w~n", [Name]),
+stop(Name) :
+    log(debug, worker, "Stopping worker ~w~n", [Name]),
     % Cause a normal exit
     send_message(Name, control(stop)),
     wait_for_actor_stopped(Name).
 
 kill(Name) :-
-    format("[worker] Killing worker ~w~n", [Name]),
+    log(debug, worker, "Killing worker ~w~n", [Name]),
     % Force exit
     send_message(Name, control(die)),
     wait_for_actor_stopped(Name).
@@ -54,7 +55,7 @@ start_worker(Name, Topics, Init, Handler, Supervisor) :-
     catch(start_run(Topics, Init, Handler), Exit, process_exit(Name, Exit, Supervisor)).
 
 process_exit(Name, Exit, Supervisor) :-
-    format("[worker] Exit ~p of ~w~n", [Exit, Name]),
+    log(debug, worker, "Exit ~p of ~w~n", [Exit, Name]),
     unsubscribe_all,
     thread_detach(Name), 
     notify_supervisor(Supervisor, Name, Exit),
@@ -85,7 +86,7 @@ process_message(Message, Handler) :-
     Goal =.. [Head, Message],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    format("[worker] ~w got ~p; calling ~p~n", [Name, Message, Goal]),
+    log(debug, worker, "~w got ~p; calling ~p~n", [Name, Message, Goal]),
     call(ModuleGoal).
 
 % Inform supervisor of the exit

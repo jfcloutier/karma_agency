@@ -13,7 +13,7 @@ Last updated: April 10 2024
 * Active Inference (an agent actively minimizes surprise to survive)
 * Enactivism (an embodied agent's perceptions and actions are constructively co-dependent)
 * Apperception (predictive sense-making comes from the discovery of unified causal theories)
-* Biosemiotics (sense-making and sign-acting are intrinsically grounded in the agent's drive to survive)
+* Mortal semiosis (sense-making and sign-acting are intrinsically grounded in the agent's drive to survive)
 * Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the world)
 * Constraint Closure (the cognition actors constrain how the Society of Mind as a whole can change, and vice-versa)
 * Kantian Whole (the parts -cognition actors- exist for and by means of the whole -the Society of Mind-)
