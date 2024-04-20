@@ -44,7 +44,7 @@ handle(event(party, PartyGoers, _), State, NewState) :-
 
 handle(event(police, Payload, _), State, NewState) :-
    format("[bob] Police! ~w~n", [Payload]),
-   put_state(State, mood, panic, NewState).
+   put_state(State, mood, panicking, NewState).
 
 handle(query(mood), State, Response) :-
    get_state(State, mood, Response),

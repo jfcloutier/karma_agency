@@ -17,15 +17,14 @@ test(supervisor) :-
         assertion(is_thread(pubsub)),
     start_bob(top),
         assertion(is_thread(bob)),
-        send_query(bob, mood, Answer1),
-        assertion(Answer1 == bored),
+        assertion(send_query(bob, mood, bored)),
     start_alice(top),
         assertion(is_thread(alice)),
-        send_query(alice, mood, Answer2),
-        assertion(Answer2 == peaceful),
+        assertion(send_query(alice, mood, peaceful)),
     publish(party, [alice, bob]),
         % Give time for workers to respond to published messages
         sleep(1),
+        assertion(send_query(bob, mood, paniking)),
     stop_bob,
     % Wait for restart of permanent bob
     wait_for_actor(bob),
