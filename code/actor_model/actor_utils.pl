@@ -1,4 +1,4 @@
-:- module(actor_utils, [start_actor/2, start_actor/3, send_message/2, wait_for_actor/1, wait_for_actor_stopped/1]).
+:- module(actor_utils, [start_actor/2, start_actor/3, send_message/2, send_query/3, wait_for_actor/1, wait_for_actor_stopped/1, empty_state/1, get_state/3, put_state/4]).
 
 :- use_module(code(logger)).
 
@@ -9,8 +9,29 @@ start_actor(Name, Goal, Options) :-
     FullOptions = [alias(Name) | Options],
     thread_create(Goal, _, FullOptions).
 
+empty_state(state{}).
+
+get_state(State, Key, Value) :-
+    is_dict(State, state),
+    get_dict(Key, State, Value).
+
+put_state(State, Key, Value, NewState) :-
+    is_dict(State, state),
+    put_dict(Key, State, Value, NewState).
+
 send_message(Name, Message) :-
     catch(thread_send_message(Name, Message), Exception, log(warn, actor_model, "Failed to send message ~p to ~w: ~p~n", [Message, Name, Exception])).
+
+% TODO - support options e.g. timeout
+% TODO - deal with failure to get response in time
+send_query(Name, Question, Answer) :-
+    catch(
+        (
+            thread_self(From),
+            thread_send_message(Name, query(Question, From)), 
+            thread_get_message(From,response(Answer, Name), [timeout(2)])
+        ),
+        Exception, log(warn, actor_model, "Failed to query ~w about ~p: ~p~n", [Name, Question, Exception])).
 
 wait_for_actor(Name) :-
     wait_for_actor(Name, 5).

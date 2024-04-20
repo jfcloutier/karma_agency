@@ -2,6 +2,7 @@
 
 :- module(alice, [start_alice/1, stop_alice/0]).
 
+:- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
@@ -23,8 +24,10 @@ stop_alice :-
 
 %% Callbacks
 
-init :-
-    writeln("[alice] Initializing").
+init(State) :-
+    writeln("[alice] Initializing"),
+    empty_state(EmptyState),
+    put_state(EmptyState, mood, peaceful, State).
 
 terminate :-
    writeln("[alice] Terminating").
@@ -32,15 +35,23 @@ terminate :-
 % Ignore all events from self
 handle(event(_,_, alice)).
 
-handle(event(party, PartyGoers, _)) :-
+handle(event(party, PartyGoers, _), State, NewState) :-
    format("[alice] Ready to party with ~w~n", [PartyGoers]),
+   put_state(State, mood, pleased, NewState),
    contact_others(PartyGoers),
    publish(police, "Anything wrong, officer?").
 
-handle(event(police, Payload, _)) :-
-   format("[alice] Police! ~w~n", [Payload]).
+handle(event(police, Payload, _), State, NewState) :-
+   format("[alice] Police! ~w~n", [Payload]),
+   put_state(State, mood, displeased, NewState).
 
-handle(message(Message, Source)) :-
+handle(query(mood), State, Response) :-
+   get_state(State, mood, Response),
+   format("Alice is ~p~n", [Response]).
+
+handle(query(_), _, "Pardon?").
+
+handle(message(Message, Source), State, State) :-
     format("[alice] Received ~w from ~w~n", [Message, Source]).
  
 %% Private

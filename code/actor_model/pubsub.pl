@@ -5,6 +5,7 @@
 :- use_module(actor_utils).
 
 % TODO - Subscriptions are lost if pubsub is restarted
+% TODO - Use a run state to hold subscriptions
 :- thread_local subscription/2.
 
 %% Supervised
@@ -85,7 +86,7 @@ process_message(die) :-
     thread_detach(pubsub), 
     thread_exit(true).
 
-process_message(event(Topic,Payload, Source)) :-
+process_message(event(Topic, Payload, Source)) :-
     broadcast(event(Topic, Payload, Source)).
 
 broadcast(event(Topic, Payload, Source)) :-

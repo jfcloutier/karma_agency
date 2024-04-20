@@ -17,8 +17,12 @@ test(supervisor) :-
         assertion(is_thread(pubsub)),
     start_bob(top),
         assertion(is_thread(bob)),
+        send_query(bob, mood, Answer1),
+        assertion(Answer1 == bored),
     start_alice(top),
         assertion(is_thread(alice)),
+        send_query(alice, mood, Answer2),
+        assertion(Answer2 == peaceful),
     publish(party, [alice, bob]),
         % Give time for workers to respond to published messages
         sleep(1),
@@ -41,7 +45,10 @@ test(supervisor) :-
     supervisor:start_child(top, supervisor, bottom, [restart(transient)]),
     start_bob(bottom),
     start_alice(bottom),
-    publish(party, [alice, bob]),
+    publish(party, [bob]),
+        % Give time for workers to respond to published messages
+        sleep(1),
+    publish(party, [alice]),
         % Give time for workers to respond to published messages
         sleep(1),
     supervisor:stop(top),
