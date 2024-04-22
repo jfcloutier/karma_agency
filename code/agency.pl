@@ -3,7 +3,7 @@ Agency is the top level module.
 
 It integrates
 
-* Body: The interface to effectors and detectors
+* Body: The interface to effectors and sensors
 * Fitness: Self-maintenance risks assessment and consequent broadcasting of feelings
 * SOM: The dynamic collective of cognition and metacognition actors
 */
