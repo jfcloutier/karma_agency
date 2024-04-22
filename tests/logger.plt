@@ -1,4 +1,10 @@
 
+/*
+[load].
+['tests/logger.plt'].
+run_tests(logger).
+*/
+
 :- begin_tests(logger).
 
 :- use_module(code(logger)).

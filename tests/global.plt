@@ -1,3 +1,9 @@
+/*
+[load].
+['tests/global.plt'].
+run_tests(global).
+*/
+
 :- begin_tests(global).
 
 :- use_module(code(global)).

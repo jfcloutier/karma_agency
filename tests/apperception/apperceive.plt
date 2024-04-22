@@ -1,7 +1,7 @@
 /*
 [load].
 ['tests/apperception/apperceive.plt'].
-run_tests.
+run_tests(apperceive).
 */
 
 :- begin_tests(apperceive).

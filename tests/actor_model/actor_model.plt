@@ -1,4 +1,10 @@
 
+/*
+[load].
+['tests/actor_model/actor_model.plt'].
+run_tests(actor_model).
+*/
+
 :- begin_tests(actor_model).
 
 :- use_module(actor_model(worker)).
@@ -8,7 +14,6 @@
 
 :- use_module(tests('actor_model/bob')).
 :- use_module(tests('actor_model/alice')).
-
 
 test(supervisor) :-
     supervisor:start(top),
@@ -24,7 +29,9 @@ test(supervisor) :-
     publish(party, [alice, bob]),
         % Give time for workers to respond to published messages
         sleep(1),
-        assertion(send_query(bob, mood, paniking)),
+        assertion(\+ send_query(bob, mood, bored)),
+        assertion(\+ send_query(peter, mood, bored)),
+        assertion(send_query(bob, mood, panicking)),
     stop_bob,
     % Wait for restart of permanent bob
     wait_for_actor(bob),
@@ -38,7 +45,7 @@ test(supervisor) :-
         assertion(\+ is_thread(bob)),
         assertion(\+ is_thread(alice)).
  
- test(supervisors, [nondet]) :-
+ test(supervisors) :-
     supervisor:start(top),
     supervisor:start_child(top, pubsub, [restart(transient)]),
     supervisor:start_child(top, supervisor, bottom, [restart(transient)]),
