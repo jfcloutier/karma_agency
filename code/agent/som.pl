@@ -12,9 +12,9 @@ The SOM is an initial collection of processes
 
 :- use_module(actor_model(supervisor)).
 :- use_module(body).
-:- use_module(effector).
-:- use_module(sensor).
-:- use_module(meta_ca).
+:- use_module(som(effector)).
+:- use_module(som(sensor)).
+:- use_module(som(meta_ca)).
 
 start(Parent) :-
     start_supervisor(Parent, Supervisor),

@@ -2,14 +2,12 @@
 The interface to the robot's effectors and sensors.
 */
 
-:- module(body, [get_sensors/2, get_effectors/2]).
+:- module(body, []).
 
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_json)).
 
-    
-capabilities(Sensors, Effectors) :-
-    host(Host),
+capabilities(Host, Sensors, Effectors) :-
     sensors(Host, Sensors),
     effectors(Host, Effectors).
 
@@ -30,9 +28,19 @@ devices_from_response(json([_=Json]), Tag, Devices) :-
     devices_from_json(Json, Tag, Devices).
 
 devices_from_json([], _, []).
-devices_from_json([JsonDevice | Others], Tag, [Device | OtherDevices]) :-
-    device_from_json(JsonDevice, Tag, Device),
+devices_from_json([json(JsonDevice) | Others], Tag, [Device | OtherDevices]) :-
+    dict_from_json(JsonDevice, Tag, Device),
     devices_from_json(Others, Tag, OtherDevices).
 
-device_from_json(json(KVPairs), Tag, Device) :-
-    dict_create(Device, Tag, KVPairs).
+dict_from_json(KVs,Tag, Dict) :-
+    convert_json_pairs(KVs, [], Pairs),
+    dict_create(Dict, Tag, Pairs).
+
+convert_json_pairs([], Pairs, Pairs).
+convert_json_pairs([Tag=json(KVs) | Rest], Acc, Pairs) :-
+    !,
+    dict_from_json(KVs, Tag, Dict),
+    convert_json_pairs(Rest, [Tag=Dict | Acc], Pairs).
+convert_json_pairs([KV | Rest], Acc, Pairs) :-
+    convert_json_pairs(Rest, [KV | Acc], Pairs).
+

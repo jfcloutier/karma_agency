@@ -35,9 +35,11 @@ tnotrace(Thread) :-
 
 ## Running the app
 
+% Start agency with the domain and port where th body is hosted
+
 ```prolog
 ?- [load].
-?- agency:start.
+?- agency:start('localhost:4000').
 ```
 
 ```prolog

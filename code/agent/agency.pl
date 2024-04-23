@@ -8,18 +8,24 @@ It integrates
 * SOM: The dynamic collective of cognition and metacognition actors
 */
 
+/*
+[load].
+[agent(agency)].
+agency:start('localhost:4000').
+*/
+
 :- module(agency, []).
 
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
-:- use_module(som(som)).
+:- use_module(agent(som)).
 :- use_module(fitness).
 :- use_module(body).
 
-start :-
+start(BodyHost) :-
     start_supervisor(Supervisor),
     supervisor:start_child(Supervisor, pubsub, [restart(transient)]),
-    body:capabilities(Sensors, Effectors),
+    body:capabilities(BodyHost, Sensors, Effectors),
     fitness:start(Supervisor),
     som:start(Supervisor, Sensors, Effectors).
 
