@@ -16,6 +16,7 @@
 :- use_module(library(option)).
 :- use_module(actor_utils).
 :- use_module(code(logger)).
+:- use_module(actor_model(worker)).
 
 % Dynamic so that children survive the exit of supervisor threads and can be restarted if the supervisor thread is restarted.
 :- dynamic child/5.
@@ -108,7 +109,7 @@ run(Options) :-
 
 % Process start, stop and exit messages
 process_message(start_child(Module, Name, Goal, Restart)) :-
-    log(debug, supervisor, "[supervisor] Starting child ~w ~w by calling ~p~n", [Module, Name, Goal]),
+    log(info, supervisor, "[supervisor] Starting child ~w ~w by calling ~p~n", [Module, Name, Goal]),
     forget_child(Module, Name),
     catch(do_start_child(Module, Name, Goal, Restart), Exception, log(debug, supervisor, "Failed to start child ~w ~w: ~p~n", [Module, Name, Exception])).
 

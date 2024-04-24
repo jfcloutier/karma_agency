@@ -4,10 +4,12 @@ The interface to the robot's effectors and sensors.
 
 :- module(body, []).
 
+:- use_module(code(logger)).
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_json)).
 
 capabilities(Host, Sensors, Effectors) :-
+    log(info, body, 'Getting sensors and efectors'),
     sensors(Host, Sensors),
     effectors(Host, Effectors).
 
@@ -29,17 +31,17 @@ devices_from_response(json([_=Json]), Tag, Devices) :-
 
 devices_from_json([], _, []).
 devices_from_json([json(JsonDevice) | Others], Tag, [Device | OtherDevices]) :-
-    dict_from_json(JsonDevice, Tag, Device),
+    json_to_dict(JsonDevice, Tag, Device),
     devices_from_json(Others, Tag, OtherDevices).
 
-dict_from_json(KVs,Tag, Dict) :-
+json_to_dict(KVs,Tag, Dict) :-
     convert_json_pairs(KVs, [], Pairs),
     dict_create(Dict, Tag, Pairs).
 
 convert_json_pairs([], Pairs, Pairs).
 convert_json_pairs([Tag=json(KVs) | Rest], Acc, Pairs) :-
     !,
-    dict_from_json(KVs, Tag, Dict),
+    json_to_dict(KVs, Tag, Dict),
     convert_json_pairs(Rest, [Tag=Dict | Acc], Pairs).
 convert_json_pairs([KV | Rest], Acc, Pairs) :-
     convert_json_pairs(Rest, [KV | Acc], Pairs).

@@ -247,7 +247,9 @@ Last updated: April 10 2024
   * Pain
     * Damage - loss of structural integrity
   * Fear
-    * Lack of foresight - Inability to predict
+    * Lack of foresight - Inability to predict (invalid knowledge)
+  * Boredom
+    * Lack of learning - Stagnant competency (no new knowledge)
 * `feeling(<feeling type>, good | bad | neutral)`
 * Motivational ranking
   * Hunger > Pain > Fear

@@ -1,7 +1,7 @@
 /*
 The agent's Society of Mind.
 
-The SOM is an initial collection of processes
+The SOM supervises cognition actors, initially:
 
 * The a priori cognition actors (sensors and effectors)
 * The a priori, level 1, metacognition actor
@@ -10,19 +10,22 @@ The SOM is an initial collection of processes
 
 :- module(som, []).
 
+:- use_module(code(logger)).
 :- use_module(actor_model(supervisor)).
-:- use_module(body).
 :- use_module(som(effector)).
 :- use_module(som(sensor)).
 :- use_module(som(meta_ca)).
 
-start(Parent) :-
+start(Parent, Sensors, Effectors) :-
+    log(info, som, 'Starting SOM'),
     start_supervisor(Parent, Supervisor),
-    body:effectors(Effectors),
-    body:sensors(Sensors),
-    forall(member(Effector, Effectors), effector:start(Supervisor, Effector)),
-    forall(member(Sensor, Sensors), sensor:start(Supervisor, Sensor)),
-    meta_ca:start(Supervisor).
+    initialize(Supervisor, Sensors, Effectors).
 
 start_supervisor(Parent, som) :-
     supervisor:start_child(Parent, supervisor, som, [restart(transient)]).
+
+initialize(Supervisor, Sensors, Effectors) :-
+    log(info, som, 'Initializing SOM with sensors ~p and effectors ~p', [Sensors, Effectors]).
+    % forall(member(Effector, Effectors), effector:start(Supervisor, Effector)),
+    % forall(member(Sensor, Sensors), sensor:start(Supervisor, Sensor)),
+    % meta_ca:start(Supervisor).
