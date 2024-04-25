@@ -1,5 +1,6 @@
 /*
-Aggregation of events from the SOM into updated feelings broadcasted back to the SOM as signals of risks to homestasis.
+ Events from the SOM are aggregated and evaluated for their impact on fitness.
+ Feelings are broadcasted to inform cognition actors of changes in risks to fitness.
 */
 
 :- module(fitness, []).

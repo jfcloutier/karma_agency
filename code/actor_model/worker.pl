@@ -90,7 +90,7 @@ process_message(query(Question, From), Handler, State, State) :-
     Goal =.. [Head, query(Question), State, Response],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    log(debug, worker, "~w got query ~p from ~m~n", [Name, Question, From]),
+    log(debug, worker, "~w got query ~p from ~w~n", [Name, Question, From]),
     call(ModuleGoal),
     send_message(From, response(Response, Name)).
 

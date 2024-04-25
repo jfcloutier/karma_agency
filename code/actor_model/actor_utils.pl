@@ -30,12 +30,14 @@ send_query(Name, Question, Answer) :-
     send_query(Name, Question, 5, Answer).
 
 send_query(Name, Question, Timeout, Answer) :- 
+    log(debug, actor_model, 'Sending query ~p to ~w', [Question, Name]),
     catch(
             (
                 thread_self(From),
                 thread_send_message(Name, query(Question, From)), 
                 % Fails (quietly) is a matching message is not received in time
-                thread_get_message(From, response(Answer, Name), [timeout(Timeout)])
+                thread_get_message(From, response(Answer, Name), [timeout(Timeout)]),
+                log(debug, actor_model, 'Got answer ~p from ~w to query ~p', [Answer, Name, Question])
             ),
             Exception, 
             (log(warn, actor_model, "Failed to query ~w about ~p: ~p~n", [Name, Question, Exception]), fail)

@@ -26,6 +26,6 @@ start_supervisor(Parent, som) :-
 
 initialize(Supervisor, Sensors, Effectors) :-
     log(info, som, 'Initializing SOM with sensors ~p and effectors ~p', [Sensors, Effectors]).
-    % forall(member(Effector, Effectors), effector:start(Supervisor, Effector)),
-    % forall(member(Sensor, Sensors), sensor:start(Supervisor, Sensor)),
-    % meta_ca:start(Supervisor).
+    % start_sensor_cognition_actors(Sensors),
+    % start_effector_cognition_actors(Effectors),
+    % start_meta_cognition_actor.
