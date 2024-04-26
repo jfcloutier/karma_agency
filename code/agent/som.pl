@@ -1,10 +1,7 @@
 /*
 The agent's Society of Mind.
 
-The SOM supervises cognition actors, initially:
-
-* The a priori cognition actors (sensors and effectors)
-* The a priori, level 1, metacognition actor
+The SOM supervises the collective of cognition actors
 
 */
 

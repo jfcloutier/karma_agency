@@ -1,5 +1,17 @@
 # The Karma actor framework
 
+## TODO
+
+* Supervisor
+  * List children (actor start specs) in supervisor options, to (re)start them on supervisor (re)start
+    * child(Kind, Name, Params, Options)
+      * put Params in init goal
+  * Make sure ALL supervised actors are terminated whenever a supervisor terminates
+  * Dynamically added children are NOT restarted when a supervisor restarts
+  * A supervisor can provide the list of its children (statically and dynamically added)
+
+## About
+
 An actor module starts and runs named, supervised threads (a.k.a actors).
 
 An actor module must implement `start(Name, Options, Supervisor)`, `stop(Name)` and `kill(Name)`.
