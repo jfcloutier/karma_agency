@@ -1,28 +1,12 @@
 %% Start/stop shortcuts and callbacks for an worker thread named alice.
 
-:- module(alice, [start_alice/1, stop_alice/0]).
+:- module(alice, []).
 
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
-%% Public
-
-start_alice(Supervisor) :-
-   supervisor:start_child(
-      Supervisor,
-      worker, 
-      alice, 
-      [topics([party, police]), 
-      init(alice:init), 
-      terminate(alice:terminate), 
-      handler(alice:handle)]
-      ).
-
-stop_alice :-
-   worker:stop(alice).
-
-%% Callbacks
+%% Worker callbacks
 
 init(State) :-
     writeln("[alice] Initializing"),

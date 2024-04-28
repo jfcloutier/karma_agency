@@ -20,6 +20,7 @@ put_state(State, Key, Value, NewState) :-
     put_dict(Key, State, Value, NewState).
 
 send_message(Name, Message) :-
+    log(debug, actor_model, 'Sending message ~p to ~w', [Message, Name]),
     catch(
         thread_send_message(Name, Message), 
         Exception, 
@@ -52,9 +53,10 @@ wait_for_actor(Name, 0) :-
 
 wait_for_actor(Name, CountDown) :-
     is_thread(Name) -> 
+        log(debug, actor_model, 'Actor ~w is running', [Name]),
         true
     ; 
-        (log(debug, actor_model, "Waiting for actor thread ~w (~w)~n", [Name, CountDown]),
+        (log(debug, actor_model, 'Waiting for actor thread ~w (~w)', [Name, CountDown]),
          sleep(0.25), 
          AttemptsLeft is CountDown - 1,
          wait_for_actor(Name, AttemptsLeft)).
@@ -63,14 +65,14 @@ wait_for_actor_stopped(Name) :-
     wait_for_actor_stopped(Name, 20).
 
 wait_for_actor_stopped(Name, 0) :-
-    log(warn, actor_model, "Failed waiting for actor thread stopped ~w~n", [Name]),!,
+    log(warn, actor_model, 'Failed waiting for actor thread stopped ~w', [Name]),!,
     fail.
 
 wait_for_actor_stopped(Name, CountDown) :-
     \+ is_thread(Name) -> 
         true
     ; 
-        (log(debug, actor_model, "Waiting for actor thread stopped ~w (~w)~n", [Name, CountDown]),
+        (log(debug, actor_model, 'Waiting for actor thread stopped ~w (~w)~n', [Name, CountDown]),
             sleep(0.25), 
             AttemptsLeft is CountDown - 1,
             wait_for_actor_stopped(Name, AttemptsLeft)).

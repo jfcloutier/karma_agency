@@ -3,8 +3,11 @@
 ## TODO
 
 * Supervisor
-  * List children (actor start specs) in supervisor options, to (re)start them on supervisor (re)start
-    * child(Kind, Name, Params, Options)
+  * List children in supervisor options, to (re)start them on supervisor (re)start
+    * worker(Name, Module, Params, Options) - Kind is worker or supervisor
+        or worker(Name, Module, Options)
+        or supervisor(Name, Options)
+        or pubsub - restart is permanent
       * put Params in init goal
   * Make sure ALL supervised actors are terminated whenever a supervisor terminates
   * Dynamically added children are NOT restarted when a supervisor restarts

@@ -10,15 +10,18 @@
 
 %% Supervised
 
-start(pubsub, _, Supervisor) :-
+start(Supervisor) :-
     log(debug, pubsub, "Starting"),
     thread_create(start_pubsub(Supervisor), _, [alias(pubsub)]).
 
-stop(pubsub) :-
+start(Supervisor, _, _, _) :-
+    start(Supervisor).
+
+stop(_) :-
     log(debug, pubsub, "Stopping"),
     send_message(pubsub, stop).
 
-kill(pubsub) :-
+kill(_) :-
     log(debug, pubsub, "Dying"),
     send_message(pubsub, die).
 
@@ -34,16 +37,31 @@ subscribe_all([Topic | Others]) :-
     
 
 subscribe(Topic) :-
-   thread_self(Name),
-   send_message(pubsub, subscribe(Name, Topic)).
+   name(Name),
+   is_thread(Name) -> 
+        (thread_self(Subscriber),
+        send_message(Name, subscribe(Subscriber, Topic))
+        )
+        ;
+        true.
 
 unsubscribe_all :-
-    thread_self(Name),
-    send_message(pubsub, unsubscribe(Name)).
+    name(Name),
+    is_thread(Name) ->
+        (thread_self(Subscriber),
+        send_message(pubsub, unsubscribe(Subscriber))
+        )
+        ;
+        true.
 
 publish(Topic, Payload) :-
-    thread_self(Source),
-    send_message(pubsub, event(Topic, Payload, Source)).
+    name(Name),
+    is_thread(Name) ->
+        (thread_self(Source),
+        send_message(pubsub, event(Topic, Payload, Source))
+        )
+        ;
+        true.
 
 %% Private
 

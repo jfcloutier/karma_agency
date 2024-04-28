@@ -9,9 +9,11 @@
 % A worker is started by giving it a unique name and options.
 % Options:
 %   topics - the list of topics for the events the worker wants to receive (defaults to [])
-%   handler - the fully qualified name of the clause header handling events (required)
-%   init - the fully qualified name of the 1-ary clause called when initiating the actor's state (defaults to worker:init)
-%   terminate - the fully qualified name of the 0-ary clause called when terminating the actor (defaults to worker:terminate)
+%
+% Callbacks:
+%   handle/3 - for handling events and queries
+%   init/1 - sets the initial state
+%   terminate/0 - called when terminating the actor
 %
 % A worker holds a state that is updated from processing messages.
 %%%
@@ -24,23 +26,22 @@
 
 %%% Supervised behavior
 
-start(Name, Options, Supervisor) :-
-    option(handler(Handler), Options),
+start(Name, Module, Options, Supervisor) :-
     option(topics(Topics), Options, []),
-    option(init(Init), Options, worker:init),
-    option(terminate(Terminate), Options, worker:terminate),
-    % Topics, Init, Handler
-    log(debug, worker, "Creating worker ~w~n", [Name]),
+    Handler =.. [:, Module, handle],
+    Init =.. [:, Module, init],
+    Terminate =.. [:, Module, terminate],
+    log(debug, worker, "Creating worker ~w", [Name]),
     start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
 
 stop(Name) :-
-    log(debug, worker, "Stopping worker ~w~n", [Name]),
+    log(debug, worker, "Stopping worker ~w", [Name]),
     % Cause a normal exit
     send_message(Name, control(stop)),
     wait_for_actor_stopped(Name).
 
 kill(Name) :-
-    log(debug, worker, "Killing worker ~w~n", [Name]),
+    log(debug, worker, "Killing worker ~w", [Name]),
     % Force exit
     send_message(Name, control(die)),
     wait_for_actor_stopped(Name).
@@ -57,7 +58,7 @@ start_worker(Name, Topics, Init, Handler, Supervisor) :-
     catch(start_run(Topics, Init, Handler), Exit, process_exit(Name, Exit, Supervisor)).
 
 process_exit(Name, Exit, Supervisor) :-
-    log(warn, worker, "Exit ~p of ~w~n", [Exit, Name]),
+    log(warn, worker, "Exit ~p of ~w", [Exit, Name]),
     unsubscribe_all,
     thread_detach(Name), 
     notify_supervisor(Supervisor, Name, Exit),
@@ -73,6 +74,7 @@ start_run(Topics, Init, Handler) :-
     run(Handler, State).
 
 run(Handler, State) :-
+    log(debug, worker, 'Running with handler ~p in state ~p', [Handler, State]),
     thread_get_message(Message),
     process_message(Message, Handler, State, NewState),
     run(Handler, NewState).
@@ -90,7 +92,7 @@ process_message(query(Question, From), Handler, State, State) :-
     Goal =.. [Head, query(Question), State, Response],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    log(debug, worker, "~w got query ~p from ~w~n", [Name, Question, From]),
+    log(debug, worker, "~w got query ~p from ~w", [Name, Question, From]),
     call(ModuleGoal),
     send_message(From, response(Response, Name)).
 
@@ -99,17 +101,9 @@ process_message(Message, Handler, State, NewState) :-
     Goal =.. [Head, Message, State, NewState],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    log(debug, worker, "~w got ~p; calling ~p~n", [Name, Message, Goal]),
+    log(debug, worker, "~w got ~p; calling ~p", [Name, Message, Goal]),
     call(ModuleGoal).
 
 % Inform supervisor of the exit
 notify_supervisor(Supervisor, Name, Exit) :-
     send_message(Supervisor, exited(worker, Name, Exit)).
-
-% Just succeed
-terminate.
-
-% Start with an empty state
-init(State) :-
-    empty_state(State).
-
