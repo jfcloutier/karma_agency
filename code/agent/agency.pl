@@ -10,10 +10,10 @@ It integrates
 
 /*
 [load].
-[agent(agency), code(logger)].
+[agent(agency), actor_model(supervisor), code(logger)].
 set_log_level(debug).
 agency:start('localhost:4000').
-agency:stop.
+supervisor:stop(agency).
 */
 
 :- module(agency, []).
@@ -28,14 +28,18 @@ agency:stop.
 
 start(BodyHost) :-
     log(info, agency, 'Starting agency'),
-    start_supervisor(Supervisor),
-    supervisor:start_child(Supervisor, pubsub, [restart(transient)]),
     body:capabilities(BodyHost, Sensors, Effectors),
-    fitness:start(Supervisor),
-    som:start(Supervisor, Sensors, Effectors).
+    FitnessChildren = [
+        worker(fullness, fullness, [topics([]), restart(permanent)]),
+        worker(integrity, integrity, [topics([]), restart(permanent)]),
+        worker(competence, competence, [topics([]), restart(permanent)]),
+        worker(engagement, engagement, [topics([]), restart(permanent)])
+    ],
+    AgencyChildren = [
+        pubsub,
+        supervisor(fitness, [children(FitnessChildren),restart(permanent)]),
+        % TODO - Support passing args to init
+        worker(som, [init([Sensors, Effectors]), restart(transient)])
+        ],
+    supervisor:start(agency, [children(AgencyChildren)]).
 
-stop :-
-    supervisor:kill(agency).
-
-start_supervisor(agency) :-
-    supervisor:start(agency).

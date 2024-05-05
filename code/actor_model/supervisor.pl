@@ -39,6 +39,7 @@ start(Supervisor, Options) :-
     log(debug, supervisor, "Starting supervisor ~w with options ~p", [Supervisor, Options]),
     start_actor(Supervisor, supervisor:run_unsupervised(Options)),
     option(children(Children), Options, []),
+    log(debug, supervisor, 'Waiting for static children of ~w', [Supervisor]),
     wait_for_static_children(Children).
 
 stop(Supervisor) :- 
@@ -66,6 +67,7 @@ start_supervisor_child(Supervisor, Name, Options) :-
     % All supervisors are implemented by the supervisor module
     starting_child(Supervisor, supervisor, supervisor, Name, Options).
 
+% Dynamically start pubsub
 start_pubsub(Supervisor) :-
     % pubsub is a singleton actor of kind pubsub implemented by the pubsub module
     singleton_thread_name(pubsub, Name),
@@ -110,6 +112,8 @@ wait_for_static_children([Child | Others]) :-
     wait_for_actor(Name),
     wait_for_static_children(Others).
 
+child_name(pubsub, Name) :-
+    pubsub:name(Name).
 child_name(worker(Name, _, _), Name).
 child_name(supervisor(Name, _), Name).
 
@@ -123,6 +127,7 @@ start(Name, supervisor, Options, Supervisor) :-
 % Its static childen are started.
 run_unsupervised(Options) :-
     start_static_children(Options),
+    log(debug, supervisor, 'Started static children ~p', [Options]),
     catch(run(Options), Exit, process_exit(Exit)).
 
 % Supervisor is run supervised, so it might be restarted on exit.
@@ -199,7 +204,18 @@ process_message(control(stop), _) :-
 
 kill_all_children(Supervisor) :-
     log(debug, supervisor, "Killing all children of ~w", [Supervisor]),
-    forall(child(_, Supervisor, Kind, Name, _, _), do_kill_child(Kind, Name)).
+    % Kill all except pubsub
+    forall((child(_, Supervisor, Kind, Name, _, _), Kind \== pubsub), do_kill_child(Kind, Name)),
+    % Kill pubsub child last, if any
+    child(_, Supervisor, pubsub, Name, _, _) -> do_kill_child(pubsub, Name) ; true.
+
+start_static_child(pubsub) :-
+    thread_self(Supervisor),
+    log(debug, supervisor, "Starting supervised pubsub under ~w", [Supervisor]),
+    singleton_thread_name(pubsub, Name),
+    Goal =.. [start, Supervisor],
+    ChildGoal =.. [:, pubsub, Goal],
+    do_start_child(static, pubsub, Name, ChildGoal, transient).
 
 start_static_child(worker(Name, Module, Options)) :-
     thread_self(Supervisor),

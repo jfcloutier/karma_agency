@@ -12,7 +12,8 @@
 
 start(Supervisor) :-
     log(debug, pubsub, "Starting"),
-    thread_create(start_pubsub(Supervisor), _, [alias(pubsub)]).
+    thread_create(start_pubsub(Supervisor), _, [alias(pubsub)]),
+    wait_for_actor(pubsub).
 
 start(Supervisor, _, _, _) :-
     start(Supervisor).

@@ -240,35 +240,35 @@ Last updated: April 10 2024
 
 ## Feelings
 
-* Feelings are agent-wide signals about detected existential risks
+* Feelings are agent-wide signals about the satisfcation of self-maintenance requirements
 * Feeling types
-  * Hunger
-    * Depleted energy/resource stores
-  * Pain
-    * Damage - loss of structural integrity
-  * Fear
-    * Lack of foresight - Inability to predict (invalid knowledge)
-  * Boredom
-    * Lack of learning - Stagnant competency (no new knowledge)
+  * Fullness
+    * How full/empty are energy/resource stores (hunger when low)
+  * Integrity
+    * Degree of structural integrity (pain when low)
+  * Confidence
+    * Foresight - Ability to predict (fear when low)
+  * Engagement
+    * High when learning (boredom when low)
 * `feeling(<feeling type>, good | bad | neutral)`
 * Motivational ranking
-  * Hunger > Pain > Fear
+  * Fullness > Integrity > Confidence > Engagement
   * The agent dies when energy/resources are depleted
-  * The agent is immobilized when pain is too high
+  * The agent is immobilized when integrity is too low
 * Feelings are centrally computed from
   * detector sensations
-    * touch - pain increases
+    * touch - integrity decreases
     * color - resources increase if color == food type
   * effector sensations
     * work done - energy decreases
   * CA cognitive sensations
     * mental effort - energy decreases
-    * prediction success rate - fear increases/decreases
+    * prediction success rate - confidence increases/decreases
     * relevance (rate of received predictions, intended composited actions)
   * The passing of time
-    * healing - pain decreases
+    * healing - integrity increases
     * base metabolism - resources/energy decreases
-* Any change in hunger/pain/fear intensity is signaled to all CAs
+* Any change in fullness/integrity/confidence intensity is signaled to all CAs
 * For each CA, for each time slice, there's an average intensity of each feeling type
 
 ## Constraints

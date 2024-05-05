@@ -1,28 +1,26 @@
 /*
 The agent's Society of Mind.
 
-The SOM supervises the collective of cognition actors
+The SOM manages the collective of cognition actors
 
 */
 
 :- module(som, []).
 
 :- use_module(code(logger)).
-:- use_module(actor_model(supervisor)).
-:- use_module(som(effector)).
-:- use_module(som(sensor)).
-:- use_module(som(meta_ca)).
+:- use_module(actor_model(actor_utils)).
 
-start(Parent, Sensors, Effectors) :-
-    log(info, som, 'Starting SOM'),
-    start_supervisor(Parent, Supervisor),
-    initialize(Supervisor, Sensors, Effectors).
-
-start_supervisor(Parent, som) :-
-    supervisor:start_child(Parent, supervisor, som, [restart(transient)]).
-
-initialize(Supervisor, Sensors, Effectors) :-
+init([Sensors, Effectors], State) :-
     log(info, som, 'Initializing SOM with sensors ~p and effectors ~p', [Sensors, Effectors]).
-    % start_sensor_cognition_actors(Sensors),
-    % start_effector_cognition_actors(Effectors),
-    % start_meta_cognition_actor.
+    empty_state(EmptyState),
+    put_state(EmptyState, sensors, Sensors, State1),
+    put_state(State1, effectors, Effectors, State).
+
+terminate :-
+    log(warn, som, 'Terminating').
+
+handle(event(Topic, Payload, Source), State, State) :-
+    log(info, som, 'Handling event event(~w, ~p, ~w) in state ~p', [Topic, Payload, Source, State]).
+
+handle(query(Query), State, tbd) :-
+    log(info, som, 'Handling query ~p in state ~p', [Query, State]).

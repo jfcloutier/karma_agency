@@ -8,10 +8,11 @@
 
 %% Worker callbacks
 
-init(State) :-
-    writeln("[bob] Initializing"),
+init(Options, State) :-
+    option(mood(Mood), Options, bored),
+    format("[bob] Initializing with mood ~w~n", [Mood]),
     empty_state(EmptyState),
-    put_state(EmptyState, mood, bored, State).
+    put_state(EmptyState, mood, Mood, State).
 
 terminate :-
    writeln("[bob] Terminating").

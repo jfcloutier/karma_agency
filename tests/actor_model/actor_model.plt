@@ -27,13 +27,15 @@ test(supervised_pubsub) :-
     assertion(\+ is_thread(pubsub)).
 
 test(supervised_static_worker) :-
-    Children = [worker(bob, bob,  [])],
+    Children = [pubsub, worker(bob, bob, [])],
     supervisor:start(top, [children(Children)]),
     assertion(is_thread(top)),
+    assertion(is_thread(pubsub)),
     assertion(is_thread(bob)),
     supervisor:stop(top),
     assertion(\+ is_thread(top)),
-    assertion(\+ is_thread(bob)).
+    assertion(\+ is_thread(bob)),
+    assertion(\+ is_thread(pubsub)).
 
 test(supervised_dynamic_worker) :-
     supervisor:start(top),
@@ -63,14 +65,13 @@ test(supervised_dynamic_supervisor) :-
     assertion(\+ is_thread(bottom)).
 
 test(supervisor_with_static_children) :-
-    supervisor:start(top),
+    supervisor:start(top, [children([pubsub])]),
     assertion(is_thread(top)),
-    supervisor:start_pubsub(top),
     assertion(is_thread(pubsub)),
     
     Children = [
-        worker(bob, bob,  [topics([party, police]),  restart(permanent)]),
-        worker(alice, alice,  [topics([party, police]),  restart(transient)])
+        worker(bob, bob,  [topics([party, police]), init([mood(bored)]),  restart(permanent)]),
+        worker(alice, alice,  [topics([party, police]), init([mood(peaceful)]), restart(transient)])
         ],
     supervisor:start_supervisor_child(top, bottom, [children(Children)]),
         assertion(is_thread(bob)),
@@ -108,7 +109,7 @@ test(supervisor_with_static_children) :-
 
 test(restarting_supervised_supervisors) :-
     % Starting supervisor (top) with a static child supervisor (middle)
-    Children = [supervisor(middle, [restart(permanent)])],
+    Children = [pubsub, supervisor(middle, [restart(permanent)])],
     supervisor:start(top, [children(Children)]),
     assertion(is_thread(top)),
     assertion(is_thread(middle)),

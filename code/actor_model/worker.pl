@@ -28,8 +28,9 @@
 
 start(Name, Module, Options, Supervisor) :-
     option(topics(Topics), Options, []),
+    option(init(Args), Options, []),
     Handler =.. [:, Module, handle],
-    Init =.. [:, Module, init],
+    Init =.. [:, Module, init, Args],
     Terminate =.. [:, Module, terminate],
     log(debug, worker, "Creating worker ~w", [Name]),
     start_actor(Name, worker:start_worker(Name, Topics, Init, Handler, Supervisor), [at_exit(Terminate)]).
@@ -66,15 +67,17 @@ process_exit(Name, Exit, Supervisor) :-
 
 
 start_run(Topics, Init, Handler) :-
-    Init =.. [:, Module, Head],
-    Goal =.. [Head, State],
+    log(debug, worker, 'Start run with topics ~p, init ~p and handler ~p', [Topics, Init, Handler]),
+    Init =.. [:, Module, Head, Args],
+    Goal =.. [Head, Args, State],
     InitGoal =.. [:, Module, Goal],
     call(InitGoal),
     subscribe_all(Topics),
     run(Handler, State).
 
 run(Handler, State) :-
-    log(debug, worker, 'Running with handler ~p in state ~p', [Handler, State]),
+    thread_self(Name),
+    log(debug, worker, 'Worker ~w is waiting in state ~p...', [Name, State]),
     thread_get_message(Message),
     process_message(Message, Handler, State, NewState),
     run(Handler, NewState).
