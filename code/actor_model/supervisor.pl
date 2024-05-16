@@ -115,6 +115,8 @@ wait_for_static_children([Child | Others]) :-
 child_name(pubsub, Name) :-
     pubsub:name(Name).
 child_name(worker(Name, _, _), Name).
+child_name(worker(Module, _), Name) :-
+    singleton_thread_name(Module, Name).
 child_name(supervisor(Name, _), Name).
 
 % Called when starting as a child of a parent supervisor
@@ -218,6 +220,10 @@ start_static_child(pubsub) :-
     Goal =.. [start, Supervisor],
     ChildGoal =.. [:, pubsub, Goal],
     do_start_child(static, pubsub, Name, ChildGoal, transient).
+
+start_static_child(worker(Module, Options)) :-
+    singleton_thread_name(Module, Name),
+    start_static_child(worker(Name, Module, Options)).
 
 start_static_child(worker(Name, Module, Options)) :-
     thread_self(Supervisor),

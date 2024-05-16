@@ -9,6 +9,8 @@ The feeling of boredom.
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
+name(engagement).
+
 init(_, State) :-
     log(info, engagement, 'Initiating'),
     empty_state(State).

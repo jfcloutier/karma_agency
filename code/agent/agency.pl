@@ -32,14 +32,14 @@ start(BodyHost) :-
     log(info, agency, 'Starting agency'),
     body:capabilities(BodyHost, Sensors, Effectors),
     FitnessChildren = [
-        worker(fullness, fullness, [topics([]), restart(permanent)]),
-        worker(integrity, integrity, [topics([]), restart(permanent)]),
-        worker(competence, competence, [topics([]), restart(permanent)]),
-        worker(engagement, engagement, [topics([]), restart(permanent)])
+        worker(fullness, [topics([]), restart(permanent)]),
+        worker(integrity, [topics([]), restart(permanent)]),
+        worker(competence, [topics([]), restart(permanent)]),
+        worker(engagement, [topics([]), restart(permanent)])
     ],
     AgencyChildren = [
         pubsub,
         supervisor(fitness, [children(FitnessChildren), restart(transient)]),
-        worker(som, som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])
+        worker(som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])
         ],
     supervisor:start(agency, [children(AgencyChildren)]).

@@ -9,6 +9,8 @@ The feeling of fear.
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
+name(competence).
+
 init(_, State) :-
     log(info, competence, 'Initiating'),
     empty_state(State).

@@ -8,6 +8,8 @@
 
 %% Worker callbacks
 
+name(bob).
+
 init(Options, State) :-
     option(mood(Mood), Options, bored),
     format("[bob] Initializing with mood ~w~n", [Mood]),

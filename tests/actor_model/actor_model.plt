@@ -4,7 +4,7 @@
 [code(logger)].
 set_log_level(debug).
 ['tests/actor_model/actor_model.plt'].
-run_tests(actor_model:supervised_static_worker).
+run_tests(actor_model).
 */
 
 :- begin_tests(actor_model).
@@ -27,7 +27,7 @@ test(supervised_pubsub) :-
     assertion(\+ is_thread(pubsub)).
 
 test(supervised_static_worker) :-
-    Children = [worker(bob, bob, [topics([party])]), pubsub],
+    Children = [worker(bob, [topics([party])]), pubsub],
     supervisor:start(top, [children(Children)]),
     assertion(is_thread(top)),
     assertion(is_thread(pubsub)),
@@ -70,7 +70,7 @@ test(supervisor_with_static_children) :-
     assertion(is_thread(pubsub)),
     
     Children = [
-        worker(bob, bob,  [topics([party, police]), init([mood(bored)]),  restart(permanent)]),
+        worker(bob,  [topics([party, police]), init([mood(bored)]),  restart(permanent)]),
         worker(alice, alice,  [topics([party, police]), init([mood(peaceful)]), restart(transient)])
         ],
     supervisor:start_supervisor_child(top, bottom, [children(Children)]),

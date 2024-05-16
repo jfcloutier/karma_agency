@@ -9,6 +9,8 @@ The feeling of hunger.
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
+name(fullness).
+
 init(_, State) :-
     log(info, fullness, 'Initiating'),
     empty_state(State).

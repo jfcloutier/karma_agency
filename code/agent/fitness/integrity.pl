@@ -9,6 +9,8 @@ The feeling of pain.
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
+name(integrity).
+
 init(_, State) :-
     log(info, integrity, 'Initiating'),
     empty_state(State).

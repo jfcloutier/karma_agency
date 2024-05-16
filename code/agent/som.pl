@@ -10,6 +10,8 @@ The SOM manages the collective of cognition actors
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
+name(som).
+
 init(Options, State) :-
     log(info, som, 'Initiating with ~p', [Options]),
     empty_state(EmptyState),
