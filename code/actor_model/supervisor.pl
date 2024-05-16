@@ -140,9 +140,11 @@ run_supervised(Options, ParentSupervisor) :-
     delete(Options, restarting(_), RestOptions),
     catch(run(RestOptions), Exit, process_exit(Exit, ParentSupervisor)).
 
+% If pubsub is one of the chlidren, start it first
 start_static_children(Options) :-
     option(children(Children), Options, []),
-    forall(member(Child, Children), start_static_child(Child)).
+    (member(pubsub, Children) -> start_static_child(pubsub) ; true),
+    forall((member(Child, Children), Child \== pubsub), start_static_child(Child)).
 
 process_exit(Exit) :-
     thread_self(Supervisor),

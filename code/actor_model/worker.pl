@@ -27,6 +27,7 @@
 %%% Supervised behavior
 
 start(Name, Module, Options, Supervisor) :-
+    log(debug, worker, 'Starting ~w implemented by ~w with options ~p supervised by ~w', [Name, Module, Options, Supervisor]),
     option(topics(Topics), Options, []),
     option(init(Args), Options, []),
     Handler =.. [:, Module, handle],

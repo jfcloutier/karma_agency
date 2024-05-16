@@ -21,10 +21,12 @@ supervisor:stop(agency).
 :- use_module(code(logger)).
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
-:- use_module(agent(som)).
 :- use_module(agent(body)).
-:- use_module(agent(fitness)).
 :- use_module(agent(som)).
+:- use_module(fitness(competence)).
+:- use_module(fitness(engagement)).
+:- use_module(fitness(fullness)).
+:- use_module(fitness(integrity)).
 
 start(BodyHost) :-
     log(info, agency, 'Starting agency'),
@@ -37,9 +39,7 @@ start(BodyHost) :-
     ],
     AgencyChildren = [
         pubsub,
-        supervisor(fitness, [children(FitnessChildren),restart(permanent)]),
-        % TODO - Support passing args to init
-        worker(som, [init([Sensors, Effectors]), restart(transient)])
+        supervisor(fitness, [children(FitnessChildren), restart(transient)]),
+        worker(som, som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])
         ],
     supervisor:start(agency, [children(AgencyChildren)]).
-

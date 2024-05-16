@@ -10,9 +10,11 @@ The SOM manages the collective of cognition actors
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 
-init([Sensors, Effectors], State) :-
-    log(info, som, 'Initializing SOM with sensors ~p and effectors ~p', [Sensors, Effectors]).
+init(Options, State) :-
+    log(info, som, 'Initiating with ~p', [Options]),
     empty_state(EmptyState),
+    option(sensors(Sensors), Options, []),
+    option(effectors(Effectors), Options, []),
     put_state(EmptyState, sensors, Sensors, State1),
     put_state(State1, effectors, Effectors, State).
 
