@@ -89,6 +89,8 @@ test(supervisor_with_static_children) :-
         assertion(\+ send_query(peter, mood, bored)),
         assertion(send_query(bob, mood, panicking)),
 
+     % Unsubscribing
+       worker:unsubscribe(bob, party),
      % Checking restart
      worker:stop(bob),
      % Wait for restart of permanent bob

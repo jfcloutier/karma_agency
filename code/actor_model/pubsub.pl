@@ -1,4 +1,4 @@
-:- module(pubsub, [subscribe/1, subscribe_all/1, publish/2, unsubscribe_all/0]).
+:- module(pubsub, [subscribe/1, subscribe_all/1, publish/2, unsubscribe_all/0, unsubscribe/1]).
 
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).
@@ -46,6 +46,16 @@ subscribe(Topic) :-
         ;
         true.
 
+unsubscribe(Topic) :-
+   name(Name),
+   is_thread(Name) -> 
+        (thread_self(Subscriber),
+        send_message(Name, unsubscribe(Subscriber, Topic))
+        )
+        ;
+        true.
+
+
 unsubscribe_all :-
     name(Name),
     is_thread(Name) ->
@@ -90,6 +100,10 @@ run :-
 process_message(subscribe(Name, Topic)) :-
     log(debug, pubsub, "Subscribing ~w to topic ~w~n", [Name, Topic]),
     assertz(subscription(Name, Topic)).
+
+process_message(unsubscribe(Name, Topic)) :-
+    log(debug, pubsub, "Unsubscribing ~w from topic ~w~n", [Name, Topic]),
+    retract(subscription(Name, Topic)).
 
 process_message(unsubscribe(Name)) :-
     retractall(subscription(Name, _)).

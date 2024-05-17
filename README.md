@@ -42,6 +42,8 @@ tnotrace(Thread) :-
 ?- agency:start('localhost:4000').
 ```
 
+## Running the tests
+
 ```prolog
 ?- [load].
 ?- [load_tests].

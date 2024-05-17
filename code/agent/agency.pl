@@ -9,6 +9,7 @@ It integrates
 */
 
 /*
+% Start karma world and body servers
 [load].
 [agent(agency), actor_model(supervisor), code(logger)].
 set_log_level(debug).

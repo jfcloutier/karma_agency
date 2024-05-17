@@ -48,6 +48,9 @@ kill(Name) :-
     send_message(Name, control(die)),
     wait_for_actor_stopped(Name).
 
+unsubscribe(Name, Topic) :-
+    log(debug, worker, "Unsubscribing worker ~w from ~w", [Name, Topic]),
+    send_message(Name, unsubscribe(Topic)).
 %%% Public
 
 send(Name, Message) :-
@@ -90,6 +93,9 @@ process_message(control(die), _, _, _) :-
     thread_self(Name),
     thread_detach(Name),
     thread_exit(true).
+
+process_message(unsubscribe(Topic), _, _, _) :-
+    unsubscribe(Topic).
 
 process_message(query(Question, From), Handler, State, State) :-
     Handler =.. [:, Module, Head],
