@@ -20,11 +20,11 @@ start(Supervisor, _, _, _) :-
 
 stop(_) :-
     log(debug, pubsub, "Stopping"),
-    send_message(pubsub, stop).
+    send_control(pubsub, stop).
 
 kill(_) :-
     log(debug, pubsub, "Dying"),
-    send_message(pubsub, die).
+    send_control(pubsub, die).
 
 % Singleton thread's name
 name(pubsub).
@@ -41,7 +41,7 @@ subscribe(Topic) :-
    name(Name),
    is_thread(Name) -> 
         (thread_self(Subscriber),
-        send_message(Name, subscribe(Subscriber, Topic))
+        send(Name, subscribe(Subscriber, Topic))
         )
         ;
         true.
@@ -50,7 +50,7 @@ unsubscribe(Topic) :-
    name(Name),
    is_thread(Name) -> 
         (thread_self(Subscriber),
-        send_message(Name, unsubscribe(Subscriber, Topic))
+        send(Name, unsubscribe(Subscriber, Topic))
         )
         ;
         true.
@@ -60,7 +60,7 @@ unsubscribe_all :-
     name(Name),
     is_thread(Name) ->
         (thread_self(Subscriber),
-        send_message(pubsub, unsubscribe(Subscriber))
+        send(pubsub, unsubscribe(Subscriber))
         )
         ;
         true.
@@ -69,7 +69,7 @@ publish(Topic, Payload) :-
     name(Name),
     is_thread(Name) ->
         (thread_self(Source),
-        send_message(pubsub, event(Topic, Payload, Source))
+        send(pubsub, event(Topic, Payload, Source))
         )
         ;
         true.
@@ -108,12 +108,12 @@ process_message(unsubscribe(Name, Topic)) :-
 process_message(unsubscribe(Name)) :-
     retractall(subscription(Name, _)).
 
-process_message(stop) :-
+process_message(control(stop)) :-
     log(debug, pubsub, "Stopping"),
     retractall(subscription/2),
     throw(exit(normal)).
 
-process_message(die) :-
+process_message(control(die)) :-
     log(debug, pubsub, "Dying"),
     retractall(subscription/2),
     thread_detach(pubsub), 
@@ -127,9 +127,9 @@ broadcast(event(Topic, Payload, Source)) :-
 
 send_event(Event, Name) :-
     log(debug, pubsub, "Sending event ~p to ~w~n", [Event, Name]),
-    send_message(Name, Event).
+    send(Name, Event).
 
 % Inform supervisor of the exit
 notify_supervisor(Supervisor, Exit) :-
     name(Name),
-    send_message(Supervisor, exited(pubsub, Name, Exit)).
+    send(Supervisor, exited(pubsub, Name, Exit)).

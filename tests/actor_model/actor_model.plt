@@ -4,7 +4,7 @@
 [code(logger)].
 set_log_level(debug).
 ['tests/actor_model/actor_model.plt'].
-run_tests(actor_model).
+run_tests(actor_model:supervised_static_worker).
 */
 
 :- begin_tests(actor_model).
@@ -32,6 +32,9 @@ test(supervised_static_worker) :-
     assertion(is_thread(top)),
     assertion(is_thread(pubsub)),
     assertion(is_thread(bob)),
+%    supervisor:children(top, Children),
+%    assertion(member(child(worker, bob), Children)),
+%    assertion(member(child(pubsub, pubsub)), Children),
     supervisor:stop(top),
     assertion(\+ is_thread(top)),
     assertion(\+ is_thread(bob)),

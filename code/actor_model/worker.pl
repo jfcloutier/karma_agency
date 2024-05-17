@@ -17,7 +17,7 @@
 %
 % A worker holds a state that is updated from processing messages.
 %%%
-:- module(worker, [send/2]).
+:- module(worker, []).
 
 :- use_module(library(option)).
 :- use_module(code(logger)).
@@ -39,23 +39,18 @@ start(Name, Module, Options, Supervisor) :-
 stop(Name) :-
     log(debug, worker, "Stopping worker ~w", [Name]),
     % Cause a normal exit
-    send_message(Name, control(stop)),
+    send_control(Name, stop),
     wait_for_actor_stopped(Name).
 
 kill(Name) :-
     log(debug, worker, "Killing worker ~w", [Name]),
     % Force exit
-    send_message(Name, control(die)),
+    send_control(Name, die),
     wait_for_actor_stopped(Name).
 
 unsubscribe(Name, Topic) :-
     log(debug, worker, "Unsubscribing worker ~w from ~w", [Name, Topic]),
-    send_message(Name, unsubscribe(Topic)).
-%%% Public
-
-send(Name, Message) :-
-    thread_self(Source),
-    send_message(Name, message(Message, Source)).
+    send(pubsub, unsubscribe(Name, Topic)).
 
 %%% Private - in thread
 
@@ -81,7 +76,7 @@ start_run(Topics, Init, Handler) :-
 
 run(Handler, State) :-
     thread_self(Name),
-    log(debug, worker, 'Worker ~w is waiting in state ~p...', [Name, State]),
+    log(debug, worker, 'Worker ~w is waiting...', [Name]),
     thread_get_message(Message),
     process_message(Message, Handler, State, NewState),
     run(Handler, NewState).
@@ -104,16 +99,16 @@ process_message(query(Question, From), Handler, State, State) :-
     thread_self(Name),
     log(debug, worker, "~w got query ~p from ~w", [Name, Question, From]),
     call(ModuleGoal),
-    send_message(From, response(Response, Name)).
+    send(From, response(Response, Question, Name)).
 
 process_message(Message, Handler, State, NewState) :-
     Handler =.. [:, Module, Head],
     Goal =.. [Head, Message, State, NewState],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    log(debug, worker, "~w got ~p; calling ~p", [Name, Message, Goal]),
+    log(debug, worker, "~w got message ~p; calling ~p", [Name, Message, ModuleGoal]),
     call(ModuleGoal).
 
 % Inform supervisor of the exit
 notify_supervisor(Supervisor, Name, Exit) :-
-    send_message(Supervisor, exited(worker, Name, Exit)).
+    send(Supervisor, exited(worker, Name, Exit)).

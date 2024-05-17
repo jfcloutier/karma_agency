@@ -45,6 +45,6 @@ contact_others([]).
 contact_others([alice | Others]) :-
    contact_others(Others).
 contact_others([Name | Others]) :-
-   worker:send(Name, "Alice says howdy!"),
+   worker:send_message(Name, "Alice says howdy!"),
    contact_others(Others).
 

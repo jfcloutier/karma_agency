@@ -40,7 +40,7 @@ A supervisor can supervise another supervisor. If a supervised supervisor is res
 
 Actors interact by sending messages to each other:
 
-* directly via `send_message(Name, Message)` (Name is the name of the target actor)
+* directly via `send(Name, Message)` (Name is the name of the target actor)
 * indirectly via pubsub `publish(Topic, Payload)` where the Message sent is `event(Topic, Payload, SenderName)`
 
 Message sent by an actor via pubsub is received by all actors that have subscribed to the message topic.

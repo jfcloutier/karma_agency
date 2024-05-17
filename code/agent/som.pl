@@ -17,14 +17,27 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensors(Sensors), Options, []),
     option(effectors(Effectors), Options, []),
-    put_state(EmptyState, sensors, Sensors, State1),
-    put_state(State1, effectors, Effectors, State).
+    put_state(EmptyState, cas, [], State),
+    send_message(start(Sensors, Effectors)).
 
 terminate :-
     log(warn, som, 'Terminating').
 
-handle(event(Topic, Payload, Source), State, State) :-
-    log(info, som, 'Handling event event(~w, ~p, ~w) in state ~p', [Topic, Payload, Source, State]).
+handle(message(start(Sensors, Effectors), _), State, UpdatedState) :-
+    start_sensor_cas(State, Sensors, State1),
+    start_effector_cas(State1, Effectors, UpdatedwState).
 
-handle(query(Query), State, tbd) :-
-    log(info, som, 'Handling query ~p in state ~p', [Query, State]).
+handle(message(Message, Source), State, State) :-
+   log(info, som, 'Handling message ~p from ~w', [Message, Source]).
+
+handle(event(Topic, Payload, Source), State, State) :-
+    log(info, som, 'Handling event ~w, with payload ~p from ~w)', [Topic, Payload, Source]).
+
+handle(query(Query), _, tbd) :-
+    log(info, som, 'Handling query ~p', [Query]).
+
+%%% Private
+
+start_sensor_cas(State, [], State).
+% start_sensor_cas(State, [Sensor | Others], UpdatedState) :-
+

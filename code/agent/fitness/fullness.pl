@@ -13,10 +13,14 @@ name(fullness).
 
 init(_, State) :-
     log(info, fullness, 'Initiating'),
-    empty_state(State).
+    empty_state(State),
+    send_message(start).
 
 terminate :-
     log(info, fullness, 'Terminating').
+
+handle(message(Message, Source), State, State) :-
+   log(info, fullness, 'Handling message ~p from ~w in state ~p', [Message, Source, State]).
     
 handle(event(Topic, Payload, Source), State, State) :-
     log(info, fullness, 'Handling event event(~w, ~p, ~w) in state ~p', [Topic, Payload, Source, State]).

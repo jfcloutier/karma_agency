@@ -38,9 +38,10 @@ start(BodyHost) :-
         worker(competence, [topics([]), restart(permanent)]),
         worker(engagement, [topics([]), restart(permanent)])
     ],
+    SomSupervisorChildren = [worker(som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])],
     AgencyChildren = [
         pubsub,
         supervisor(fitness, [children(FitnessChildren), restart(transient)]),
-        worker(som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])
+        supervisor(som_supervisor, [children(SomSupervisorChildren)], restart(transient))
         ],
     supervisor:start(agency, [children(AgencyChildren)]).

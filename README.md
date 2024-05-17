@@ -2,6 +2,8 @@
 
 **UNDER CONSTRUCTION**
 
+TODO - send_control vs send_message vs send_query
+
 ## Getting started
 
 Use the development version of SWI-PROLOG (https://www.swi-prolog.org/build/PPA.html)

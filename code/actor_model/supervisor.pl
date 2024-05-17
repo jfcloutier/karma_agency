@@ -44,11 +44,15 @@ start(Supervisor, Options) :-
 
 stop(Supervisor) :- 
     log(debug, supervisor, "Stopping supervisor ~w", [Supervisor]),
-    send_message(Supervisor, control(stop)),
+    send_control(Supervisor, stop),
     wait_for_actor_stopped(Supervisor).
 
 kill(Supervisor) :-
     stop(Supervisor).
+
+children(Supervisor, Children) :-
+    log(debug, supervisor, 'Getting children of ~w', [Supervisor]),
+    send_query(Supervisor, children, Children).
 
 %%% Public
 
@@ -81,7 +85,7 @@ kill_child(Supervisor, Kind) :-
 % Kill a named child actor
 kill_child(Supervisor, Kind, Name) :-
     log(debug, supervisor, 'Kill ~w child named ~w of ~w', [Kind, Name, Supervisor]),
-    send_message(Supervisor, stop_child(Kind, Name)).
+    send(Supervisor, stop_child(Kind, Name)).
 
 %%% Private 
 
@@ -103,7 +107,7 @@ starting_child(Supervisor, Kind, Module, Name, Options) :-
     option(restart(Restart), Options, transient),
     Goal =.. [start, Name, Module, Options, Supervisor],
     ChildGoal =.. [:, Kind, Goal],
-    send_message(Supervisor, start_child(dynamic, Kind, Name, ChildGoal, Restart)),
+    send(Supervisor, start_child(dynamic, Kind, Name, ChildGoal, Restart)),
     wait_for_actor(Name).
 
 wait_for_static_children([]).
@@ -165,7 +169,7 @@ process_exit(Exit, ParentSupervisor) :-
 
 % Inform supervisor of the exit
 notify_supervisor(ParentSupervisor, Supervisor, Exit) :-
-    send_message(ParentSupervisor, exited(supervisor, Supervisor, Exit)).
+    send(ParentSupervisor, exited(supervisor, Supervisor, Exit)).
 
 % Options are not used, yet.
 run(Options) :-
@@ -205,6 +209,12 @@ process_message(control(stop), _) :-
     % kill_all_children(Supervisor),
     % thread_detach(Supervisor), 
     % thread_exit(true).
+
+process_message(query(children, From), _) :-
+    log(debug, supervisor, 'Processing query(children, ~w)', [From]),
+    thread_self(Supervisor),
+    findall(child(Kind, Name), child(_, Supervisor, Kind, Name, _, _), Children),
+    send(From, response(Children, children, Supervisor)).
 
 kill_all_children(Supervisor) :-
     log(debug, supervisor, "Killing all children of ~w", [Supervisor]),
@@ -268,12 +278,12 @@ maybe_restart_child(_, _, Kind, Name, _, exit(normal), transient) :-
     forget_child(Kind, Name).
 maybe_restart_child(StaticOrDynamic, Supervisor, Kind, Name, Goal, _, transient) :-
     child_restarting_goal(Goal, RestartingGoal),
-    send_message(Supervisor, start_child(StaticOrDynamic, Kind, Name, RestartingGoal, transient)).
+    send(Supervisor, start_child(StaticOrDynamic, Kind, Name, RestartingGoal, transient)).
 maybe_restart_child(StaticOrDynamic,Supervisor, Kind, Name, Goal, _, permanent) :-
     log(debug, supervisor, 'Getting restarting goal from ~p', [Goal]),
     child_restarting_goal(Goal, RestartingGoal),
     log(debug, supervisor, 'Restarting goal is ~p', [RestartingGoal]),
-    send_message(Supervisor, start_child(StaticOrDynamic, Kind, Name, RestartingGoal, permanent)).
+    send(Supervisor, start_child(StaticOrDynamic, Kind, Name, RestartingGoal, permanent)).
 
 % supervisor:child_restarting_goal(worker:start(bob, bob, [topics([party, police]), restart(permanent)], bottom), _660)
 child_restarting_goal(ModuleGoal, RestartingModuleGoal) :-

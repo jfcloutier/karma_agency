@@ -1,4 +1,4 @@
-:- module(actor_utils, [start_actor/2, start_actor/3, send_message/2, send_query/3, send_query/4, wait_for_actor/1, wait_for_actor_stopped/1, empty_state/1, get_state/3, put_state/4]).
+:- module(actor_utils, [start_actor/2, start_actor/3, send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, wait_for_actor/1, wait_for_actor_stopped/1, empty_state/1, get_state/3, put_state/4]).
 
 :- use_module(code(logger)).
 
@@ -19,13 +19,30 @@ put_state(State, Key, Value, NewState) :-
     is_dict(State, state),
     put_dict(Key, State, Value, NewState).
 
-send_message(Name, Message) :-
-    log(debug, actor_model, 'Sending message ~p to ~w', [Message, Name]),
+% Undecorated message
+send(Name, Message) :-
     catch(
-        thread_send_message(Name, Message), 
+        (
+            log(debug, actor_model, 'Sending ~p to ~w', [Message, Name]),
+            thread_send_message(Name, Message)
+        ), 
         Exception, 
         (log(warn, actor_model, "Failed to send message ~p to ~w: ~p~n", [Message, Name, Exception]), fail)
         ).
+
+send_message(Message) :-
+    thread_self(Name),
+    send_message(Name, Message).
+
+% Semantic message
+send_message(Name, Message) :-
+    thread_self(From),
+    log(debug, actor_model, 'Sending message(~p, ~w) to ~w', [Message, From, Name]),
+    send(Name, message(Message, From)).
+
+send_query(Question, Answer) :-
+    thread_self(Name),
+    send_query(Name, Question, Answer).
 
 send_query(Name, Question, Answer) :-
     send_query(Name, Question, 5, Answer).
@@ -37,12 +54,21 @@ send_query(Name, Question, Timeout, Answer) :-
                 thread_self(From),
                 thread_send_message(Name, query(Question, From)), 
                 % Fails (quietly) is a matching message is not received in time
-                thread_get_message(From, response(Answer, Name), [timeout(Timeout)]),
+                log(debug, actor_model, '~w is waiting for response(Answer, ~p, ~w), timeout is ~w', [From, Question, Name, Timeout]),
+                thread_get_message(From, response(Answer, Question, Name), [timeout(Timeout)]),
                 log(debug, actor_model, 'Got answer ~p from ~w to query ~p', [Answer, Name, Question])
             ),
             Exception, 
             (log(warn, actor_model, "Failed to query ~w about ~p: ~p~n", [Name, Question, Exception]), fail)
         ).
+
+% Control message
+send_control(Control) :-
+    thread_self(Name),
+    send_control(Name, Control).
+
+send_control(Name, Control) :-
+    send(Name, control(Control)).
 
 wait_for_actor(Name) :-
     wait_for_actor(Name, 20).

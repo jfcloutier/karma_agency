@@ -13,10 +13,14 @@ name(integrity).
 
 init(_, State) :-
     log(info, integrity, 'Initiating'),
-    empty_state(State).
+    empty_state(State),
+    send_message(start).
 
 terminate :-
     log(info, integrity, 'Terminating').
+
+handle(message(Message, Source), State, State) :-
+   log(info, integrity, 'Handling message ~p from ~w in state ~p', [Message, Source, State]).
     
 handle(event(Topic, Payload, Source), State, State) :-
     log(info, integrity, 'Handling event event(~w, ~p, ~w) in state ~p', [Topic, Payload, Source, State]).
