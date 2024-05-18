@@ -94,12 +94,12 @@ process_message(unsubscribe(Topic), _, _, _) :-
 
 process_message(query(Question, From), Handler, State, State) :-
     Handler =.. [:, Module, Head],
-    Goal =.. [Head, query(Question), State, Response],
+    Goal =.. [Head, query(Question), State, Answer],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
     log(debug, worker, "~w got query ~p from ~w", [Name, Question, From]),
     call(ModuleGoal),
-    send(From, response(Response, Question, Name)).
+    send(From, response(Answer, Question, Name)).
 
 process_message(Message, Handler, State, NewState) :-
     Handler =.. [:, Module, Head],
