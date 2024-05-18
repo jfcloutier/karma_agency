@@ -1,0 +1,30 @@
+/*
+An effector is an a priori cognition actor that communicates with a body effector to do one action.
+*/
+
+:- module(effector_ca, []).
+:- use_module(actor_model(actor_utils)).
+
+:- use_module(code(logger)).
+
+name(Effector, Name) :-
+    atomic_list_concat([effector, Effector.id, Effector.capabilities.action], ':', Name).
+
+init(Options, State) :-
+    log(info, effector_ca, 'Initiating with ~p', [Options]),
+    empty_state(EmptyState),
+    option(device(Effector), Options),
+    put_state(EmptyState, device, Effector, State),
+    send_message(start).
+
+terminate :-
+    log(warn, effector_ca, 'Terminating').
+
+handle(message(Message, Source), State, State) :-
+   log(info, effector_ca, 'Handling message ~p from ~w', [Message, Source]).
+
+handle(event(Topic, Payload, Source), State, State) :-
+    log(info, effector_ca, 'Handling event ~w, with payload ~p from ~w)', [Topic, Payload, Source]).
+
+handle(query(Query), _, tbd) :-
+    log(info, effector_ca, 'Handling query ~p', [Query]).

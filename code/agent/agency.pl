@@ -23,7 +23,8 @@ supervisor:stop(agency).
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
 :- use_module(agent(body)).
-:- use_module(agent(som)).
+:- use_module(som(sensor_ca)).
+:- use_module(som(effector_ca)).
 :- use_module(fitness(competence)).
 :- use_module(fitness(engagement)).
 :- use_module(fitness(fullness)).
@@ -32,16 +33,26 @@ supervisor:stop(agency).
 start(BodyHost) :-
     log(info, agency, 'Starting agency'),
     body:capabilities(BodyHost, Sensors, Effectors),
+    log(info, agency, 'Sensors: ~p', [Sensors]),
+    log(info, agency, 'Effectors: ~p', [Effectors]),
     FitnessChildren = [
         worker(fullness, [topics([]), restart(permanent)]),
         worker(integrity, [topics([]), restart(permanent)]),
         worker(competence, [topics([]), restart(permanent)]),
         worker(engagement, [topics([]), restart(permanent)])
     ],
-    SomSupervisorChildren = [worker(som, [topics([]), init([sensors(Sensors), effectors(Effectors)]), restart(transient)])],
     AgencyChildren = [
         pubsub,
-        supervisor(fitness, [children(FitnessChildren), restart(transient)]),
-        supervisor(som_supervisor, [children(SomSupervisorChildren)], restart(transient))
+        supervisor(fitness, [children(FitnessChildren), restart(permanent)]),
+        supervisor(som, [restart(permanent)])
         ],
-    supervisor:start(agency, [children(AgencyChildren)]).
+    supervisor:start(agency, [children(AgencyChildren)]),
+    % Start the SOM with sensor and effector CAs
+    forall(
+            (member(Sensor, Sensors), sensor_ca:name(Sensor, Name)),
+            supervisor:start_worker_child(som, sensor_ca, Name, [init([device(Sensor)])])
+          ),
+    forall(
+            (member(Effector, Effectors), effector_ca:name(Effector, Name)),
+            supervisor:start_worker_child(som, effector_ca, Name, [init([device(Effector)])])
+          ).
