@@ -15,6 +15,7 @@ It integrates
 set_log_level(debug).
 agency:start('localhost:4000').
 supervisor:stop(agency).
+threads.
 */
 
 :- module(agency, []).
@@ -50,9 +51,13 @@ start(BodyHost) :-
     % Start the SOM with sensor and effector CAs
     forall(
             (member(Sensor, Sensors), sensor_ca:name(Sensor, Name)),
-            supervisor:start_worker_child(som, sensor_ca, Name, [init([device(Sensor)])])
+            supervisor:start_worker_child(som, sensor_ca, Name, [init([sensor(Sensor)])])
           ),
-    forall(
-            (member(Effector, Effectors), effector_ca:name(Effector, Name)),
-            supervisor:start_worker_child(som, effector_ca, Name, [init([device(Effector)])])
-          ).
+    start_effectors(Effectors).
+
+    start_effectors([]).
+    start_effectors([Effector | Others]) :-
+        findall(Twin, (member(Twin, Others), Twin.id == Effector.id), Twins),
+        supervisor:start_worker_child(som, effector_ca, Effector.id, [init([effectors([Effector |Twins])])]),
+        subtract(Others, Twins, Rest),
+        start_effectors(Rest).

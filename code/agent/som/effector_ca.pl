@@ -1,5 +1,7 @@
 /*
-An effector is an a priori cognition actor that communicates with a body effector to do one action.
+An effector is an a priori cognition actor that communicates with a body effector to execute actions.
+The body considers each possible action a device can take as defining a separate effector.
+Same-device effectors are combined in one effector_ca.
 */
 
 :- module(effector_ca, []).
@@ -13,8 +15,8 @@ name(Effector, Name) :-
 init(Options, State) :-
     log(info, effector_ca, 'Initiating with ~p', [Options]),
     empty_state(EmptyState),
-    option(device(Effector), Options),
-    put_state(EmptyState, device, Effector, State),
+    option(effectors(Effectors), Options),
+    put_state(EmptyState, device, Effectors, State),
     send_message(start).
 
 terminate :-

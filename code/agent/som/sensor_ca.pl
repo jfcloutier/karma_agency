@@ -13,8 +13,8 @@ name(Sensor, Name) :-
 init(Options, State) :-
     log(info, sensor_ca, 'Initiating with ~p', [Options]),
     empty_state(EmptyState),
-    option(device(Sensor), Options),
-    put_state(EmptyState, device, Sensor, State),
+    option(sensor(Sensor), Options),
+    put_state(EmptyState, sensor, Sensor, State),
     send_message(start).
 
 terminate :-
