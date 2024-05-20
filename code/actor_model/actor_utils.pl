@@ -1,6 +1,13 @@
-:- module(actor_utils, [start_actor/2, start_actor/3, send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, empty_state/1, get_state/3, put_state/4]).
+:- module(actor_utils, [self/0, self/1, start_actor/2, start_actor/3, send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, empty_state/1, get_state/3, put_state/4]).
 
 :- use_module(code(logger)).
+
+self :-
+    self(Name),
+    print(Name).
+    
+self(Name) :-
+    thread_self(Name).
 
 start_actor(Name, Goal) :-
     start_actor(Name, Goal, []).

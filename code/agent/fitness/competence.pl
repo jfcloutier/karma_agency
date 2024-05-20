@@ -20,10 +20,10 @@ terminate :-
     log(info, competence, 'Terminating').
     
 handle(message(Message, Source), State, State) :-
-   log(info, competence, 'Handling message ~p from ~w in state ~p', [Message, Source, State]).
+   log(info, competence, '~@ is NOT handling message ~p from ~w in state ~p', [self, Message, Source, State]).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, competence, 'Handling event event(~w, ~p, ~w) in state ~p', [Topic, Payload, Source, State]).
+    log(info, competence, '~@ is NOT handling event event(~w, ~p, ~w) in state ~p', [self, Topic, Payload, Source, State]).
 
 handle(query(Query), State, tbd) :-
-    log(info, competence, 'Handling query ~p in state ~p', [Query, State]).
+    log(info, competence, '~@ is NOT handling query ~p in state ~p', [self, Query, State]).

@@ -4,7 +4,7 @@
 [code(logger)].
 set_log_level(debug).
 ['tests/actor_model/actor_model.plt'].
-run_tests(actor_model:supervised_static_worker).
+run_tests(actor_model).
 */
 
 :- begin_tests(actor_model).

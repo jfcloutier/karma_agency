@@ -1,5 +1,8 @@
 /*
-A sensor is an a priori cognition actor that communicates with a body sensor to read one semse.
+A sensor is an a priori cognition actor that communicates with a body sensor to read one sense.
+Each sensor CA has one belief, about the sense value it measures.
+It listens to prediction events about its belief and may emit a prediction error event,
+based on the latest reading, if not too old, else given a reading it presently makes.
 */
 
 :- module(sensor_ca, []).
@@ -21,10 +24,10 @@ terminate :-
     log(warn, sensor_ca, 'Terminating').
 
 handle(message(Message, Source), State, State) :-
-   log(info, sensor_ca, 'Handling message ~p from ~w', [Message, Source]).
+   log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, sensor_ca, 'Handling event ~w, with payload ~p from ~w)', [Topic, Payload, Source]).
+    log(info, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(Query), _, tbd) :-
-    log(info, sensor_ca, 'Handling query ~p', [Query]).
+    log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).

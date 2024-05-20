@@ -37,7 +37,7 @@ handle(query(mood), State, Response) :-
 handle(query(_), _, "Pardon?").
 
 handle(message(Message, Source), State, State) :-
-    format("[alice] Received ~w from ~w~n", [Message, Source]).
+    format("[alice] ~@ received ~w from ~w~n", [self, Message, Source]).
  
 %% Private
 

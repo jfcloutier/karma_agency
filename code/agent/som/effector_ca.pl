@@ -23,10 +23,10 @@ terminate :-
     log(warn, effector_ca, 'Terminating').
 
 handle(message(Message, Source), State, State) :-
-   log(info, effector_ca, 'Handling message ~p from ~w', [Message, Source]).
+   log(info, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, effector_ca, 'Handling event ~w, with payload ~p from ~w)', [Topic, Payload, Source]).
+    log(info, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(Query), _, tbd) :-
-    log(info, effector_ca, 'Handling query ~p', [Query]).
+    log(info, effector_ca, '~@ is NOT handling query ~p', [self, Query]).

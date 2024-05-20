@@ -39,7 +39,7 @@ handle(query(mood), State, Response) :-
 handle(query(_), _, "Ugh?").
 
 handle(message(Message, Source), State, State) :-
-   format("[bob] Received ~w from ~w~n", [Message, Source]).
+   format("[bob] ~@ received ~w from ~w~n", [self, Message, Source]).
 
 %% Private
 
