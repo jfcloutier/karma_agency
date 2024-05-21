@@ -147,4 +147,8 @@ time_now(Time) :-
     get_time(Timestamp),
     format_time(atom(Time), '%H:%M:%S.%f', Timestamp).
 
+self :-
+    thread_self(Name),
+    print(Name).
+
 
