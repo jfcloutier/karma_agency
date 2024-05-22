@@ -1,4 +1,9 @@
-:- module(actor_utils, [self/1, start_actor/2, start_actor/3, send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, empty_state/1, get_state/3, put_state/4]).
+:- module(actor_utils, [
+    self/1, 
+    start_actor/2, start_actor/3, 
+    wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, 
+    send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, 
+    empty_state/1, get_state/3, put_state/3, put_state/4]).
 
 :- use_module(code(logger)).
     
@@ -18,9 +23,25 @@ get_state(State, Key, Value) :-
     is_dict(State, state),
     get_dict(Key, State, Value).
 
+% Adding/overwriting pairs to a dictionary.
+put_state(State, Pairs, NewState) :-
+    dict_pairs(State, Tag, StatePairs),
+    merge_pairs(StatePairs, Pairs, MergedPairs),
+    dict_pairs(NewState, Tag, MergedPairs).
+
 put_state(State, Key, Value, NewState) :-
     is_dict(State, state),
     put_dict(Key, State, Value, NewState).
+
+merge_pairs(Pairs, InPairs, MergedPairs) :-
+    append(InPairs, Pairs, AllPairs),
+    sort(1, @>=, AllPairs, SortedAllPairs),
+    group_pairs_by_key(SortedAllPairs, Grouped),
+    pairs_from_groups(Grouped, MergedPairs).
+
+pairs_from_groups([], []).
+pairs_from_groups([Key-[Value | _] | Rest], [Key-Value | OtherPairs]) :-
+    pairs_from_groups(Rest, OtherPairs).
 
 % Undecorated message
 send(Name, Message) :-

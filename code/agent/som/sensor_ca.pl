@@ -1,8 +1,8 @@
 /*
 A sensor is an a priori cognition actor that communicates with a body sensor to read one sense.
-Each sensor CA has one belief, about the sense value it measures.
-It listens to prediction events about its belief and may emit a prediction error event,
-based on the latest reading, if not too old, else given a reading it presently makes.
+Each sensor CA holds one belief. It is about the sense value it measures.
+It listens to prediction events about its belief and may emit a prediction error event
+based on the latest reading, if not staled, else based on a present reading.
 */
 
 :- module(sensor_ca, []).
@@ -23,6 +23,12 @@ init(Options, State) :-
 terminate :-
     log(warn, sensor_ca, 'Terminating').
 
+handle(message(start, _), State, NewState) :-
+    belief_domain(State, BeliefDomain),
+    subcribe_to_predictions(BeliefDomain),
+    empty_readings(BeliefDomain, Readings),
+    put_state(State, [belief_domain-BeliefDomain, readings-Readings], NewState).
+
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
@@ -31,3 +37,14 @@ handle(event(Topic, Payload, Source), State, State) :-
 
 handle(query(Query), _, tbd) :-
     log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
+
+%%%%
+
+% TODO
+belief_domain(State, BeliefDomain).
+
+% TODO 
+subcribe_to_predictions(BeliefDomain).
+
+% TODO
+empty_readings(BeliefDomain, Readings).
