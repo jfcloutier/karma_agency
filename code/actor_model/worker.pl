@@ -81,6 +81,9 @@ run(Handler, State) :-
     process_message(Message, Handler, State, NewState),
     run(Handler, NewState).
 
+process_message(state, _, State, State) :-
+    writeln(State).
+
 process_message(control(stop), _, _, _) :-
     throw(exit(normal)).
 

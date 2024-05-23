@@ -9,6 +9,7 @@ based on the latest reading, if not staled, else based on a present reading.
 
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
+:- use_module(actor_model(pubsub)).
 
 name(Sensor, Name) :-
     atomic_list_concat([sensor, Sensor.id, Sensor.capabilities.sense], ':', Name).
@@ -23,11 +24,12 @@ init(Options, State) :-
 terminate :-
     log(warn, sensor_ca, 'Terminating').
 
-handle(message(start, _), State, NewState) :-
+handle(message(start, Source), State, NewState) :-
+    thread_self(Source),
     belief_domain(State, BeliefDomain),
-    subcribe_to_predictions(BeliefDomain),
-    empty_readings(BeliefDomain, Readings),
-    put_state(State, [belief_domain-BeliefDomain, readings-Readings], NewState).
+    subcribe_to_predictions(State, Topics),
+    empty_readings(State, Readings),
+    put_state(State, [subscriptions-Topics, belief_domain-BeliefDomain, readings-Readings], NewState).
 
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
@@ -40,11 +42,35 @@ handle(query(Query), _, tbd) :-
 
 %%%%
 
-% TODO
-belief_domain(State, BeliefDomain).
+% sensor(sensor{capabilities:capabilities{domain:domain{from:0,to:250},sense:distance},id:'ultrasonic-in4',type:ultrasonic,url:'http://127.0.0.1:4000/api/sense/ultrasonic-in4/distance'})])]
 
-% TODO 
-subcribe_to_predictions(BeliefDomain).
+% Example [distance-domain{from:0, to:250}]
+belief_domain(State, [Sense-Domain]) :-
+    sense(State, Sense),
+    sense_domain(State, Domain).
 
-% TODO
-empty_readings(BeliefDomain, Readings).
+subcribe_to_predictions(State, [Topic]) :-
+    sense(State, Sense),
+    Topic =.. [prediction, Sense],
+    subscribe(Topic).
+
+empty_readings(State, [Reading]) :-
+    sense(State, Sense),
+    get_time(Timestamp),
+    Reading = reading(Sense, 'unknown', Timestamp).
+
+sense(State, Sense) :-
+    Sense = State.sensor.capabilities.sense.
+
+sense_url(State, SenseURL) :-
+    SenseURL = State.sensor.url.
+
+sense_domain(State, SenseDomain) :-
+    SenseDomain = State.sensor.capabilities.domain.
+
+read_sense(State, Sense, reading(Sense, Value, Timestamp)) :-
+    Url = sense_url(State),
+    body:sense_value(Url, Value),
+    get_time(Timestamp).
+
+
