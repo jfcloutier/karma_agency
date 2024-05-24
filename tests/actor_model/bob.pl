@@ -32,9 +32,9 @@ handle(event(police, Payload, _), State, NewState) :-
    format("[bob] Police! ~w~n", [Payload]),
    put_state(State, mood, panicking, NewState).
 
-handle(query(mood), State, Response) :-
-   get_state(State, mood, Response),
-   format("Bob is ~p~n", [Response]).
+handle(query(mood), State, Answer) :-
+   get_state(State, mood, Answer),
+   format("Bob is ~p~n", [Answer]).
 
 handle(query(_), _, "Ugh?").
 

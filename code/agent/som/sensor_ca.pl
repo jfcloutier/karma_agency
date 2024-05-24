@@ -11,8 +11,12 @@ based on the latest reading, if not staled, else based on a present reading.
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 
+% The name of the sensor CA
 name(Sensor, Name) :-
     atomic_list_concat([sensor, Sensor.id, Sensor.capabilities.sense], ':', Name).
+
+% The period of the sensor CA
+period(0.5).
 
 init(Options, State) :-
     log(info, sensor_ca, 'Initiating with ~p', [Options]),
@@ -28,16 +32,32 @@ handle(message(start, Source), State, NewState) :-
     thread_self(Source),
     belief_domain(State, BeliefDomain),
     subcribe_to_predictions(State, Topics),
-    empty_readings(State, Readings),
-    put_state(State, [subscriptions-Topics, belief_domain-BeliefDomain, readings-Readings], NewState).
+    empty_reading(State, Reading),
+    put_state(State, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], NewState).
+
 
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
+handle(event(prediction(Sense), Value, Source), State, NewState) :-
+    sense(State, Sense),
+    self(Name),
+    current_reading(State, Reading, NewState),
+    (prediction_accurate(Sense, Value, Reading) ->
+        log(info, sensor_ca, '~w received accurate prediction ~p about ~w from ~w', [Name, Value, Sense, Source])
+        ;
+        make_prediction_error(Sense, Value, Reading, PredictionError),
+        send_message(Source, PredictionError),
+        log(info, sensor_ca, '~w sent prediction error ~p to ~w', [Name, PredictionError, Source])
+    ).
+
 handle(event(Topic, Payload, Source), State, State) :-
     log(info, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
-handle(query(Query), _, tbd) :-
+handle(query(belief_domain), State, BeliefDomain) :-
+    get_state(State, belief_domain, BeliefDomain).
+
+handle(query(Query), _, unknown) :-
     log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 %%%%
@@ -68,9 +88,32 @@ sense_url(State, SenseURL) :-
 sense_domain(State, SenseDomain) :-
     SenseDomain = State.sensor.capabilities.domain.
 
+last_reading(State, Reading) :-
+    [Reading | _] = State.readings.
+
+current_reading(State, Reading, NewState) :-
+    last_reading(State, LastReading),
+    (reading_stale(LastReading) ->
+        sense(State, Sense),
+        read_sense(State, Sense, Reading),
+        put_state(State, readings, [Reading | state.readings], NewState)
+        ;
+        Reading = LastReading,
+        NewState = State
+    ).
+
+reading_stale(reading(_, unknown, _)) :- !.
+reading_stale(reading(_, _, Timestamp)) :-
+    get_time(Now),
+    period(Period),
+    age is Now - Timestamp,
+    age > Period.
+
+prediction_accurate(Sense, Value, reading(Sense, Value, _)).
+
 read_sense(State, Sense, reading(Sense, Value, Timestamp)) :-
     Url = sense_url(State),
     body:sense_value(Url, Value),
     get_time(Timestamp).
 
-
+make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _), prediction_error(Sense, PredictedValue, ActualValue)).
