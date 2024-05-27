@@ -28,6 +28,19 @@ sense_value(Url, Value, Tolerance) :-
     sense_value_from_response(Response, Value, Tolerance),
     log(info, body, 'Sensed ~w with tolerance ~w from ~w', [Value, Tolerance, Url]).
 
+actuate(Url) :-
+    http_get(Url, Response, []),
+    log(debug, body, '~w got response ~p', [Url, Response]),
+    actuation_value_from_response(Response, ok),
+    log(info, body, 'Actuated via ~w ', [Url]).
+
+execute_actions(Host) :-
+    api_url(Host, 'execute_actions', Url),
+    http_get(Url, Response, []),
+    log(debug, body, '~w got response ~p', [Url, Response]),
+    execution_value_from_response(Response, ok),
+    log(info, body, 'Executed actions').
+
 api_url(Host, Query, Url) :-
     format(atom(Url), 'http://~w/api/~w', [Host, Query]).
 
@@ -44,6 +57,14 @@ sense_value_from_response(json(KVs), Value, Tolerance) :-
     json_to_dict(KVs, sensed, Sensed),
     Value = Sensed.value,
     Tolerance = Sensed.tolerance.
+
+actuation_value_from_response(json(KVs), Value) :-
+    json_to_dict(KVs, sensed, Sensed),
+    Value = Sensed.value.
+
+execution_value_from_response(json(KVs), Value) :-
+    json_to_dict(KVs, result, Result),
+    Value = Result.executed.
 
 json_to_dict(KVs,Tag, Dict) :-
     convert_json_pairs(KVs, [], Pairs),

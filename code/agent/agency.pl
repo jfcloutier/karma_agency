@@ -16,8 +16,14 @@ set_log_level(debug).
 agency:start('localhost:4000').
 threads.
 % send('sensor:ultrasonic-in4:distance', state).
+send('tacho_motor-outA', state).
+send_query('tacho_motor-outA', action_domain, Answer).
+send_message('tacho_motor-outA', actuate(spin)).
+send_message('tacho_motor-outA', actuate(reverse_spin)).
 
-publish(prediction(distance), 130).
+body:execute_actions('localhost:4000').
+
+% publish(prediction(distance), 130).
 
 supervisor:stop(agency).
 threads.
