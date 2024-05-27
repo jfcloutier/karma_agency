@@ -61,7 +61,6 @@ send_message(Message) :-
 % Semantic message
 send_message(Name, Message) :-
     thread_self(From),
-    log(debug, actor_model, 'Sending message(~p, ~w) to ~w', [Message, From, Name]),
     send(Name, message(Message, From)).
 
 send_query(Question, Answer) :-

@@ -15,33 +15,30 @@ based on the latest reading, if not staled, else based on a present reading.
 name(Sensor, Name) :-
     atomic_list_concat([sensor, Sensor.id, Sensor.capabilities.sense], ':', Name).
 
-% The period of the sensor CA
-period(0.5).
+% The latency of a sensor CA is half a sceond
+latency(0.5).
 
 init(Options, State) :-
     log(info, sensor_ca, 'Initiating with ~p', [Options]),
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
-    put_state(EmptyState, sensor, Sensor, State),
-    send_message(start).
+    put_state(EmptyState, sensor, Sensor, State1),
+    belief_domain(State1, BeliefDomain),
+    subcribe_to_predictions(State1, Topics),
+    empty_reading(State1, Reading),
+    put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State).
 
 terminate :-
     log(warn, sensor_ca, 'Terminating').
-
-handle(message(start, Source), State, NewState) :-
-    thread_self(Source),
-    belief_domain(State, BeliefDomain),
-    subcribe_to_predictions(State, Topics),
-    empty_reading(State, Reading),
-    put_state(State, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], NewState).
-
 
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(prediction(Sense), Value, Source), State, NewState) :-
-    sense(State, Sense),
     self(Name),
+    log(debug, sensor_ca, '~w received prediction ~w is ~w by ~w', [Name, Sense, Value, Source]),
+    sense(State, Sense),
+    !,
     current_reading(State, Reading, NewState),
     (prediction_accurate(Sense, Value, Reading) ->
         log(info, sensor_ca, '~w received accurate prediction ~p about ~w from ~w', [Name, Value, Sense, Source])
@@ -62,8 +59,6 @@ handle(query(Query), _, unknown) :-
 
 %%%%
 
-% sensor(sensor{capabilities:capabilities{domain:domain{from:0,to:250},sense:distance},id:'ultrasonic-in4',type:ultrasonic,url:'http://127.0.0.1:4000/api/sense/ultrasonic-in4/distance'})])]
-
 % Example [distance-domain{from:0, to:250}]
 belief_domain(State, [Sense-Domain]) :-
     sense(State, Sense),
@@ -74,10 +69,10 @@ subcribe_to_predictions(State, [Topic]) :-
     Topic =.. [prediction, Sense],
     subscribe(Topic).
 
-empty_readings(State, [Reading]) :-
+empty_reading(State, Reading) :-
     sense(State, Sense),
     get_time(Timestamp),
-    Reading = reading(Sense, 'unknown', Timestamp).
+    Reading = reading(Sense, 'unknown', 0, Timestamp).
 
 sense(State, Sense) :-
     Sense = State.sensor.capabilities.sense.
@@ -88,32 +83,38 @@ sense_url(State, SenseURL) :-
 sense_domain(State, SenseDomain) :-
     SenseDomain = State.sensor.capabilities.domain.
 
-last_reading(State, Reading) :-
-    [Reading | _] = State.readings.
-
 current_reading(State, Reading, NewState) :-
     last_reading(State, LastReading),
     (reading_stale(LastReading) ->
         sense(State, Sense),
         read_sense(State, Sense, Reading),
-        put_state(State, readings, [Reading | state.readings], NewState)
+        put_state(State, readings, [Reading | State.readings], NewState)
         ;
         Reading = LastReading,
         NewState = State
     ).
 
-reading_stale(reading(_, unknown, _)) :- !.
-reading_stale(reading(_, _, Timestamp)) :-
+last_reading(State, Reading) :-
+    [Reading | _] = State.readings.
+
+reading_stale(reading(_, unknown, _, _)) :- !.
+reading_stale(reading(_, _, _, Timestamp)) :-
     get_time(Now),
-    period(Period),
-    age is Now - Timestamp,
-    age > Period.
+    latency(Latency),
+    Age is Now - Timestamp,
+    Age > Latency.
 
-prediction_accurate(Sense, Value, reading(Sense, Value, _)).
+prediction_accurate(Sense, PredictedValue, reading(Sense, Value, 0, _)) :-
+    !,
+    PredictedValue == Value.
+prediction_accurate(Sense, PredictedValue, reading(Sense, Value, Tolerance, _)) :-
+    Delta is abs(PredictedValue - Value),
+    Delta =< Tolerance.
 
-read_sense(State, Sense, reading(Sense, Value, Timestamp)) :-
-    Url = sense_url(State),
-    body:sense_value(Url, Value),
+read_sense(State, Sense, reading(Sense, Value, Tolerance, Timestamp)) :-
+    sense_url(State, Url),
+    body:sense_value(Url, Value, Tolerance),
     get_time(Timestamp).
 
-make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _), prediction_error(Sense, PredictedValue, ActualValue)).
+make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _, _), prediction_error(Sense, PredictedValue, ActualValue, Source)) :-
+    self(Source).

@@ -23,9 +23,10 @@ effectors(Host, Effectors) :-
     http_get(Url, Response, []),
     devices_from_response(Response, effector, Effectors).
 
-sense_value(Url, Value) :-
+sense_value(Url, Value, Tolerance) :-
     http_get(Url, Response, []),
-    sense_value_from_response(Response, Value).
+    sense_value_from_response(Response, Value, Tolerance),
+    log(info, body, 'Sensed ~w with tolerance ~w from ~w', [Value, Tolerance, Url]).
 
 api_url(Host, Query, Url) :-
     format(atom(Url), 'http://~w/api/~w', [Host, Query]).
@@ -38,7 +39,11 @@ devices_from_json([json(JsonDevice) | Others], Tag, [Device | OtherDevices]) :-
     json_to_dict(JsonDevice, Tag, Device),
     devices_from_json(Others, Tag, OtherDevices).
 
-sense_value_from_response(json([_=Value]), Value).
+% json([value=130,tolerance=1,sensor='ultrasonic-in4',sense=distance])
+sense_value_from_response(json(KVs), Value, Tolerance) :-
+    json_to_dict(KVs, sensed, Sensed),
+    Value = Sensed.value,
+    Tolerance = Sensed.tolerance.
 
 json_to_dict(KVs,Tag, Dict) :-
     convert_json_pairs(KVs, [], Pairs),

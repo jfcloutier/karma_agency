@@ -11,11 +11,14 @@ It integrates
 /*
 % Start karma_world server then karma_body server
 [load].
-[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils)].
+[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub)].
 set_log_level(debug).
 agency:start('localhost:4000').
 threads.
-send('sensor:ultrasonic-in4:distance', state).
+% send('sensor:ultrasonic-in4:distance', state).
+
+publish(prediction(distance), 130).
+
 supervisor:stop(agency).
 threads.
 */
