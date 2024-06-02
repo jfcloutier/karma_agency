@@ -3,6 +3,25 @@ A sensor is an a priori cognition actor that communicates with a body sensor to 
 Each sensor CA holds one belief. It is about the sense value it measures.
 It listens to prediction events about its belief and may emit a prediction error event
 based on the latest reading, if not staled, else based on a present reading.
+
+A sensor CA 
+
+* listens to events about:
+    * prediction(Sense), expecting payload [value(Value)]
+
+* sends messages about
+    * prediction errors -> prediction_error([belief_name(Sense), 
+                                             predicted_value(PredictedValue), 
+                                             actual_value(ActualValue), 
+                                             confidence(1.0), 
+                                             source(Self)]))
+
+* like all CAs, a sensor CA responds to queries about
+    * name
+    * level
+    * latency
+    * belief_domain -> responds with a [Sense-ValueDomain], e.g. [distance-domain{from:0, to:250}]
+    * action_domain -> always responds with []
 */
 
 :- module(sensor_ca, []).
@@ -11,12 +30,15 @@ based on the latest reading, if not staled, else based on a present reading.
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 
-% The name of the sensor CA
-name(Sensor, Name) :-
+% The name of the sensor CA given the sensor it wraps
+name_from_sensor(Sensor, Name) :-
     atomic_list_concat([sensor, Sensor.id, Sensor.capabilities.sense], ':', Name).
 
 % The latency of a sensor CA is half a sceond
 latency(0.5).
+
+% The CA has the lowest level of abstration
+level(0).
 
 init(Options, State) :-
     log(info, sensor_ca, 'Initiating with ~p', [Options]),
@@ -26,7 +48,8 @@ init(Options, State) :-
     belief_domain(State1, BeliefDomain),
     subcribe_to_predictions(State1, Topics),
     empty_reading(State1, Reading),
-    put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State).
+    put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
+    publish(ca_started, []).
 
 terminate :-
     log(warn, sensor_ca, 'Terminating').
@@ -34,8 +57,10 @@ terminate :-
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
-handle(event(prediction(Sense), Value, Source), State, NewState) :-
+% Sense is the belief name
+handle(event(prediction(Sense), Payload, Source), State, NewState) :-
     self(Name),
+    option(value(Value), Payload),
     log(debug, sensor_ca, '~w received prediction ~w is ~w by ~w', [Name, Sense, Value, Source]),
     sense(State, Sense),
     !,
@@ -51,8 +76,19 @@ handle(event(prediction(Sense), Value, Source), State, NewState) :-
 handle(event(Topic, Payload, Source), State, State) :-
     log(info, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
+handle(query(name), _, Name) :-
+    self(Name).
+
+handle(query(level), _, Level) :-
+    level(Level).
+
+handle(query(latency), _, Latency) :-
+    latency(Latency).
+
 handle(query(belief_domain), State, BeliefDomain) :-
     get_state(State, belief_domain, BeliefDomain).
+
+handle(query(action_domain), _, []).
 
 handle(query(Query), _, unknown) :-
     log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
@@ -116,5 +152,11 @@ read_sense(State, Sense, reading(Sense, Value, Tolerance, Timestamp)) :-
     body:sense_value(Url, Value, Tolerance),
     get_time(Timestamp).
 
-make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _, _), prediction_error(Sense, PredictedValue, ActualValue, Source)) :-
+% Sense is the belief name
+make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _, _), 
+                        prediction_error([belief_name(Sense), 
+                                          predicted_value(PredictedValue), 
+                                          actual_value(ActualValue), 
+                                          confidence(1.0), 
+                                          source(Source)])) :-
     self(Source).

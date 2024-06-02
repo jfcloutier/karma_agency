@@ -23,7 +23,9 @@ send_message('tacho_motor-outA', actuate(reverse_spin)).
 
 body:execute_actions('localhost:4000').
 
-% publish(prediction(distance), 130).
+publish(prediction(distance), [value(130)]).
+publish(prediction(distance), [value(0)]).
+thread_get_message(Message).
 
 supervisor:stop(agency).
 threads.
@@ -37,6 +39,7 @@ threads.
 :- use_module(agent(body)).
 :- use_module(som(sensor_ca)).
 :- use_module(som(effector_ca)).
+:- use_module(som(meta_ca)).
 :- use_module(fitness(competence)).
 :- use_module(fitness(engagement)).
 :- use_module(fitness(fullness)).
@@ -48,9 +51,13 @@ start(BodyHost) :-
     log(info, agency, 'Sensors: ~p', [Sensors]),
     log(info, agency, 'Effectors: ~p', [Effectors]),
     FitnessChildren = [
+        % Energy level
         worker(fullness, [topics([]), restart(permanent)]),
+        % Physical integrity
         worker(integrity, [topics([]), restart(permanent)]),
+        % Ability to accurately predict
         worker(competence, [topics([]), restart(permanent)]),
+        % Moving and learning?
         worker(engagement, [topics([]), restart(permanent)])
     ],
     AgencyChildren = [
@@ -59,12 +66,16 @@ start(BodyHost) :-
         supervisor(som, [restart(permanent)])
         ],
     supervisor:start(agency, [children(AgencyChildren)]),
-    % Start the SOM with sensor and effector CAs
+    % Start the SOM with the sensor and effector CAs (at level 0)
     forall(
-            (member(Sensor, Sensors), sensor_ca:name(Sensor, Name)),
+            (member(Sensor, Sensors), sensor_ca:name_from_sensor(Sensor, Name)),
             supervisor:start_worker_child(som, sensor_ca, Name, [init([sensor(Sensor)])])
           ),
-    start_effectors(Effectors).
+    start_effectors(Effectors),
+    % Start a metacognition actor at level 1
+    meta_ca:name_from_level(1, Name),
+    supervisor:start_worker_child(som, meta_ca, Name, [init([level(1)])]).
+
 
     start_effectors([]).
     start_effectors([Effector | Others]) :-
@@ -72,3 +83,4 @@ start(BodyHost) :-
         supervisor:start_worker_child(som, effector_ca, Effector.id, [init([effectors([Effector |Twins])])]),
         subtract(Others, Twins, Rest),
         start_effectors(Rest).
+    
