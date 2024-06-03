@@ -19,9 +19,22 @@ State:
     * wards - names of the CAs under oversight
 
 
+TODO
+
 What a meta-ca does:
 
-    * It ensures Level -1 coverage in the umwelts of its wards by adding level Level CAs to the SOM - TODO
+    * It starts CAs to increase Level-1 CAs coverage by the umwelts of its wards
+        * A CA starts with at half (rounded up) level-1 CAs in its umwelt
+            * A CA eventually drops non-contributing (irrelevant) CAs from its umwelt - how is this detected? -
+                * This event is caught by the responsible meta-CA and may trigger stopping the CA
+        * Constraints
+            * A CA must have in its transitive umwelt all effector CAs
+            * A CA must have in its transitive mwelt at least 2 sensor CAs 
+
+    * It stops CAs 
+        * if they no longer meet the above constraints
+        * if they persistently do not contribute to fitness (useless) - how is this detected?
+        * if they are persistently of no import to other CAs (deadwood)
 
 */
 
