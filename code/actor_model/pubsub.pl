@@ -1,3 +1,11 @@
+/*
+The PubSub singleton actor. 
+
+It receives sibscriptions to topics from listening actors and
+dispatches events published to it to topic listeners.
+*/
+
+
 :- module(pubsub, [subscribe/1, subscribe_all/1, publish/2, unsubscribe_all/0, unsubscribe/1]).
 
 :- use_module(library(aggregate)).

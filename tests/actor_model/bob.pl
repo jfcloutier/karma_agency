@@ -4,6 +4,7 @@
 
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).
+:- use_module(actor_model(timer)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
 %% Worker callbacks
@@ -14,7 +15,9 @@ init(Options, State) :-
     option(mood(Mood), Options, bored),
     format("[bob] Initializing with mood ~w~n", [Mood]),
     empty_state(EmptyState),
-    put_state(EmptyState, mood, Mood, State).
+    self(Name),
+    send_at_interval(Name, clock, event(tictoc, true, Name), 1, Timer),
+    put_state(EmptyState, [mood-Mood, timer-Timer], State).
 
 terminate :-
    writeln("[bob] Terminating").
@@ -32,6 +35,9 @@ handle(event(police, Payload, _), State, NewState) :-
    format("[bob] Police! ~w~n", [Payload]),
    put_state(State, mood, panicking, NewState).
 
+handle(event(tictoc, _, _), State, State) :-
+   format("[bob] Tictoc!").
+
 handle(query(mood), State, Answer) :-
    get_state(State, mood, Answer),
    format("Bob is ~p~n", [Answer]).
@@ -40,6 +46,10 @@ handle(query(_), _, "Ugh?").
 
 handle(message(Message, Source), State, State) :-
    format("[bob] Received ~w from ~w~n", [Message, Source]).
+
+handle(terminating, State) :-
+    get_state(State, timer, Timer),
+    timer:stop(Timer).
 
 %% Private
 

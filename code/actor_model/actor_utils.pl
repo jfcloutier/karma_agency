@@ -2,10 +2,11 @@
     self/1, 
     start_actor/2, start_actor/3, 
     wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, 
-    send/2, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4, 
+    send/2, send_at_interval/5, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4,
     empty_state/1, get_state/3, put_state/3, put_state/4]).
 
 :- use_module(code(logger)).
+:- use_module(timer).
     
 self(Name) :-
     thread_self(Name).
@@ -54,6 +55,12 @@ send(Name, Message) :-
         (log(warn, actor_model, "Failed to send message ~p to ~w: ~p~n", [Message, Name, Exception]), fail)
         ).
 
+% Send undecorated message periodically
+send_at_interval(Target, Tag, Message, Delay, Timer) :-
+    self(Name),
+    atomic_list_concat([Name, Tag], "_", Timer),
+    timer:start(Timer, thread_send_message(Target, Message), Delay).
+
 send_message(Message) :-
     thread_self(Name),
     send_message(Name, Message).
@@ -92,6 +99,8 @@ send_control(Control) :-
 
 send_control(Name, Control) :-
     send(Name, control(Control)).
+
+% Send at interval
 
 wait_for_actor(Name) :-
     wait_for_actor(Name, 20).

@@ -38,7 +38,7 @@ init(Options, State) :-
     publish(ca_started, []).
 
 terminate :-
-    log(warn, effector_ca, 'Terminating').
+    log(warn, effector_ca, 'Terminated').
 
 handle(message(actuate(Action), _), State, State) :-
     actuate(State, Action).
@@ -65,6 +65,8 @@ handle(query(action_domain), State, ActionDomain) :-
 
 handle(query(Query), _, tbd) :-
     log(info, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
+
+handle(terminating, _).
 
 %%%%
 

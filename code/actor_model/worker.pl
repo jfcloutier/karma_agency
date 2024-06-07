@@ -84,10 +84,12 @@ run(Handler, State) :-
 process_message(state, _, State, State) :-
     writeln(State).
 
-process_message(control(stop), _, _, _) :-
+process_message(control(stop), Handler, State, _) :-
+    terminating(Handler, State),
     throw(exit(normal)).
 
-process_message(control(die), _, _, _) :-
+process_message(control(die), Handler, State, _) :-
+    terminating(Handler, State),
     thread_self(Name),
     thread_detach(Name),
     thread_exit(true).
@@ -110,6 +112,14 @@ process_message(Message, Handler, State, NewState) :-
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
     log(debug, worker, "~w got message ~p; calling ~p", [Name, Message, ModuleGoal]),
+    call(ModuleGoal).
+
+terminating(Handler, State) :-
+    Handler =.. [:, Module, Head],
+    Goal =.. [Head, terminating, State],
+    ModuleGoal =.. [:, Module, Goal],
+    thread_self(Name),
+    log(debug, worker, "~w is terminating with ~p", [Name, ModuleGoal]),
     call(ModuleGoal).
 
 % Inform supervisor of the exit

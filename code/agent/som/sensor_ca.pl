@@ -52,7 +52,7 @@ init(Options, State) :-
     publish(ca_started, []).
 
 terminate :-
-    log(warn, sensor_ca, 'Terminating').
+    log(warn, sensor_ca, 'Terminated').
 
 handle(message(Message, Source), State, State) :-
    log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
@@ -92,6 +92,8 @@ handle(query(action_domain), _, []).
 
 handle(query(Query), _, unknown) :-
     log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
+
+handle(terminating, _).
 
 %%%%
 
