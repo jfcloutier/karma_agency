@@ -5,7 +5,7 @@ It integrates
 
 * Body: The interface to effectors and sensors
 * Fitness: Self-maintenance risks assessment and consequent broadcasting of feelings
-* SOM: The dynamic collective of cognition and metacognition actors
+* SOM: The dynamic collective of cognition and metacognition actors. CAs are grown bottom-up and culled top-down.
 */
 
 /*
@@ -40,7 +40,6 @@ threads.
 :- use_module(som(sensor_ca)).
 :- use_module(som(effector_ca)).
 :- use_module(som(meta_ca)).
-:- use_module(fitness(competence)).
 :- use_module(fitness(engagement)).
 :- use_module(fitness(fullness)).
 :- use_module(fitness(integrity)).
@@ -55,8 +54,6 @@ start(BodyHost) :-
         worker(fullness, [topics([]), restart(permanent)]),
         % Physical integrity
         worker(integrity, [topics([]), restart(permanent)]),
-        % Ability to accurately predict
-        worker(competence, [topics([]), restart(permanent)]),
         % Moving and learning?
         worker(engagement, [topics([]), restart(permanent)])
     ],
