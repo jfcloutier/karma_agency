@@ -98,7 +98,7 @@ Last updated: April 10 2024
 
 ## A CA's beliefs
 
-* Abelief is what's imagined (latent) or synthesized by the CA
+* A belief is what's imagined (latent) or synthesized by the CA
   * from its perceptions
     * which are unrefuted predictions + prediction errors about the beliefs of CAs in its immediate umwelt
 * Beliefs are available to other CA's as _synthetic or latent_ and thus _novel_ perceptions
@@ -175,7 +175,7 @@ Last updated: April 10 2024
 
 * Changes in properties/relations observed by a CA are either caused by latent processes or by actions.
   * **In a static environment, they are caused entirely by actions!**
-  * No perception without action and no action without perception
+    * No perception without action and no action without perception
 * To make sense of/apperceive the consequences of actions, they must be observed together with the property/relation changes they (may) cause
 * A CA exposes, by name, the actions it can execute
 * A CA must always be capable of acting
@@ -183,13 +183,13 @@ Last updated: April 10 2024
 
 * The action repertoire of a CA consists of
   * the actions it synthesized
-  * plus the distinct actions exposed by CAs in its umwelt
+    * starting from the distinct actions exposed by CAs in its umwelt
 * The CA of an effector exposes atomic actions
   * For example, a wheel CA exposes the atomic actions "spin" and "reverse spin"
-* A CA syntesizes actions from the actions exposed by CAs in its umwelt, names them and exposes them in turn
+* A CA syntesizes actions from the actions exposed by CAs in its umwelt, names them and exposes the former in turn
 * A synthetic action is a named list of actions
-  * e.g. action_2 = [action(ca_2, action_1), action(ca_2, action_1), action(ca_3, action_2)]
-    * an action can be repeated
+  * e.g. action_2 = [action(effector_ca1, action_1), action(effector_ca1, action_2), action(effector_ca2, action_3)]
+    * an action can be repeated to synthesize a replacement, synthetic action
   * a synthetic action is, via closure, a sequence of atomic actions
 
 ### Why does a CA defines a new action?
@@ -246,8 +246,6 @@ Last updated: April 10 2024
     * How full/empty are energy/resource stores (hunger when low)
   * Integrity
     * Degree of structural integrity (pain when low)
-  * Confidence
-    * Foresight - Ability to predict (fear when low)
   * Engagement
     * High when learning (boredom when low)
 * `feeling(<feeling type>, good | bad | neutral)`
@@ -263,12 +261,12 @@ Last updated: April 10 2024
     * work done - energy decreases
   * CA cognitive sensations
     * mental effort - energy decreases
-    * prediction success rate - confidence increases/decreases
+    * prediction success rate - competence increases/decreases
     * relevance (rate of received predictions, intended composited actions)
   * The passing of time
     * healing - integrity increases
     * base metabolism - resources/energy decreases
-* Any change in fullness/integrity/confidence intensity is signaled to all CAs
+* Any change in fullness/integrity intensity is signaled to all CAs
 * For each CA, for each time slice, there's an average intensity of each feeling type
 
 ## Constraints

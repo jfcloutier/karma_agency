@@ -23,7 +23,7 @@ Homeostasis:
 * The fitness actor responsible for the event collects messaged proposals and the selects then best one
   * The fitness actor sends a message back OKing the culling
 
-* If fullness is critically low, the meta-CA proposes to sacrifice the costliest of its non-relevant ward CAs
+* If fullness is critically low, the meta-CA proposes to sacrifice the most unjustifiably costly (cost/competence) of its non-relevant ward CAs
   * Cost = local cost + shared cost of its transitive umwelt
     * if an L - 1 CA is in the umwelt of a level L CA and no others, then that CA inherits the entire (unshared) cost of the L - 1 CA
 * If integrity is critically low, the meta-CA proposes to sacrifice the non-relevant ward CA most directly responsible for loss of integrity
