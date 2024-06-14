@@ -96,7 +96,7 @@ Last updated: April 10 2024
     * The duration of the perceptual trend supporting the belief, modulated by (see below)
       * the average precision and variance of the perceptions aggregated by the trend (see below)
 
-## A CA's beliefs
+## A CA's synthetic beliefs
 
 * A belief is what's imagined (latent) or synthesized by the CA
   * from its perceptions
@@ -136,7 +136,7 @@ Last updated: April 10 2024
 
 #### Inducing beliefs from trends
 
-* Beliefs are induced from the analysis of trends, themsleves produced from analyzing a perceptual history.
+* Beliefs are induced from the analysis of trends, themselves produced from analyzing a perceptual history.
   * A belief induced form the analysis of a trend is then supported by that trend.
   * Induction can result from
     * Associating
