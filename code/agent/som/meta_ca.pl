@@ -1,33 +1,6 @@
 /*
-A meta-cognition actor adds and removes CAs at its level.
 
-Constraints:
-
-* Only competent (good predictor) CAs from level L - 1 can be in the (static) umwelt of a new CA at level L
-* Level L is grown one CA at a time until all competent Level - 1 CAs are covered
-* When creating a level L CA,
-  * a meta-CA selects a random N >= 2 subset of all competent L-1 CAs as the new CA's umwelt such that 
-    * it increases coverage of Level - 1
-    * all effector CAs are transitively in the umwelt.
-* A meta-CA can not cull a relevant CA at its level L, i.e. if the CA is in the umwelt of a more abstract CA at level L + 1.
-* A meta-CA culls a non-relevant level L CA if it is persistently incompetent.
-
-Lifecycle:
-
-* A level L + 1 meta-CA is started by the Level L meta-CA when Level L completely covers Level L - 1
-* A meta-CA stops when there are no CAs at level L - 1
-
-Homeostasis:
-
-* The response to critically low fitness events is to message a proposal to cull one non-relevant (but possibly competent) ward CA
-* The fitness actor responsible for the event collects messaged proposals and the selects then best one
-  * The fitness actor sends a message back OKing the culling
-
-* If fullness is critically low, the meta-CA proposes to sacrifice the most unjustifiably costly (cost/competence) of its non-relevant ward CAs
-  * Cost = local cost + shared cost of its transitive umwelt
-    * if an L - 1 CA is in the umwelt of a level L CA and no others, then that CA inherits the entire (unshared) cost of the L - 1 CA
-* If integrity is critically low, the meta-CA proposes to sacrifice the non-relevant ward CA most directly responsible for loss of integrity
-* If engegement is critically low, the meta-CA proposes to sacrifice the least active, non-relevant ward CA
+Meta-cognition actor
 
 Events:
 

@@ -22,6 +22,12 @@ A sensor CA
     * latency
     * belief_domain -> responds with a [Sense-ValueDomain], e.g. [distance-domain{from:0, to:250}]
     * action_domain -> always responds with []
+
+* believes its sensor's reading (observation) to a point
+    * it remembers past sensings
+    * applies a Kalman filter to determine its belief about the current sense value
+        * see https://thekalmanfilter.com/kalman-filter-explained-simply/
+        * to reduce sensor noise
 */
 
 :- module(sensor_ca, []).

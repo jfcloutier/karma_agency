@@ -6,6 +6,24 @@ It integrates
 * Body: The interface to effectors and sensors
 * Fitness: Self-maintenance risks assessment and consequent broadcasting of feelings
 * SOM: The dynamic collective of cognition and metacognition actors. CAs are grown bottom-up and culled top-down.
+
+Hierarchical SOM and agency
+
+* A Level N + 1 CA 
+    * models the (Level N) CAs in its umwelt but not vice-versa
+        * umwelt CAs can't make sense of what's asked of/imposed on them (Froese's Irruption Theory?)
+    * reduces the agency of its umwelt
+        * restricts the causal theory search space of umwelt CAs
+            * they can not disappear trends integrated in parent CA's beliefs (esp. trends involving abduced objects/predicates)
+                * this imposes constraints on signatures of causal theories
+                    * the choice of abduced objects/predicates is reduced
+        * impose intents on Level N CAs to achieve its own goals
+            * umwelt CAs decide how to fulfill imposed intents (they are not micromanaged, just directed)
+            * they can't fulfill their own goals while fulfilling their parent CA's goals
+                * they have fewer opportunity to intend their own goals and work on being/staying relevant
+    * has a better chance than its umwelt to keep the agent alive 
+        * it can detect the more abstract observation trends that are more likely to correlate with fitness trends
+        * and thus its goals to validate/invalidate its beliefs (these trends) are likely more effective
 */
 
 /*
