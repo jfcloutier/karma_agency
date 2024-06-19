@@ -1,148 +1,162 @@
 # Cognition actor
 
-A CA strives to become competent at predicting its umwelt (merkwelt + wirkwelt) so it can be relevant to other CAs - and survive
+A CA strives to become increasingly compentent at making sense of its umwelt and at altering its own beliefs.
+
+A CA makes sense of its umwelt by predicting changes to it (i.e. predicting incoming observations)
+and by deriving beliefs from past observations that then become observations available to parent CAs (higher-level CAs that have the CA in their umwelts).
+
+A CA is effective at impacting its umwelt if it has reliable policies it can apply to validate pleasant beliefs or invalidate unpleasant beliefs.
+
+The more competent a CA is, the more likely it is that its parents CAs will be competent and survive, and thus the more likely it is that the CA itself will survive since orphaned CAs are susceptible to being removed.
 
 ## Observing (its umwelt's beliefs)
 
 * A CA predicts the beliefs of CAs in its umwelt
   * If the CA has no prior observations, it makes random, domain-bounded predictions about all beliefs in its umwelt
-  * If the CA has no model but has prior observations, it predicts that the latest observations are unchanged.
-  * If the CA has a causal model, it uses it to predict the next observations.
+  * If the CA has no causal theory but has prior observations, it predicts that the latest observations are unchanged.
+  * If the CA has a causal theory, it uses it to predict the next observations.
 * A CA predicts the success of its policies
-* If a prediction is met with a prediction error, the prediction error becomes the latest observation, else the prediction does.
-* A CA drops repeated states (state = observations in a time frame) - i.e. if nothing changes, remembered time stands still
+* If a prediction is met with a prediction error, the prediction error becomes the latest observation, else its the the prediction.
+* A CA drops repeated states (state = observations in the same time frame) - i.e. if nothing changes, remembered time stands still
 
-## Modeling (causality between observations)
+## Modeling (causality relating observations)
 
-* To be competent, a CA needs to make sense of its observations via causal models of
+* To be competent, a CA needs to make sense of its observations via a causal theory of
   * how its umwelt changes (or not) on its own
   * how its umwelt changes (or not) by executed policies
-* A CA requests a causal model from the Apperception Engine when
-  * it has no model and a model can be generated from its remembered states
-  * it has a model and its predictive capabilities have fallen by half or more since acquired
-* A CA integrates beliefs across its umwelt using its causal model
+* A CA requests a causal theory from the Apperception Engine when
+  * it has no theory and a theory can be generated from its remembered states
+  * it has a theory and its predictive capabilities have degraded since acquired such that it is no longer good enough
+* A CA's causal theory integrates beliefs across its umwelt
   * co-occurrences of observations from static rules
+    * if a static rule states "A whenever B and C:, then observing B and C at time T infers (deductively) observing A also at T
     * e.g if the proximity got smaller then the ambient light must also have gotten brighter
   * sequencing of observations from causal rules
-    * e.g. the color becomes gray after the color being green
-* The CA gets a model's trace
-  * to "observe" latent properties/relations given the current state
-    * latent properties/relations
-  * to predict
-    * the consequences of the execution of a policy selected to achieve an intent by the CA
-    * "spontaneous" changes in the umwelt
+    * if a causal rule states "A after B and C", then
+      * observing A at time T entails (abductively) B and C at T-1
+      * having observed B and C at T-1 entails (deductively) A at time T
+    * e.g. the color becomes gray after the color was green
+* Inferred observations (that are not also umwelt-affirmed observations) are marked as "inferred" to distinguish them
+  * A new causal theory leads the CA to reconsider inferred observations across remembered states
+  * A CA reconsidering its past is opaque to parent CAs
+    * A CA never questions observations affirmed by its umwelt (even if umwelt CAs might reconsider their past beliefs)
+      * Because the internal belief state of a CA is opaque to other CAs and is only revealed by
+        * prediction errors
+        * events signaling new belief predicates (names and domains) and new (latent) objects
+          * the belief space of a CA never shrinks
+* The CA applies the theory's causal rules to predict the next state so it can make predictions
+  * from the execution of a policy selected to achieve an intent by the CA from the previous state
+  * due to "spontaneous" changes in the umwelt
+* The parent CAs constrain the vocabulary of a CA's causal theory, should the CA look for a better one
+  * or else beliefs of parent CAs based on latent observations would become unfounded
+  * the parent CAs can provide these constraints to the CA
+* Up-down and down-up constraints
+  * Umwelt CAs constrain the space of beliefs of their parent CAs
+  * Parent CAs constrain the space of causal theories of the CAs in their umwelts
 
 ## Believing (detecting patterns of change in observations)
 
-* A sensor CA has atomic beliefs obtained from measurements
-* A CA gets its beliefs from observing its umwelt and doing
-  * abduction
-    * via its causal model abducting properties, relations and/or objects
-    * the causal model anticipates with varying accuracy state-to-state changes
-    * it introduces beliefs about latent reality posited from making sense of observing the umwelt
-    * some latent reality might only become apparent at a sufficient level of abstraction
-  * induction
-    * by detecting trends in remembered states
-      * trends capture patterns of change over mutliple states that may not be inferrable from the causal model
-      * e.g. the distance getting smaller is stable (trend about a trend)
+* A sensor CA has atomic beliefs obtained from Kalman-filtered measurements
+* A CA gets its beliefs from detecting trends in the remembered observations of its umwelt
+  * trends capture patterns of change over many states that are not be inferrable from the causal theory (state-to-state transitions)
+    * e.g. the distance getting smaller is stable (trend about a trend)
+* A CA has no belief until it detects trends
 * Detecting trends
-  * trends are properties about observations changing (or not) over time
+  * trends capture how observations most recently vary across more than two consecutive states
+  * the subject of the trend (property or relation) must match the head of a causal rule of the CA's causal theory
+    * i.e. obeservations on that subject are expected to vary across states
   * trends have values
     * up, down, stable, unstable, fluctuant
     * trends of trends can be stable, unstable and fluctuant
       * stable: e.g. the sub-trend is consistently up
       * unstable: e.g. the sub-trend is up then down then stable...
-      * fluctuant: e.g. the sub-trend is up then down then up then down...
+      * fluctuant: e.g. the sub-trend values alternate
   * trend values have durations
     * since time frame T and until and the trend value changes or the trend disappears
+    * trends about the same subject (e.g. ambient brightness) do not overlap in time
+    * trends are tolerant of "noise" - mostly up is up
   * values are assigned from
-    * patterns of change in the number of objects related to a given object
-    * patterns of change in the value of a given object's property
+    * patterns of change in the number of objects related to a given object by a given relation (r(object, X) is the subject)
+    * patterns of change in the value of a given object's property (p(object, V) is the subject)
     * property value domains are ordered if numerical
       * allowing for up/down trend values
 * Synthesizing a belief from a detected trend
-  * A property or relation defined by a detected trend
+  * A synthetic property or relation names a detected trend
     * A synthetic relation between objects X and Y is a trend detected about an observed relation between X and Y
-      * The observed relation (an umwelt CAs belief) may itself be
-        * defined by an umwelt CA as a trending relation between X and Y
-        * or an atomic relation between X and Y
+      * The observed relation (an umwelt CAs belief) may itself be a trending relation or an atomic relation
     * A synthetic property of object X is a trend detected about an observed property of X
-      * The observed property (an umwelt CAs belief) may itself be
-        * defined by an umwelt CA as a trending property of X
-        * or an atomic property of X
-* Synthesizing a belief from posited latent reality
-  * If an umwelt CA believes in the existence of a latent object/property/relation, then the CA must include it in its causal model
+      * The observed property (an umwelt CAs belief) may itself be a trending property or an atomic property
 * Naming a synthetic belief
   * The CA assigns an agent-wide, forever unique predicate name to the belief
   * The CA remembers and hides the definition of the belief
-    * as a detected trend (thick now)
-    * as a latent object/property/relation
 * Exposing a synthetic belief
-  * A CA exposes its beliefs as objects/relations/properties but hides their definition/origin
-  * To other CAs a synthetic belief looks the same as an atomic belief
-* Beliefs are (if transitively opened up) recursive structures (trends of trends ... of atomic or abduced beliefs)
+  * A CA exposes its beliefs (detected trends) so they are indistinguisable from atomic properties or relations
+* Beliefs are (if transitively opened up) recursive structures (trends of trends ... of atomic properties/relations)
   * They are composed of simpler beliefs, down to atomic beliefs (held by sensor CAs)
   * This makes beliefs semantically transparent to an outside observer but obscure between CAs
-* A CA's set of beliefs changes when
+* A CA's set of beliefs grows when
   * a new trend (whatever its value) is detected
-  * a trend disappears when
-    * its subject (an abduced object, property or relation or trend) is no longer observed
-  * changing the value of a trend does not add to the set of beliefs
+    * changing the value of a trend does not add to the set of beliefs the CA makes available as observations to parent CAs
+  * a CA's space of beliefs never shrinks
+    * a trend never disappear
+    * it can become boring/uninformative
 
 ## Acting (on beliefs)
 
-* A CA intends to validate a pleasant belief and invalidate an unplesant belief
-* By furthering or interrupting (impacting) sub-beliefs via intents delegated to umwelt CAs
-* Realizing and intent is recursive because a belief is a recursive structure of beliefs held by umwelt CAs
+* A CA seeks to validate a pleasant belief and invalidate an unplesant belief
+  * By furthering or interrupting (i.e. impacting) sub-beliefs via intents delegated to umwelt CAs
+* Realizing an intent is recursive because a belief is a recursive structure of beliefs held by umwelt CAs
 * An intent contains
-  * a goal - the belief to validate or invalidate
-  * a policy
+  * a goal - the belief of the CA to validate or invalidate
+  * a policy - which belief(s) of umwelt CAs to validate/invalidate
   * the initiating CA
   * a deadline (the end of the CA's time frame)
 * Policy selection
-  * What intents a CA emits to its umwelt depends on the CA's goal (further or disrupt a belief it holds)
-  * There might be alternative ways to achieve a goal (impacting a held belief) depending on the definition ofthe belief
-  * Each alternative set of intents on the umwelt that could achieve a goal is a policy
-    * If the belief is the effect of one or more causal rules
-      * determining which rule(s) apply to the current state - i.e. which, if any, were operative
-      * for each opertive rule
-        * impacting the conjunction of cause beliefs
-          * furthering all if the goal is to further the effected belief
-          * disrupting any if the goal is to disrupting the effected belief
-    * If the belief is a detected trend
-      * direct the umwelt to impact the trend based on the value of the trend and the goal
+  * What intents a CA emits to its umwelt depends on the CA's goal
+  * Determining alternative ways to achieve a goal
+    * identify the subject of the trend defining the belief
+    * The subject of the trend is the head of one or more causal rules in the CA's causal theory
+    * This entails various combination of causative sub-beliefs, from the bodies of the causal rules, that the CA may want to impact
+    * A policy is a set of intents each with the goal of impacting a sub-belief (i.e. a belief in the umwelt)
+  * Each alternative set of intents is a distinct policy that can be tried
+    * How sub-beliefs are intended to be impacted depends on how the CA's belief is to be impacted
+      * furthering all if the goal is to further the CA's belief
+      * disrupting any if the goal is to disrupting the CA's belief
+    * Since a belief is a detected trend, impacting it depends on the type of impact and the value of the trend
+      * if the value of the trend to impact is
         * stable
-          * disrupt -> intend to disrupt the sub-belief
-          * further -> intend to further the sub-belief
+          * disrupt -> intend to disrupt sub-beliefs
+          * further -> intend to further sub-beliefs
         * unstable
-          * disrupt -> intend to further the sub-belief
-          * further -> intend to disrupt the sub-belief
+          * disrupt -> intend to further sub-beliefs
+          * further -> intend to disrupt sub-beliefs
         * fluctuant
-          * disrupt -> intend to further the sub-belief (stop fluctuation)
-          * further -> intend to disrupt the sub-belief (keep fluctuating)
+          * disrupt -> intend to further sub-beliefs (stop fluctuation)
+          * further -> intend to disrupt sub-beliefs (keep fluctuating)
         * up
-          * disrupt -> intend to down the sub-belief
-          * further -> intend to up the sub-belief
+          * disrupt -> intend to down sub-beliefs
+          * further -> intend to up sub-beliefs
         * down
-          * disrupt -> intend to up the sub-belief
-          * further -> intend to down the sub-belief
-* A CA will try alternative intents until the received intent is realized (or times up)
-  * based on its causal model which might describe alternate causes for the same outcome
-  * Or it guesses if it has no model yet (babbling)
+          * disrupt -> intend to up sub-beliefs
+          * further -> intend to down sub-beliefs
+* A CA receiving an intent from a parent CA will try alternative policies until the received intent is realized (or times up)
+  * based on its causal theory which might describe alternate causes for the same outcome
+  * Or on guesses if it has no theory yet (babbling)
 * One policy execution at a time
-  * A CA can not execute its own policy if it is executing a higher CA's policy
+  * A CA can not execute its own policy if it is executing a parent CA's policy
     * Lower-level CAs relinquish some autonomy for the greater good
 * Learning affordances
-  * A CA gets feedback as to whether the delegated intents from its policy were realized
-  * A CA detects remembers how successul a policy was at achieving a goal
-    * A CA selects the more successful policies more often but not always
+  * A CA gets feedback as to whether the intents in an executed policy were realized
+  * A CA remembers how successul each policy was at achieving a goal
+    * A CA selects the more recently successful policies more often (it will also try others in case they might be better)
   * A CA holding atomic beliefs needs to discover what actions affect its beliefs
 
-## Caring (about beliefs)
+## Attention
 
 * A belief, being a trend, is associated with a fitness/pleasantness trend (better, worse, same, unclear)
-* A CA does not attempt to validate/invalidate beliefs under a deviation-from-neutral threshold
-* Higher-level beliefs are more likely to be associated with clear fitness trends than lower-level beliefs are
+  * A CA remembers the ambient fitness at each time frame
+* A CA normally does not intend to validate/invalidate beliefs when fitness trends not far enough from neutral
+* Higher-level beliefs are more likely to be associated with clear fitness trends than lower-level beliefs
   * This drives the SOM to add levels until clear fitness trends appear
   * Afforded control over fitness makes up fo resource consumption from adding levels to the SOM
 
@@ -153,8 +167,8 @@ A CA strives to become competent at predicting its umwelt (merkwelt + wirkwelt) 
   * Get rid of beliefs (least cared about first)
   * Forgetting states (oldest first)
 * Low integrity
-  * Set a higher pleasantness threshold triggering intentions (reduce likelihood to act)
+  * Set a higher pleasantness threshold for triggering intents (reduces likelihood to act)
 * Low engagement
-  * Set a lower pleasantness threshold triggering intentions (increase likelihood to act)
-  * Refresh causal model to discover previously missed causes to act
+  * Set a lower pleasantness threshold for triggering intents (increase likelihood to act)
+  * Refresh causal theory to discover previously missed causes to act
   * When threshold is 0, even neutral beliefs will be validated (babbling)

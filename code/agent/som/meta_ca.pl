@@ -1,6 +1,8 @@
 /*
 
-Meta-cognition actor
+Meta-cognition actor (meta-CA)
+
+A meta-CA adds and removes cognition actors (CAs) at the level of the SOM it manages.
 
 Events:
 
