@@ -143,13 +143,17 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
   * based on its causal theory which might describe alternate causes for the same outcome
   * Or on guesses if it has no theory yet (babbling)
 * One policy execution at a time
-  * A CA can not execute its own policy if it is executing a parent CA's policy
+  * A CA can not intend its own goal if it is executing a parent CA's policy
     * Lower-level CAs relinquish some autonomy for the greater good
 * Learning affordances
   * A CA gets feedback as to whether the intents in an executed policy were realized
   * A CA remembers how successul each policy was at achieving a goal
     * A CA selects the more recently successful policies more often (it will also try others in case they might be better)
-  * A CA holding atomic beliefs needs to discover what actions affect its beliefs
+  * A CA emits a goal-free intent to observe what happens (babbles)
+    * when given the opportunity
+      * all fitness levels are high and the CA is not involved in a parent's intent
+    * or when necessary
+      * the CA lacks beliefs (because the umwelt does not change) and thus affordances
 
 ## Attention
 
@@ -160,15 +164,23 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
   * This drives the SOM to add levels until clear fitness trends appear
   * Afforded control over fitness makes up fo resource consumption from adding levels to the SOM
 
-## Regulating (to respond to fitness risks)
+## Regulating (to respond to fitness measures)
 
-* Low fullness
-  * Get rid of remembered policies (least effective first)
-  * Get rid of beliefs (least cared about first)
-  * Forgetting states (oldest first)
-* Low integrity
-  * Set a higher pleasantness threshold for triggering intents (reduces likelihood to act)
-* Low engagement
-  * Set a lower pleasantness threshold for triggering intents (increase likelihood to act)
-  * Refresh causal theory to discover previously missed causes to act
-  * When threshold is 0, even neutral beliefs will be validated (babbling)
+* The agent's fitness actors (fullness, integrity and engagement) each keep track of an agent fitness measure.
+  * The agent starts life with highest fullness, highest integrity and lowest engagement (all initially broadcasted)
+* When a measure changes, the fitness actor emits an event listened to by all CAs (and meta-CAs)
+* In each time frame, a CA responds to the latest brodacasted measure while its high or low
+* It responds to
+  * low fullness by
+    * getting rid of an ineffective policy (if any)
+    * else getting rid of an irrelevant belief (if any)
+    * else forgetting the oldest state (unless it supports held beliefs)
+  * high fullness by
+    * trying to upgrade the causal theory
+  * low integrity by
+    * ratcheting up pleasantness threshold for triggering intents (reduces likelihood to act)
+  * high integrity or low engagement
+    * ratcheting down pleasantness threshold for triggering intents (increases likelihood to act)
+      * When threshold is 0, even neutral beliefs will be validated
+  * high fullness and high integrity
+    * babbling
