@@ -4,7 +4,7 @@ Agency is the top level module.
 It integrates
 
 * Body: The interface to effectors and sensors
-* Fitness: Self-maintenance risks assessment and consequent broadcasting of feelings
+* Wellbeing: Self-maintenance risks assessment and consequent broadcasting of feelings
 * SOM: The dynamic collective of cognition and metacognition actors. CAs are grown bottom-up and culled top-down.
 
 Hierarchical SOM and agency
@@ -22,7 +22,7 @@ Hierarchical SOM and agency
             * they can't fulfill their own goals while fulfilling their parent CA's goals
                 * they have fewer opportunity to intend their own goals and work on being/staying relevant
     * has a better chance than its umwelt to keep the agent alive 
-        * it can detect the more abstract observation trends that are more likely to correlate with fitness trends
+        * it can detect the more abstract observation trends that are more likely to correlate with wellbeing trends
         * and thus its goals to validate/invalidate its beliefs (these trends) are likely more effective
 */
 
@@ -58,16 +58,16 @@ threads.
 :- use_module(som(sensor_ca)).
 :- use_module(som(effector_ca)).
 :- use_module(som(meta_ca)).
-:- use_module(fitness(engagement)).
-:- use_module(fitness(fullness)).
-:- use_module(fitness(integrity)).
+:- use_module(wellbeing(engagement)).
+:- use_module(wellbeing(fullness)).
+:- use_module(wellbeing(integrity)).
 
 start(BodyHost) :-
     log(info, agency, 'Starting agency'),
     body:capabilities(BodyHost, Sensors, Effectors),
     log(info, agency, 'Sensors: ~p', [Sensors]),
     log(info, agency, 'Effectors: ~p', [Effectors]),
-    FitnessChildren = [
+    WellbeingChildren = [
         % Energy level
         worker(fullness, [topics([]), restart(permanent)]),
         % Physical integrity
@@ -77,7 +77,7 @@ start(BodyHost) :-
     ],
     AgencyChildren = [
         pubsub,
-        supervisor(fitness, [children(FitnessChildren), restart(permanent)]),
+        supervisor(wellbeing, [children(WellbeingChildren), restart(permanent)]),
         supervisor(som, [restart(permanent)])
         ],
     supervisor:start(agency, [children(AgencyChildren)]),

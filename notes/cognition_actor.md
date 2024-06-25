@@ -3,20 +3,20 @@
 A CA strives to become increasingly compentent at making sense of its umwelt and at altering its own beliefs.
 
 A CA makes sense of its umwelt by predicting changes to it (i.e. predicting incoming observations)
-and by deriving beliefs from past observations that then become observations available to parent CAs (higher-level CAs that have the CA in their umwelts).
+and by deriving beliefs from trends in past observations that then become observations available to parent CAs (higher-level CAs that have the CA in their umwelts).
 
 A CA is effective at impacting its umwelt if it has reliable policies it can apply to validate pleasant beliefs or invalidate unpleasant beliefs.
 
-The more competent a CA is, the more likely it is that its parents CAs will be competent and survive, and thus the more likely it is that the CA itself will survive since orphaned CAs are susceptible to being removed.
+The more competent a CA is, the more likely it is that its parents CAs will be competent and survive, and thus the more likely it is that the CA itself will survive since orphaned CAs are susceptible to being removed when wellbeing is low.
 
 ## Observing (its umwelt's beliefs)
 
-* A CA predicts the beliefs of CAs in its umwelt
+* A CA predicts observations of the beliefs of CAs in its umwelt
   * If the CA has no prior observations, it makes random, domain-bounded predictions about all beliefs in its umwelt
   * If the CA has no causal theory but has prior observations, it predicts that the latest observations are unchanged.
   * If the CA has a causal theory, it uses it to predict the next observations.
-* A CA predicts the success of its policies
-* If a prediction is met with a prediction error, the prediction error becomes the latest observation, else its the the prediction.
+* A CA predicts the success of its policies since an executed policy is also an observation
+* If a prediction is met with a prediction error, the prediction error becomes the latest observation, else its the prediction.
 * A CA drops repeated states (state = observations in the same time frame) - i.e. if nothing changes, remembered time stands still
 
 ## Modeling (causality relating observations)
@@ -35,14 +35,15 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
     * if a causal rule states "A after B and C", then
       * observing A at time T entails (abductively) B and C at T-1
       * having observed B and C at T-1 entails (deductively) A at time T
-    * e.g. the color becomes gray after the color was green
+    * e.g. the color becomes gray if the color was green
 * Inferred observations (that are not also umwelt-affirmed observations) are marked as "inferred" to distinguish them
   * A new causal theory leads the CA to reconsider inferred observations across remembered states
   * A CA reconsidering its past is opaque to parent CAs
-    * A CA never questions observations affirmed by its umwelt (even if umwelt CAs might reconsider their past beliefs)
+    * A CA never questions observations affirmed by its umwelt (even if umwelt CAs might reconsider their past affirmed beliefs)
       * Because the internal belief state of a CA is opaque to other CAs and is only revealed by
         * prediction errors
-        * events signaling new belief predicates (names and domains) and new (latent) objects
+        * and events signaling new belief predicates (names and domains) and new (latent) objects
+          * affording new kinds of predictions
           * the belief space of a CA never shrinks
 * The CA applies the theory's causal rules to predict the next state so it can make predictions
   * from the execution of a policy selected to achieve an intent by the CA from the previous state
@@ -51,8 +52,10 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
   * or else beliefs of parent CAs based on latent observations would become unfounded
   * the parent CAs can provide these constraints to the CA
 * Up-down and down-up constraints
-  * Umwelt CAs constrain the space of beliefs of their parent CAs
   * Parent CAs constrain the space of causal theories of the CAs in their umwelts
+    * By constraining their vocabularies
+  * Umwelt CAs constrain the space of beliefs of their parent CAs
+    * By constraining what the beliefs derived from
 
 ## Believing (detecting patterns of change in observations)
 
@@ -62,7 +65,7 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
     * e.g. the distance getting smaller is stable (trend about a trend)
 * A CA has no belief until it detects trends
 * Detecting trends
-  * trends capture how observations most recently vary across more than two consecutive states
+  * trends capture how observations most recently vary across more than two of the latest consecutive states
   * the subject of the trend (property or relation) must match the head of a causal rule of the CA's causal theory
     * i.e. obeservations on that subject are expected to vary across states
   * trends have values
@@ -151,24 +154,24 @@ The more competent a CA is, the more likely it is that its parents CAs will be c
     * A CA selects the more recently successful policies more often (it will also try others in case they might be better)
   * A CA emits a goal-free intent to observe what happens (babbles)
     * when given the opportunity
-      * all fitness levels are high and the CA is not involved in a parent's intent
+      * all wellbeing levels are high and the CA is not involved in a parent's intent
     * or when necessary
       * the CA lacks beliefs (because the umwelt does not change) and thus affordances
 
 ## Attention
 
-* A belief, being a trend, is associated with a fitness/pleasantness trend (better, worse, same, unclear)
-  * A CA remembers the ambient fitness at each time frame
-* A CA normally does not intend to validate/invalidate beliefs when fitness trends not far enough from neutral
-* Higher-level beliefs are more likely to be associated with clear fitness trends than lower-level beliefs
-  * This drives the SOM to add levels until clear fitness trends appear
-  * Afforded control over fitness makes up fo resource consumption from adding levels to the SOM
+* A belief, being a trend, is associated with a wellbeing/pleasantness trend (better, worse, same, unclear)
+  * A CA remembers the ambient wellbeing at each time frame
+* A CA normally does not intend to validate/invalidate beliefs when wellbeing trends not far enough from neutral
+* Higher-level beliefs are more likely to be associated with clear wellbeing trends than lower-level beliefs
+  * This drives the SOM to add levels until clear wellbeing trends appear
+  * Afforded control over wellbeing makes up fo resource consumption from adding levels to the SOM
 
-## Regulating (to respond to fitness measures)
+## Regulating (to respond to wellbeing measures)
 
-* The agent's fitness actors (fullness, integrity and engagement) each keep track of an agent fitness measure.
+* The agent's wellbeing actors (fullness, integrity and engagement) each keep track of an agent wellbeing measure.
   * The agent starts life with highest fullness, highest integrity and lowest engagement (all initially broadcasted)
-* When a measure changes, the fitness actor emits an event listened to by all CAs (and meta-CAs)
+* When a measure changes, the wellbeing actor emits an event listened to by all CAs (and meta-CAs)
 * In each time frame, a CA responds to the latest brodacasted measure while its high or low
 * It responds to
   * low fullness by

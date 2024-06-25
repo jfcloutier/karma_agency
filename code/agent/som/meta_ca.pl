@@ -16,9 +16,9 @@ Events:
   * ca_added, [name: Name]
 
 * Messages
-  * to appropriate fitness actor
+  * to appropriate wellbeing actor
     * proposed_culling([ca: Name, level: Level, savings: Number]), 
-  * from a fitness actor
+  * from a wellbeing actor
     * cull([ca: WardName])
     
 State:
