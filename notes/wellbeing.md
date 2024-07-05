@@ -1,76 +1,88 @@
 # Wellbeing
 
-Wellbeing is a collection of agent-wide measures the agent strives to maximize. Wellbeing provides normativity and drives attention.
+Wellbeing is a collection of measures the agent strives to maximize. Wellbeing is a collection of measures the agent strives to maximize. Wellbeing imparts normativity to beliefs, motivates activity, and focuses attention.
 
 The measures are:
 
-* Fullness: A measure of how much energy the agent has in store to pay for its metabolic and activity costs
-* Integrity: A measure of the structural and metabolic health of the agent
-* Engagement: A measure of how active the agent is at making sense of its environment
+* **Fullness**: A measure of how much energy the agent has in store, to pay for "metabolic" and activity costs
+* **Integrity**: A measure of the "health" of the agent, helped by avoiding collisions and not "eating poison"
+* **Engagement**: A measure of how much the agent is engaging its environment, by making sense of it and acting in it
 
-Wellbeing measures integrate information the Actors communicate about their metabolic draw and actions taken throughout their lifecycles.
-The measures of wellbeing are centrally computed and broadcasted so that they permeate the collective of Cognition Actors (CAs) and Meta-Cognition Actors (M-CAs).
+The wellbeing measures are numbers, one for each measure. Each measure aggregates information communicated by the Cognition Actors about their metabolic draw, actions they take etc.
 
-Wellbeing provides the context by which *normativity* is associated with the beliefs of CAs. CAs detect wellbeing trends and associate them with the beliefs they synthesize from current and past observation. Beliefs associated with positively trending wellbeing measures are "pleasant" beliefs. Beliefs associated with negatively trending wellbeing measures are "unpleasant" beliefs. Beliefs associated with neither are "neutral" beliefs.
+The measures of wellbeing are centrally computed and then broadcasted. They permeate the collective of Cognition Actors (CAs) and Meta-Cognition Actors (M-CAs - actors responsible for each curating a level of abstraction within a hierarchy of CAs).
 
-Wellbeing drives attention: CAs intend actions to validate pleasant beliefs and actions to invalidate unplesant beliefs. Neutral beliefs are "left alone" by the CA, but may compose non-neutral beliefs of more abstract CAs.
+Wellbeing provides the context by which *normativity* is associated with the beliefs of CAs. CAs detect wellbeing levels and trends and correlate these with beliefs the CAs synthesize from current and past observations. Beliefs associated with high wellbeing measures are "pleasant" beliefs. Beliefs associated with low wellbeing measures are "unpleasant" beliefs. Beliefs associated with neither are "neutral" beliefs.
 
-Wellbeing also provides the motivation for M-CAs to cull or add CAs to manage overall metabolic expenditures or nudge up overall engagement.
+Wellbeing drives attention: CAs intend actions to validate pleasant beliefs and actions to invalidate unplesant beliefs. Neutral beliefs are normally "left alone" by the CA but are kept as they may compose non-neutral beliefs of more abstract CAs.
 
-Wellbeing is implemented by actors, one per measure. Each wellbeing actor listens to events broadcasted by CAs that are relevant to increasing or decreasing the wellbeing measure managed by the actor. Each wellbeing actor also broadcasts changes to its wellbeing measure. These broadcasts are listened to by all CAs and M-CAs.
+Wellbeing also provides the motivation for M-CAs to cull or add CAs so as to manage overall energy expenditures or nudge up overall engagement.
 
 ## Fullness
 
-The fullness wellbeing actor maintains a global energy budget to pay for the agent's metabolic and activity costs. It starts full.
+The fullness Wellbeing Actor maintains a global energy budget. It starts full.
 
 An agent's collective of CAs is mortal; when there is no energy left, it dies.
 
-Energy is replenished by the action of `eating` when the agent is positioned over food. It is spent globally whenever the agent recovers from lost integrity.
+Energy is replenished by the action of `eating` but only when the agent is positioned over food (the agent may or may not know it is over food).
 
-Energy is spent individually by each Cognition Actor when
+Energy is spent individually by each CA when
 
-* completing a time frame (baseline cost)
+* completing a time frame (baseline metabolic cost)
 * remembering past states (additional cost per state beyond the current state)
 * synthesizing a belief (each belief comes at a metabolic cost)
-* obtaining a causal theory (the more time spent searching, the higher the cost of the theory)
+* obtaining a causal theory (the more time spent searching, the higher the cost of finding the theory)
 * using a causal theory (the more complex the theory, the higher the cost per use)
 
-At the completion of a time frame, the CA emits an account of energy spent. It is collected and integrated by the energy wellbeing actor.
+Energy is also spent whenever the agent progressively and automatically recovers from lost integrity.
 
-CAs and meta-CAs listen to energy level events, broadcasted whenever the measure changes significantly.
+At the completion of a time frame, the CA emits an account of energy spent in the time frame. Costs reported by CAs are collected and integrated by the energy Wellbeing Actor.
 
-In response,
+CAs and meta-CAs listen to energy level events, broadcasted to the collective of CAs and M-CAs whenever the measure changes significantly.
 
-* A CA may, as long as it does not break constraints,
+In response to low energy,
+
+* A CA may, subject to maintaining constraint closure (more about that in another post),
   * forget a past state (oldest first)
   * forget a belief (neutral first)
+  * look for a less complex causal theory
+  * raise the threshold for validating/invalidating beliefs (don't waste energy on trivial matters!)
 
-* A M-CA may, as long as it does not break constraints,
-  * remove a "low-value" CA
+* A M-CA may, also subject to maintaining constraint closure,
+  * remove a "low-value" CA (low-engagement, low predictive accuracy)
 
 ## Integrity
 
-The integrity wellbeing actor maintains a global integrity level. Integrity is initially full. 
+The integrity Wellbeing Actor maintains a global integrity level. Integrity is initially full.
 
-Integrity decrease because of harmful actions taken by the agent. Lost integrity is recovered with time but at an energy cost proportional to the amount of recovery.
+Integrity decrease because of harmful actions taken by the agent. Lost integrity is recovered over time but at an energy cost proportional to the amount of recovery.
 
-Integrity is reduced whenever the agent's touch sensor is activated and whenever the agent executes the action of `eating` poison food (the agent may not know to distinguish perceptually between food and poison but its "metabolism" always does).
+Integrity is reduced whenever
 
-CAs listen to integrity level events, broadcasted whenever the measure drops significantly.
+* the agent's touch sensor is activated, or
+* whenever the agent executes the action of `eating` poison food (the agent may not know to distinguish perceptually between non-food, food and poison but its "metabolism" does).
 
-In response,
+CAs listen to integrity level events, broadcasted whenever the measure changes significantly.
 
-* A CA may raise the threshold at which it intends to impact good or bad beliefs (it less easily triggered into action when unhealthy)
+In response to low integrity,
+
+* A CA may raise the threshold at which it intends to impact good, or bad beliefs (it less easily triggered into action when unhealthy)
 
 ## Engagement
 
-The engament wellbeing actor keeps track of how engaged CAs are overall. Engagement is initially empty. 
+The engament Wellbeing Actor keeps track of how engaged CAs are overall. Engagement is initially empty.
 
-Engagement goes up whenever a CA's belief is used in the synthesis of another CA's belief (it becomes relevant) and whenever an action it intends is executed (it acts in the world).
+Engagement goes up whenever
 
-Engagement decreases whenever a CA's belief loses relevance (another CA's that was belief based on it is removed), or with the passing of time if no action is executed.
+* a CA's belief is used in the synthesis of another CA's belief (it becomes relevant), and
+* whenever an action it intends is executed (it acts in the world).
 
-In response,
+Engagement decreases whenever
 
-* A M-CA may duplicate a low-engagement CA (start a new CA with the same umwelt) in the hope that its sense-making trajectory will be different and lead to more relevance
-* A CA may lower its threshold for validating beliefs, to the point where neutral beliefs are acted on (babbling)
+* a CA's belief loses relevance (it was the basis of another CA's belief that was removed), or
+* with the passing of time when no action is executed
+
+In response to overall low engagement,
+
+* a M-CA may add a new CA, even though the hierarchy level might already be crowded, in the hope that its sense-making trajectory will lead to relevance and to action-taking
+* a CA may lower its threshold for validating beliefs, to the point where even neutral beliefs are acted on (leading to babbling)
