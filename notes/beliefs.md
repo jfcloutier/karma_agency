@@ -2,7 +2,7 @@
 
 > Beliefs are meta-observations made by a Cognition Actor (CA) from examining its remembered states (a state is a set of observations of the CA's umwelt that are synchronous to one time frame).
 
-There are three kinds of beliefs: **counts**, **trends** and **endings**.
+There are four kinds of beliefs: **counts**, **trends** and **endings**.
 
 The beliefs of a CA are exposed as properties to be observed by parent CAs.
 
@@ -10,7 +10,7 @@ A belief is about is a **synthetic object** named by the CA and whose nature (wh
 
 ## Counts
 
-> How many of something there are in the current state
+> How many of something there are in the current state, if there are more than one
 
 e.g. self is next to 2 objects
 
