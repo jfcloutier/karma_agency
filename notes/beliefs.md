@@ -1,12 +1,27 @@
 # Beliefs
 
-> Beliefs are meta-observations made by a Cognition Actor (CA) from examining its remembered states (a state is a set of observations of the CA's umwelt that are synchronous to one time frame).
+> Beliefs are observations made by a Cognition Actor (CA) from examining its remembered states and from attempts at achieving goals.
 
-There are four kinds of beliefs: **counts**, **trends** and **endings**.
+A state is a set of observations of the CA's umwelt that are synchronous to one time frame.
+
+There are five kinds of beliefs: **abductions**, **counts**, **trends**, **endings** and **attempts**.
 
 The beliefs of a CA are exposed as properties to be observed by parent CAs.
 
-A belief is about is a **synthetic object** named by the CA and whose nature (what is being counted, what is trending, what is ending) is private to the CA.
+A belief is synthesized by the CA and its nature (what is being imagined, what is being counted, what is trending, what is ending, what is attempted) is private to the CA.
+
+## Abductions
+
+> Observation expressed using a predicate and/or object imagined by the CA in order to formulate a causal theory of its direct observations.
+
+Any observation abduced by the CA is elevated to the status of belief of the CA since it is never expressed in its umwelt.
+
+* About
+  * A relationship or property
+* Value
+  * An object (relationship) or domain value (property)
+* Since when
+  * Current time frame
 
 ## Counts
 
@@ -64,3 +79,22 @@ Expressed as `ending(Object, Value)` where
 * `Object` is a unique name that the CA internally maps to
   * `property_ending(ObservedObject, Value)`
   * `relationship_ending(RelationshipName, ObservedObject1, ObservedObject2)`
+
+## Attempts
+
+> An attempt made at achieving a goal
+
+e.g. attempted to stop the distance to a thing getting smaller
+
+* About
+  * A belief
+* Value
+  * validate, invalidate
+* Since when
+  * Current time frame
+
+Expressed as `attempted(Object, Value)` where
+
+* `Object` is a belief to be impacted
+  * `attempted(Belief, Value)`
+* `Belief` is any belief expression

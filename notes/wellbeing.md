@@ -1,6 +1,6 @@
 # Wellbeing
 
-Wellbeing is a collection of measures the agent strives to maximize. Wellbeing is a collection of measures the agent strives to maximize. Wellbeing imparts normativity to beliefs, motivates activity, and focuses attention.
+Wellbeing is a collection of measures the agent strives to maximize. Wellbeing imparts normativity to beliefs, motivates activity, and focuses attention.
 
 The measures are:
 
