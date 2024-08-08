@@ -7,25 +7,23 @@ A meta-CA adds and removes cognition actors (CAs) at the level of the SOM it man
 Events:
 
 * In
-  * fullness, [level: 0..1]
-  * integrity, [level: 0..1]
-  * engagement, [level: 0..1]
+  * fullness, [level(0..1)]
+  * integrity, [level{0..1)]
+  * engagement, [level(0..1)]
+  * ca_started, [level(Level)]
 
 * Out
-  * ca_retired, [name: Name]
-  * ca_added, [name: Name]
+  * mca_started, [level(Level)]
 
 * Messages
-  * to appropriate wellbeing actor
-    * proposed_culling([ca: Name, level: Level, savings: Number]), 
-  * from a wellbeing actor
-    * cull([ca: WardName])
+  * TBD
     
 State:
     * level - 1..? - the level of the CAs it is responsible for
     * frame - 1..? - the current frame, incremented from 0 
     * wards - names all same-level CAs
     * timer - the frame timer
+    * history - latest frames
 
 */
 
@@ -42,6 +40,8 @@ name_from_level(Level, Name) :-
 latency(Level, Latency) :-
     Latency is 2 ** Level.
 
+%% Worker
+
 init(Options, State) :-
     log(info, meta_ca, "Initiating with ~p", [Options]),
     empty_state(EmptyState),
@@ -50,7 +50,7 @@ init(Options, State) :-
     self(Name),
     latency(Level, Latency),
     send_at_interval(Name, curator, event(curate, true, Name), Latency, Timer),
-    put_state(EmptyState, [level-Level, wards-[], timer-Timer, frame-0], State),
+    put_state(EmptyState, [level-Level, wards-[], timer-Timer, frame-0, history-[]], State),
     publish(mca_started, [level(Level)]).
 
 terminate :-
@@ -59,8 +59,9 @@ terminate :-
 handle(message(Message, Source), State, State) :-
    log(info, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
-handle(event(ca_started, _, Source), State, NewState) :-
-    send_query(Source, level, Level),
+handle(event(ca_started, Payload, Source), State, NewState) :-
+    options(level(Level), Payload),
+    % A ward of the meta CA
     get_state(State, level, Level),
     get_state(State, wards, Wards),
     put_state(State, wards, [Source | Wards], NewState).
@@ -89,17 +90,25 @@ handle(terminating, State) :-
 %   retiring a useless ward CA (if needed)
 curate(State, NewState) :-
     get_state(State, level, Level),
-    log(info, meta_ca, '~@ assessing level ~w', [self, Level]),
-    grow(State, State1),
-    cull(State1, NewState).
+    log(debug, meta_ca, '~@ assessing level ~w', [self, Level]),
+    cull(State, State1),
+    grow(State1, NewState).
+
+% For each ward that is not dependent on by a CA at a higher level,
+% evaluate if it is persistently useless.
+% If so, terminate it.
+cull(State, State) :-
+    self(Name),
+    get_state(State, wards, Wards),
+    log(info, meta_ca, '~w is culling', [Name, Wards]).
 
 % Find the number of inclusions in the umwelt of a ward of each level-1 sensor CAs, 
 % Randomly choose one with the fewest number N of umwelt inclusions of a level-1 sensor CA
 % If the frame is a multiple of N + 1,
 % assemble an umwelt with the level-1 sensor CA, subject to constraints and create a level-0 CA with it.
-grow(State, State).
+grow(State, State) :-
+    self(Name),
+    get_state(State, wards, Wards),
+    log(info, meta_ca, '~w is growing ~p', [Name, Wards]).
 
-% For each ward that is not dependent on by a CA at a higher level,
-% evaluate if it is persistently useless.
-% If so, terminate it.
-cull(State, State).
+

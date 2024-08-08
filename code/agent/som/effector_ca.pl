@@ -44,10 +44,10 @@ handle(message(actuate(Action), _), State, State) :-
     actuate(State, Action).
 
 handle(message(Message, Source), State, State) :-
-   log(info, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+   log(debug, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+    log(debug, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
     self(Name).
@@ -64,7 +64,7 @@ handle(query(action_domain), State, ActionDomain) :-
     get_state(State, action_domain, ActionDomain).
 
 handle(query(Query), _, tbd) :-
-    log(info, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
+    log(debug, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 handle(terminating, _).
 

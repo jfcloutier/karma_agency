@@ -93,8 +93,7 @@ e.g. attempted to stop the distance to a thing getting smaller
 * Since when
   * Current time frame
 
-Expressed as `attempted(Object, Value)` where
+Expressed as `attempted(Belief, Value)` where
 
-* `Object` is a belief to be impacted
-  * `attempted(Belief, Value)`
 * `Belief` is any belief expression
+  * `attempted(Belief, Value)`

@@ -1,8 +1,8 @@
 %%%
 % Worker actor logic.
 %
-% A worker thread subscribes to and handles broadcast events, 
-% sends/receives direct messages and responds to control directives.
+% A worker thread subscribes to and handles broadcast events, and
+% sends/receives (semantic) messages, queries and control directives.
 % 
 % A worker is supervised and thus implements start/3, stop/1 and kill/1.
 %
@@ -11,7 +11,7 @@
 %   topics - the list of topics for the events the worker wants to receive (defaults to [])
 %
 % Callbacks:
-%   handle/3 - for handling events and queries
+%   handle/3 - for handling events, semantic messages and queries
 %   init/1 - sets the initial state
 %   terminate/0 - called when terminating the actor
 %
@@ -81,6 +81,7 @@ run(Handler, State) :-
     process_message(Message, Handler, State, NewState),
     run(Handler, NewState).
 
+% Write out the current state of the worker
 process_message(state, _, State, State) :-
     writeln(State).
 
@@ -111,7 +112,7 @@ process_message(Message, Handler, State, NewState) :-
     Goal =.. [Head, Message, State, NewState],
     ModuleGoal =.. [:, Module, Goal],
     thread_self(Name),
-    log(debug, worker, "~w got message ~p; calling ~p", [Name, Message, ModuleGoal]),
+    log(debug, worker, "~w received ~p; calling ~p", [Name, Message, ModuleGoal]),
     call(ModuleGoal).
 
 terminating(Handler, State) :-

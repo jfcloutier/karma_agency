@@ -61,19 +61,22 @@ send_at_interval(Target, Tag, Message, Delay, Timer) :-
     atomic_list_concat([Name, Tag], "_", Timer),
     timer:start(Timer, thread_send_message(Target, Message), Delay).
 
+% Send self a message
 send_message(Message) :-
     thread_self(Name),
     send_message(Name, Message).
 
-% Semantic message
+% Send a semantic message
 send_message(Name, Message) :-
     thread_self(From),
     send(Name, message(Message, From)).
 
+% Send self a query
 send_query(Question, Answer) :-
     thread_self(Name),
     send_query(Name, Question, Answer).
 
+% Send a semantic query and wait for an answer
 send_query(Name, Question, Answer) :-
     send_query(Name, Question, 5, Answer).
 
@@ -92,16 +95,16 @@ send_query(Name, Question, Timeout, Answer) :-
             (log(warn, actor_model, "Failed to query ~w about ~p: ~p~n", [Name, Question, Exception]), fail)
         ).
 
-% Control message
+% Send control message to self
 send_control(Control) :-
     thread_self(Name),
     send_control(Name, Control).
 
+% Send a semantic control message
 send_control(Name, Control) :-
     send(Name, control(Control)).
 
-% Send at interval
-
+% Wait 20s for a actor thread to be alive
 wait_for_actor(Name) :-
     wait_for_actor(Name, 20).
 
@@ -119,6 +122,7 @@ wait_for_actor(Name, CountDown) :-
          AttemptsLeft is CountDown - 1,
          wait_for_actor(Name, AttemptsLeft)).
 
+% Wait 60s for an actor thread to be stopped
 wait_for_actor_stopped(Name) :-
     wait_for_actor_stopped(Name, 60).
 

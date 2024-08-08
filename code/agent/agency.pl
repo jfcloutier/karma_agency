@@ -30,9 +30,10 @@ Hierarchical SOM and agency
 % Start karma_world server then karma_body server
 [load].
 [agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub)].
-set_log_level(debug).
+set_log_level(info).
 agency:start('localhost:4000').
 threads.
+send_query('som', children, SOMChildren).
 % send('sensor:ultrasonic-in4:distance', state).
 send('tacho_motor-outA', state).
 send_query('tacho_motor-outA', action_domain, Answer).

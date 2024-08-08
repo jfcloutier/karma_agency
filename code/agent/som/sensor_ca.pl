@@ -43,7 +43,7 @@ name_from_sensor(Sensor, Name) :-
 % The latency of a sensor CA is half a sceond
 latency(0.5).
 
-% The CA has the lowest level of abstration
+% The CA has the lowest level of abstraction
 level(0).
 
 init(Options, State) :-
@@ -80,7 +80,7 @@ handle(event(prediction(Sense), Payload, Source), State, NewState) :-
     ).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+    log(debug, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
     self(Name).
@@ -97,7 +97,7 @@ handle(query(belief_domain), State, BeliefDomain) :-
 handle(query(action_domain), _, []).
 
 handle(query(Query), _, unknown) :-
-    log(info, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
+    log(debug, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 handle(terminating, _).
 
