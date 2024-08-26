@@ -4,7 +4,7 @@ A Cognition Actor (CA) seeks to validate its pleasant beliefs and to invalidate 
 
 ## Recap
 
-A CA is part of a hierarchichal collective of CAs that animate a mobile agent. Each CA has an umwelt composed of a small number of CAs from the level below. A CA synthesizes its beliefs from observations, past and current, of the beliefs of its umwelt.
+A CA is part of a hierarchichal collective of CAs that animate an agent. Each CA has an umwelt composed of a small number of CAs from the level below. A CA synthesizes its beliefs from observations, past and current, of the beliefs in its umwelt.
 
 The beliefs of a CA exist in the context of wellbeing measures, current and trending. The wellbeing measures are fullness, integrity and engagement. They signal risks, present or absent, to the survivability of the entire collective of CAs. Beliefs associated with high risks are unpleasant. Beliefs associated with low risks are pleasant. Others are neutral. A CA acts on its umwelt in response to the pleasantness or unpleasantness of its current beliefs.
 
@@ -14,7 +14,7 @@ At the end of the current time frame, a CA decides whether to act on its updated
 
 ## Intents
 
-A CA can at most *intend* to take action; an intent is not guaranteed to be realized. After all, a CA participates in a collective and there is only one agent that the collective animates. Simultaneous intentions to act coming from multiple CAs must be resolved so that only one course of action, hopefully beneficial to all CAs, is carried out by the agent at any point in time.
+A CA can at most *intend* to take action; an intent is not guaranteed to be realized. After all, a CA participates in a collective and there is only one agent that the collective animates. Simultaneous intents to act coming from multiple CAs must be resolved so that only one course of action, hopefully beneficial to all CAs, is carried out by the agent at any point in time.
 
 An intent (to act) by a CA consists of
 
@@ -71,7 +71,7 @@ How a CA could impact a held belief is further modulated by the kind of belief i
 
 ### Impacting an abduction belief
 
-An *abduction* belief is a relationship or property that is *imagined* (i.e. not directly observed and thus made up) by the CA to formulate a causal theory that explains what it does directly observe.
+An *abduction* belief is an object, relationship or property that is *imagined* (i.e. not directly observed and thus made up) by the CA to formulate a causal theory that explains what it does directly observe.
 
 To validate an abduction belief, a CA's policy would request its umwelt CAs to validate *all of* the supporting beliefs, directly or indirectly.
 
