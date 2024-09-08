@@ -4,12 +4,12 @@
 
 %% A supervisor actor restarts terminated child threads according to option restart(Restart) with which they were started,
 %% where Restart is one of permanent (always restart), temporary (never restart) or transient (restart on abnormal exit - the default).
-%% The restarted goal options are set to include `restarting(true)`
+%% The restarted goal options are set to include `restarting(true)` to indicate the context in which the actor is starting.
 %%
 %% A supervisor can itself be supervised. If a supervisor is started with option `restarting(true)`, 
 %% its non-temporary, dynamic children are restarted, in addition to its static children.
 %%
-%% Explicitly stopping a supervisor effectively kills it and all its children.
+%% Explicitly stopping a supervisor effectively kills it and all its children (i.e. no restarting).
 %%
 
 /*

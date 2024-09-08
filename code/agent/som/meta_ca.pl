@@ -10,7 +10,6 @@ Events:
   * fullness, [level(0..1)]
   * integrity, [level{0..1)]
   * engagement, [level(0..1)]
-  * ca_started, [level(Level)]
 
 * Out
   * mca_started, [level(Level)]
@@ -20,8 +19,7 @@ Events:
     
 State:
     * level - 1..? - the level of the CAs it is responsible for
-    * frame - 1..? - the current frame, incremented from 0 
-    * wards - names all same-level CAs
+    * frame - 1..? - the current frame, incremented from 0
     * timer - the frame timer
     * history - latest frames
 
@@ -50,7 +48,7 @@ init(Options, State) :-
     self(Name),
     latency(Level, Latency),
     send_at_interval(Name, curator, event(curate, true, Name), Latency, Timer),
-    put_state(EmptyState, [level-Level, wards-[], timer-Timer, frame-0, history-[]], State),
+    put_state(EmptyState, [level-Level, timer-Timer, frame-0, history-[]], State),
     publish(mca_started, [level(Level)]).
 
 terminate :-
@@ -88,27 +86,37 @@ handle(terminating, State) :-
 % Curate by 
 %   adding a ward CA to increase coverage (if needed)
 %   retiring a useless ward CA (if needed)
-curate(State, NewState) :-
+curate(State, State) :-
     get_state(State, level, Level),
     log(debug, meta_ca, '~@ assessing level ~w', [self, Level]),
-    cull(State, State1),
-    grow(State1, NewState).
+    cull(State),
+    grow(State).
 
 % For each ward that is not dependent on by a CA at a higher level,
 % evaluate if it is persistently useless.
 % If so, terminate it.
-cull(State, State) :-
+cull(_) :-
     self(Name),
-    get_state(State, wards, Wards),
-    log(info, meta_ca, '~w is culling', [Name, Wards]).
+    log(debug, meta_ca, '~w is culling ', [Name]).
 
-% Find the number of inclusions in the umwelt of a ward of each level-1 sensor CAs, 
-% Randomly choose one with the fewest number N of umwelt inclusions of a level-1 sensor CA
-% If the frame is a multiple of N + 1,
-% assemble an umwelt with the level-1 sensor CA, subject to constraints and create a level-0 CA with it.
-grow(State, State) :-
+% Add a CA to the metaCA's level L if leve L - 1 is complete and level L is not covering it.
+grow(State) :-
     self(Name),
-    get_state(State, wards, Wards),
-    log(info, meta_ca, '~w is growing ~p', [Name, Wards]).
+    get_state(State, level, Level),
+    UmweltLevel is Level - 1,
+    is_level_complete(UmweltLevel),
+    \+ is_level_covering(Level),
+    add_ca(Level, NewCA),
+    log(debug, meta_ca, '~w added CA ~p', [Name, NewCA]).
+grow(_).
 
+% TODO
+is_level_complete(0).
+
+% TODO
+is_level_covering(_) :- fail.
+
+% TODO
+add_ca(_,_) :- fail.
+ 
 

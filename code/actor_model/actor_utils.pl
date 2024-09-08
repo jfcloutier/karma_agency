@@ -122,7 +122,7 @@ wait_for_actor(Name, CountDown) :-
          AttemptsLeft is CountDown - 1,
          wait_for_actor(Name, AttemptsLeft)).
 
-% Wait 60s for an actor thread to be stopped
+% Wait 15s (60 * 0.25s) for an actor thread to be stopped
 wait_for_actor_stopped(Name) :-
     wait_for_actor_stopped(Name, 60).
 

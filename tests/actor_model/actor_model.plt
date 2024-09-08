@@ -70,7 +70,7 @@ test(supervised_dynamic_supervisor) :-
     assertion(\+ is_thread(top)),
     assertion(\+ is_thread(bottom)).
 
-test(supervisor_with_static_children) :-
+test(communicating_with_supervised_static_children) :-
     supervisor:start(top, [children([pubsub])]),
     assertion(is_thread(top)),
     assertion(is_thread(pubsub)),
@@ -80,40 +80,40 @@ test(supervisor_with_static_children) :-
         worker(alice, alice,  [topics([party, police]), init([mood(peaceful)]), restart(transient)])
         ],
     supervisor:start_supervisor_child(top, bottom, [children(Children)]),
-        assertion(is_thread(bob)),
-        assertion(is_thread(alice)),
+    assertion(is_thread(bob)),
+    assertion(is_thread(alice)),
     % Querying
     assertion(send_query(bob, mood, bored)),
     assertion(send_query(alice, mood, peaceful)),
 
     % Eventing
     publish(party, [alice, bob]),
-        % Give time for workers to respond to published messages
-        sleep(1),
-        % Checking state changes from event
-        assertion(\+ send_query(bob, mood, bored)),
-        assertion(\+ send_query(peter, mood, bored)),
-        assertion(send_query(bob, mood, panicking)),
+    % Give time for workers to respond to published messages
+    sleep(1),
+    % Checking state changes from event
+    assertion(\+ send_query(bob, mood, bored)),
+    assertion(\+ send_query(peter, mood, bored)),
+    assertion(send_query(bob, mood, panicking)),
 
-     % Unsubscribing
-       worker:unsubscribe(bob, party),
-     % Checking restart
-     worker:stop(bob),
-     % Wait for restart of permanent bob
-     wait_for_actor(bob),
-        assertion(is_thread(bob)),
+    % Unsubscribing
+    worker:unsubscribe(bob, party),
+    % Checking restart
+    worker:stop(bob),
+    % Wait for restart of permanent bob
+    wait_for_actor(bob),
+    assertion(is_thread(bob)),
     % Stopping
     worker:stop(alice),
-        % alice is transient
-        assertion(\+ is_thread(alice)),
+    % alice is transient
+    assertion(\+ is_thread(alice)),
     supervisor:kill_child(bottom, worker, bob),
-        sleep(1),
-        assertion(\+ is_thread(bob)),
-        supervisor:stop(top),
-            sleep(1),
-            assertion(\+ is_thread(pubsub)),
-            assertion(\+ is_thread(bottom)),
-            assertion(\+ is_thread(top)).
+    sleep(1),
+    assertion(\+ is_thread(bob)),
+    supervisor:stop(top),
+    sleep(1),
+    assertion(\+ is_thread(pubsub)),
+    assertion(\+ is_thread(bottom)),
+    assertion(\+ is_thread(top)).
 
 test(restarting_supervised_supervisors) :-
     % Starting supervisor (top) with a static child supervisor (middle)

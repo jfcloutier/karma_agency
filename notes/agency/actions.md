@@ -4,7 +4,7 @@ A Cognition Actor (CA) seeks to validate its pleasant beliefs and to invalidate 
 
 ## Recap
 
-A CA is part of a hierarchichal collective of CAs that animate an agent. Each CA has an umwelt composed of a small number of CAs from the level below. A CA synthesizes its beliefs from observations, past and current, of the beliefs in its umwelt.
+A CA is part of a hierarchichal collective of CAs that animate an agent. Each CA has an umwelt composed of a small number of CAs from the level below. A CA synthesizes its beliefs from predicted observations, past and current, of the beliefs in its umwelt.
 
 The beliefs of a CA exist in the context of wellbeing measures, current and trending. The wellbeing measures are fullness, integrity and engagement. They signal risks, present or absent, to the survivability of the entire collective of CAs. Beliefs associated with high risks are unpleasant. Beliefs associated with low risks are pleasant. Others are neutral. A CA acts on its umwelt in response to the pleasantness or unpleasantness of its current beliefs.
 
