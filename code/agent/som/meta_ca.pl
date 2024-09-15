@@ -10,18 +10,22 @@ Events:
   * fullness, [level(0..1)]
   * integrity, [level{0..1)]
   * engagement, [level(0..1)]
+  * ca_started, [level(Level)]
+  * ca_terminated, [level(Level)]
 
 * Out
   * mca_started, [level(Level)]
+  * mca_terminated, [level(Level)]
 
-* Messages
-  * TBD
+* Queries
+  * type - meta-ca
+  * level - Integer > 0
+  * wards - [CAName, ...]
     
 State:
     * level - 1..? - the level of the CAs it is responsible for
-    * frame - 1..? - the current frame, incremented from 0
     * timer - the frame timer
-    * history - latest frames
+    * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
 
 */
 
@@ -30,48 +34,59 @@ State:
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
+:- use_module(som(ca)).
 
 name_from_level(Level, Name) :-
-    atomic_list_concat([metaca, Level], "_", Name).
+    atomic_list_concat([metaca, level, Level], ":", Name).
 
-% A meta-cognition actor re-evaluates the  state of its layer of the SOM every 2 ** Level seconds
+% A meta-cognition actor re-evaluates the state of its layer of the SOM every 2 ** Level seconds
 latency(Level, Latency) :-
-    Latency is 2 ** Level.
+    Latency is 2 ** Level * 2.
 
 %% Worker
 
 init(Options, State) :-
-    log(info, meta_ca, "Initiating with ~p", [Options]),
+    log(info, meta_ca, "Initiating meta-ca with ~p", [Options]),
     empty_state(EmptyState),
     option(level(Level), Options),
-    subscribe(ca_started),
-    self(Name),
+    subscribe_all([ca_started, ca_terminated]),
     latency(Level, Latency),
-    send_at_interval(Name, curator, event(curate, true, Name), Latency, Timer),
-    put_state(EmptyState, [level-Level, timer-Timer, frame-0, history-[]], State),
+    self(Name),
+    send_at_interval(Name, curator, message(curate, Name), Latency, Timer),
+    put_state(EmptyState, [level-Level, timer-Timer, wards-unknown], State),
     publish(mca_started, [level(Level)]).
 
 terminate :-
     log(warn, meta_ca, 'Terminated').
 
+handle(message(curate, _), State, NewState) :-
+    curate(State, NewState).
+
 handle(message(Message, Source), State, State) :-
    log(info, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
-handle(event(ca_started, Payload, Source), State, NewState) :-
-    options(level(Level), Payload),
-    % A ward of the meta CA
+handle(event(ca_started, Payload, CA), State, NewState) :-
+    option(level(Level), Payload),
     get_state(State, level, Level),
-    get_state(State, wards, Wards),
-    put_state(State, wards, [Source | Wards], NewState).
+    !,
+    find_wards(State, Wards),
+    put_state(State, wards, [CA | Wards], NewState).
 
-handle(event(curate, _, _), State, NewState) :-
-    curate(State, NewState).
+handle(event(ca_terminated, Payload, CA), State, NewState) :-
+    option(level(Level), Payload),
+    get_state(State, level, Level),
+    !,
+    find_wards(State, Wards),
+    delete(Wards, CA, RemainingWards),
+    put_state(State, wards, RemainingWards, NewState).
 
 handle(event(Topic, Payload, Source), State, State) :-
     log(info, meta_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
     self(Name).
+
+handle(query(type), _, meta_ca).
 
 handle(query(level), State, Level) :-
     get_state(State, level, Level).
@@ -81,42 +96,85 @@ handle(query(Query), _, unknown) :-
 
 handle(terminating, State) :-
     get_state(State, timer, Timer),
-    timer:stop(Timer).
+    get_state(State, level, Level),
+    timer:stop(Timer),
+    publish(mca_terminated, [level(Level)]).
 
 % Curate by 
 %   adding a ward CA to increase coverage (if needed)
-%   retiring a useless ward CA (if needed)
-curate(State, State) :-
-    get_state(State, level, Level),
-    log(debug, meta_ca, '~@ assessing level ~w', [self, Level]),
-    cull(State),
-    grow(State).
+%   and/or retiring a useless ward CA (if needed)
+curate(State, State).
+% TODO
+%  :-
+%     get_state(State, level, Level),
+%     log(debug, meta_ca, '~@ curating level ~w', [self, Level]),
+%     cull(State),
+%     grow(State).
 
 % For each ward that is not dependent on by a CA at a higher level,
 % evaluate if it is persistently useless.
 % If so, terminate it.
-cull(_) :-
-    self(Name),
-    log(debug, meta_ca, '~w is culling ', [Name]).
+cull(_).
 
-% Add a CA to the metaCA's level L if leve L - 1 is complete and level L is not covering it.
+% Add a CA to the metaCA's level L if leve L - 1 is complete and level L is not.
 grow(State) :-
-    self(Name),
     get_state(State, level, Level),
+    log(debug, meta_ca, '~@ is growing level ~w ', [self, Level]),
     UmweltLevel is Level - 1,
-    is_level_complete(UmweltLevel),
-    \+ is_level_covering(Level),
+    level_is_complete(UmweltLevel, State),
+    \+ level_is_complete(Level, State),
+    !,
     add_ca(Level, NewCA),
-    log(debug, meta_ca, '~w added CA ~p', [Name, NewCA]).
+    log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
 grow(_).
 
-% TODO
-is_level_complete(0).
+level_is_complete(0, _).
+level_is_complete(Level, State) :-
+    Level \= 0,
+    UmweltLevel is Level - 1,
+    level_cas(UmweltLevel, UmweltCAs),
+    log(debug, meta_ca, 'Level ~w has umwelt CAs ~p', [Level, UmweltCAs]),
+    find_wards(State, WardCAs),
+    log(debug, meta_ca, 'Level ~w has wards CAs ~p', [Level, WardCAs]),
+    all_covered(UmweltCAs, WardCAs).
 
-% TODO
-is_level_covering(_) :- fail.
+
+all_covered([], _).
+all_covered([UmweltCA | Others], CAs) :-
+    covered(UmweltCA, CAs),
+    !,
+    all_covered(Others, CAs).
+
+covered(UmweltCA, CAs) :-
+    member(CA, CAs),
+    ca:umwelt(CA, Umwelt),
+    member(UmweltCA, Umwelt).
 
 % TODO
 add_ca(_,_) :- fail.
- 
 
+find_wards(State, Wards) :-
+    get_state(State, wards, unknown), !,
+    get_state(State, level, Level),
+    level_cas(Level, Wards).
+
+find_wards(State, Wards) :-
+    get_state(State, wards, Wards).
+ 
+level_cas(Level, CAs) :-
+    supervisor:children(som, Children),
+    findall(Name, (member(child(worker, Name), Children), type_of(Name, ca), level_of(Name, Level)), CAs).
+
+type_of(Name, ca) :-
+    atomic_list_concat([Header | _], ':', Name),
+    member(Header, [sensor, effector, ca]), !.
+type_of(Name, metaca) :-
+    atomic_list_concat([metaca | _], ':', Name), !.
+
+level_of(Name, 0) :-
+    atomic_list_concat([Header | _], ':', Name),
+    member(Header, [sensor, effector]), !.
+level_of(Name, Level) :-
+    atomic_list_concat([_, level, L | _], ':', Name), 
+    !,
+    L == Level.

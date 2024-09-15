@@ -81,7 +81,7 @@ send_query(Name, Question, Answer) :-
     send_query(Name, Question, 5, Answer).
 
 send_query(Name, Question, Timeout, Answer) :- 
-    log(debug, actor_model, 'Sending query ~p to ~w', [Question, Name]),
+    log(info, actor_model, 'Sending query ~p to ~w', [Question, Name]),
     catch(
             (
                 thread_self(From),

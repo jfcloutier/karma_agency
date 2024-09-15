@@ -12,7 +12,7 @@ It integrates services and actors:
 /*
 % Start karma_world server then karma_body server
 [load].
-[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub)].
+[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub), som(meta_ca)].
 set_log_level(info).
 agency:start('localhost:4000').
 threads.
@@ -83,7 +83,8 @@ start(BodyHost) :-
     start_effector_cas([]).
     start_effector_cas([Effector | Others]) :-
         findall(Twin, (member(Twin, Others), Twin.id == Effector.id), Twins),
-        supervisor:start_worker_child(som, effector_ca, Effector.id, [init([effectors([Effector |Twins])])]),
+        effector_ca:name_from_effector(Effector, Name),
+        supervisor:start_worker_child(som, effector_ca, Name, [init([effectors([Effector |Twins])])]),
         subtract(Others, Twins, Rest),
         start_effector_cas(Rest).
     

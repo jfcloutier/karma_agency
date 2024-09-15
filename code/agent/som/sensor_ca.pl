@@ -85,6 +85,8 @@ handle(event(Topic, Payload, Source), State, State) :-
 handle(query(name), _, Name) :-
     self(Name).
 
+handle(query(type), _, ca).
+
 handle(query(level), _, Level) :-
     level(Level).
 

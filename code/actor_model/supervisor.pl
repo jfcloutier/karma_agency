@@ -212,7 +212,7 @@ process_message(control(stop), _) :-
 
 process_message(query(children, From), _) :-
     thread_self(Supervisor),
-    log(info, supervisor, '~w processing query(children, ~w)', [Supervisor, From]),
+    log(debug, supervisor, '~w processing query(children, ~w)', [Supervisor, From]),
     findall(child(Kind, Name), child(_, Supervisor, Kind, Name, _, _), Children),
     send(From, response(Children, children, Supervisor)).
 

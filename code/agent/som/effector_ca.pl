@@ -22,6 +22,9 @@ An effector CA
 
 :- use_module(code(logger)).
 
+name_from_effector(Effector, Name) :-
+    atomic_list_concat([effector, Effector.id], ':', Name).
+
 % An effector CA has no latency
 latency(0).
 
@@ -51,6 +54,8 @@ handle(event(Topic, Payload, Source), State, State) :-
 
 handle(query(name), _, Name) :-
     self(Name).
+
+handle(query(type), _, ca).
 
 handle(query(level), _, Level) :-
     level(Level).
