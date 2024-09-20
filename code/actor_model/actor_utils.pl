@@ -3,7 +3,8 @@
     start_actor/2, start_actor/3, 
     wait_for_actor/1, wait_for_actor_stopped/1, wait_for_actor_stopped/2, 
     send/2, send_at_interval/5, send_control/1, send_control/2, send_message/1, send_message/2, send_query/2, send_query/3, send_query/4,
-    empty_state/1, get_state/3, put_state/3, put_state/4]).
+    empty_state/1, get_state/3, put_state/3, put_state/4,
+    pick_some/2]).
 
 :- use_module(code(logger)).
 :- use_module(timer).
@@ -33,6 +34,24 @@ put_state(State, Pairs, NewState) :-
 put_state(State, Key, Value, NewState) :-
     is_dict(State, state),
     put_dict(Key, State, Value, NewState).
+
+% Pick a random subset of a list. Deterministic.
+pick_some([], []).
+pick_some([E], [E]).
+pick_some(List, SubList) :-
+    random_permutation(List, PermutedList),
+    length(List, L),
+    random_between(1, L, N),
+    take(N, PermutedList, SubList).
+
+take(_, [], []).
+take(0, _, []).
+take(N, _, []) :-
+    N < 0.
+take(N, [El | Rest], [El | Others]) :-
+    N > 0,
+    N1 is N - 1,
+    take(N1, Rest, Others).
 
 merge_pairs(Pairs, InPairs, MergedPairs) :-
     append(InPairs, Pairs, AllPairs),

@@ -91,6 +91,9 @@ handle(query(type), _, meta_ca).
 handle(query(level), State, Level) :-
     get_state(State, level, Level).
 
+handle(query(wards), State, Wards) :-
+    get_state(State, wards, Wards).
+
 handle(query(Query), _, unknown) :-
     log(info, meta_ca, '~@ is NOT handling query ~p', [self, Query]).
 
@@ -103,17 +106,16 @@ handle(terminating, State) :-
 % Curate by 
 %   adding a ward CA to increase coverage (if needed)
 %   and/or retiring a useless ward CA (if needed)
-curate(State, State).
-% TODO
-%  :-
-%     get_state(State, level, Level),
-%     log(debug, meta_ca, '~@ curating level ~w', [self, Level]),
-%     cull(State),
-%     grow(State).
+curate(State, State) :-
+    get_state(State, level, Level),
+    log(debug, meta_ca, '~@ curating level ~w', [self, Level]),
+    cull(State),
+    grow(State).
 
 % For each ward that is not dependent on by a CA at a higher level,
 % evaluate if it is persistently useless.
 % If so, terminate it.
+% TODO
 cull(_).
 
 % Add a CA to the metaCA's level L if leve L - 1 is complete and level L is not.
@@ -124,7 +126,8 @@ grow(State) :-
     level_is_complete(UmweltLevel, State),
     \+ level_is_complete(Level, State),
     !,
-    add_ca(Level, NewCA),
+    log(info, meta_ca, 'Adding new ca at level ~w', [Level]),
+    add_ca(State, NewCA),
     log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
 grow(_).
 
@@ -136,22 +139,58 @@ level_is_complete(Level, State) :-
     log(debug, meta_ca, 'Level ~w has umwelt CAs ~p', [Level, UmweltCAs]),
     find_wards(State, WardCAs),
     log(debug, meta_ca, 'Level ~w has wards CAs ~p', [Level, WardCAs]),
-    all_covered(UmweltCAs, WardCAs).
+    all_covered_by(UmweltCAs, WardCAs).
 
 
-all_covered([], _).
-all_covered([UmweltCA | Others], CAs) :-
-    covered(UmweltCA, CAs),
+all_covered_by([], _).
+all_covered_by([UmweltCA | Others], CAs) :-
+    covered_by_any(UmweltCA, CAs),
     !,
-    all_covered(Others, CAs).
+    all_covered_by(Others, CAs).
 
-covered(UmweltCA, CAs) :-
+covered_by_any(UmweltCA, CAs) :-
     member(CA, CAs),
     ca:umwelt(CA, Umwelt),
     member(UmweltCA, Umwelt).
 
-% TODO
-add_ca(_,_) :- fail.
+% If at level 1, always include all effector_ca's
+% Then assemble an umwelt of at least 1 or more non-covered CA and 0 or more covered CAs from level L - 1
+% Create a CA with that umwelt at level L
+add_ca(State, Name) :- 
+    get_state(State, level, Level),
+    ca:name_from_level(Level, Name),
+    pick_umwelt(State, Umwelt),
+    supervisor:start_worker_child(som, ca, Name, [init([level(Level), name(Name), umwelt(Umwelt)])]),
+    log(info, meta_ca, 'Added new CA ~w at level ~w with umwelt ~p', [Name, Level, Umwelt]).
+
+pick_umwelt(State, Umwelt) :-
+    get_state(State, level, Level),
+    effector_cas(Level, EffectorCAs),
+    pick_uncovered_cas(State, UncoveredCAs),
+    pick_covered_cas(State, CoveredCAs),
+    flatten([EffectorCAs, UncoveredCAs, CoveredCAs], Umwelt).
+
+effector_cas(1, EffectorCAs) :-
+    supervisor:children(som, Children),
+    findall(Name, (member(child(worker, Name), Children), type_of(Name, effector)), EffectorCAs).
+
+effector_cas(_, []).
+
+pick_uncovered_cas(State, UncoveredCAs) :-
+    get_state(State, level, Level),
+    get_state(State, wards, Wards),
+    UmweltLevel is Level - 1,
+    level_cas(UmweltLevel, CAs),
+    find(CA, (member(CA, CAs), \+ covered_by_any(CA, Wards)), AllUncoveredCAs),
+    pick_some(AllUncoveredCAs, UncoveredCAs).
+    
+pick_covered_cas(State, CoveredCAs) :-
+    get_state(State, level, Level),
+    get_state(State, wards, Wards),
+    UmweltLevel is Level - 1,
+    level_cas(UmweltLevel, CAs),
+    find(CA, (member(CA, CAs), covered_by_any(CA, Wards)), AllUncoveredCAs),
+    pick_some(AllUncoveredCAs, CoveredCAs).
 
 find_wards(State, Wards) :-
     get_state(State, wards, unknown), !,
@@ -170,6 +209,9 @@ type_of(Name, ca) :-
     member(Header, [sensor, effector, ca]), !.
 type_of(Name, metaca) :-
     atomic_list_concat([metaca | _], ':', Name), !.
+
+type_of(Name, Type) :-
+    atomic_list_concat([Type | _], ':', Name).
 
 level_of(Name, 0) :-
     atomic_list_concat([Header | _], ':', Name),
