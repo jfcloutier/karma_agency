@@ -98,6 +98,7 @@ handle(query(Query), _, unknown) :-
     log(info, meta_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 handle(terminating, State) :-
+    log(warn, meta_ca, '~@ terminating', [self]),
     get_state(State, timer, Timer),
     get_state(State, level, Level),
     timer:stop(Timer),
@@ -160,7 +161,7 @@ add_ca(State, Name) :-
     get_state(State, level, Level),
     ca:name_from_level(Level, Name),
     pick_umwelt(State, Umwelt),
-    supervisor:start_worker_child(som, ca, Name, [init([level(Level), name(Name), umwelt(Umwelt)])]),
+    supervisor:start_worker_child(som, ca, Name, [init([level(Level), umwelt(Umwelt)])]),
     log(info, meta_ca, 'Added new CA ~w at level ~w with umwelt ~p', [Name, Level, Umwelt]).
 
 pick_umwelt(State, Umwelt) :-
@@ -181,7 +182,7 @@ pick_uncovered_cas(State, UncoveredCAs) :-
     get_state(State, wards, Wards),
     UmweltLevel is Level - 1,
     level_cas(UmweltLevel, CAs),
-    find(CA, (member(CA, CAs), \+ covered_by_any(CA, Wards)), AllUncoveredCAs),
+    findall(CA, (member(CA, CAs), \+ covered_by_any(CA, Wards)), AllUncoveredCAs),
     pick_some(AllUncoveredCAs, UncoveredCAs).
     
 pick_covered_cas(State, CoveredCAs) :-
@@ -189,7 +190,7 @@ pick_covered_cas(State, CoveredCAs) :-
     get_state(State, wards, Wards),
     UmweltLevel is Level - 1,
     level_cas(UmweltLevel, CAs),
-    find(CA, (member(CA, CAs), covered_by_any(CA, Wards)), AllUncoveredCAs),
+    findall(CA, (member(CA, CAs), covered_by_any(CA, Wards)), AllUncoveredCAs),
     pick_some(AllUncoveredCAs, CoveredCAs).
 
 find_wards(State, Wards) :-

@@ -29,7 +29,7 @@ publish(prediction(distance), [value(130)]).
 publish(prediction(distance), [value(0)]).
 thread_get_message(Message).
 
-supervisor:stop(agency).
+supervisor:stop(agency, 60).
 threads.
 */
 

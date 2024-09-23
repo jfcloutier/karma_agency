@@ -48,7 +48,7 @@ name_from_level(Level, Name) :-
 
 % A meta-cognition actor re-evaluates the  state of its layer of the SOM every 2 ** Level seconds
 latency(Level, Latency) :-
-    Latency is 2 ** Level.
+    Latency is (2 ** Level) * 100.
 
 level(Name, Level) :-
     send_query(Name, level, Level).
@@ -62,17 +62,19 @@ init(Options, State) :-
     log(info, ca, "Initiating ca with ~p", [Options]),
     empty_state(EmptyState),
     option(level(Level), Options),
+    option(umwelt(Umwelt), Options),
     self(Name),
     latency(Level, Latency),
     send_at_interval(Name, framer, message(start_frame, Name), Latency, Timer),
     send_message(Name, start_frame),
-    put_state(EmptyState, [level-Level, timer-Timer, umwelt-unknown, frame-0, history-[]], State),
+    put_state(EmptyState, [level-Level, timer-Timer, umwelt-Umwelt, frame-0, history-[]], State),
     publish(ca_started, [level(Level)]).
 
 terminate :-
     log(warn, ca, 'Terminated').
 
 handle(terminating, State) :-
+    log(warn, ca, '~@ terminating', [self]),
     get_state(State, timer, Timer),
     get_state(State, level, Level),
     timer:stop(Timer),
@@ -97,7 +99,6 @@ handle(query(umwelt), State, Umwelt) :-
 
 handle(query(Query), _, unknown) :-
     log(info, ca, '~@ is NOT handling query ~p', [self, Query]).
-
 
 % TODO
 end_frame(State, State) :-

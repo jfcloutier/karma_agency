@@ -27,3 +27,5 @@ handle(event(Topic, Payload, Source), State, State) :-
 
 handle(query(Query), State, tbd) :-
     log(info, fullness, '~@ is NOT handling query ~p in state ~p', [self, Query, State]).
+
+handle(terminating, _).

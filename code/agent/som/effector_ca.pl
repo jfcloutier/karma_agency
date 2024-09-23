@@ -71,7 +71,8 @@ handle(query(action_domain), State, ActionDomain) :-
 handle(query(Query), _, tbd) :-
     log(debug, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
 
-handle(terminating, _).
+handle(terminating, _) :-
+    log(info, effector_ca, '~@ is terminating', [self]).
 
 %%%%
 

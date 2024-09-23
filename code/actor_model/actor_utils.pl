@@ -67,7 +67,7 @@ pairs_from_groups([Key-[Value | _] | Rest], [Key-Value | OtherPairs]) :-
 send(Name, Message) :-
     catch(
         (
-            log(debug, actor_model, 'Sending ~p to ~w', [Message, Name]),
+            log(debug, actor_model, '~@ is sending ~p to ~w', [self, Message, Name]),
             thread_send_message(Name, Message)
         ), 
         Exception, 
@@ -100,7 +100,7 @@ send_query(Name, Question, Answer) :-
     send_query(Name, Question, 5, Answer).
 
 send_query(Name, Question, Timeout, Answer) :- 
-    log(info, actor_model, 'Sending query ~p to ~w', [Question, Name]),
+    log(info, actor_model, '~@ is sending query ~p to ~w', [self, Question, Name]),
     catch(
             (
                 thread_self(From),
@@ -108,7 +108,7 @@ send_query(Name, Question, Timeout, Answer) :-
                 % Fails (quietly) is a matching message is not received in time
                 log(debug, actor_model, '~w is waiting for response(Answer, ~p, ~w), timeout is ~w', [From, Question, Name, Timeout]),
                 thread_get_message(From, response(Answer, Question, Name), [timeout(Timeout)]),
-                log(debug, actor_model, 'Got answer ~p from ~w to query ~p', [Answer, Name, Question])
+                log(info, actor_model, 'Got answer ~p from ~w to query ~p', [Answer, Name, Question])
             ),
             Exception, 
             (log(warn, actor_model, "Failed to query ~w about ~p: ~p~n", [Name, Question, Exception]), fail)

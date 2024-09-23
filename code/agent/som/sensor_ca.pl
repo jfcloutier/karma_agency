@@ -101,7 +101,8 @@ handle(query(action_domain), _, []).
 handle(query(Query), _, unknown) :-
     log(debug, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
 
-handle(terminating, _).
+handle(terminating, _) :-
+    log(info, sensor_ca, '~@ is terminating', [self]).
 
 %%%%
 

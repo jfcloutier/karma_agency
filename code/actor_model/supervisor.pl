@@ -47,6 +47,12 @@ stop(Supervisor) :-
     send_control(Supervisor, stop),
     wait_for_actor_stopped(Supervisor).
 
+stop(Supervisor, WaitSecs) :-
+    Timeout is WaitSecs * 4,
+    log(debug, supervisor, "Stopping supervisor ~w", [Supervisor]),
+    send_control(Supervisor, stop),
+    wait_for_actor_stopped(Supervisor, Timeout).
+   
 kill(Supervisor) :-
     stop(Supervisor).
 
