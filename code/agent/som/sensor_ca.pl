@@ -32,6 +32,8 @@ A sensor CA
 
 :- module(sensor_ca, []).
 
+:- [load].
+
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
@@ -56,6 +58,10 @@ init(Options, State) :-
     empty_reading(State1, Reading),
     put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
     publish(ca_started, []).
+
+process_signal(control(stop)) :-
+    terminate,
+    worker:stop.
 
 terminate :-
     log(warn, sensor_ca, 'Terminated').
@@ -100,9 +106,6 @@ handle(query(action_domain), _, []).
 
 handle(query(Query), _, unknown) :-
     log(debug, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
-
-handle(terminating, _) :-
-    log(info, sensor_ca, '~@ is terminating', [self]).
 
 %%%%
 

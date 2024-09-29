@@ -4,14 +4,13 @@
 
 An actor module starts and runs named, supervised threads (a.k.a actors).
 
-An actor module must implement `start(Name, Options, Supervisor)`, `stop(Name)` and `kill(Name)`.
+An actor module must implement `start(Name, Options, Supervisor)` and `process_signal(Signal)`.
 
 Start options:
 
 * topics(Topics) - Topics is the list of topics for the events the worker wants to receive (defaults to [])
 * handler(Handler) - Handler is the fully qualified name of the clause header handling events (required)
 * init(Init) - Init is the fully qualified name of the clause called when initiating the agent (defaults to worker:noop/0)
-* terminate(Terminate) - Terminate is the fully qualified name of the clause called when terminating the agent (defaults to worker:noop/0)
 
 If the module runs a singleton actor, it must also implement `name(Name)`.
 
@@ -39,6 +38,6 @@ An actor can subscribe to a list of topics or to an individual topic via
 
 An actor unsubscribes from all topics with `unsubscribe_all()`.
 
-On termination, an actor must send an `exited(Module, Name, Exit)` message to its supervisor where Exit = `exit(normal)` means normal exit.
+On termination, an actor must send an `exited(Kind, Module, Name, Exit)` message to its supervisor where Exit = `exit(normal)` means normal exit.
 
 See `./tests/actor_model` for simple examples of using the Karma actor model.

@@ -6,138 +6,109 @@ dispatches events published to it to topic listeners.
 */
 
 
-:- module(pubsub, [subscribe/1, subscribe_all/1, publish/2, unsubscribe_all/0, unsubscribe/1]).
+:- module(pubsub, [subscribe/1, subscribe/2, subscribe_all/1, subscribe_all/2, unsubscribe_all/0, unsubscribe_all/1, unsubscribe/1, unsubscribe/2, publish/2]).
+
+:- [load].
 
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).
 :- use_module(actor_utils).
-
-% TODO - Subscriptions are lost if pubsub is restarted
-% TODO - Use a run state to hold subscriptions
-:- thread_local subscription/2.
-
-%% Supervised
-
-start(Supervisor) :-
-    log(debug, pubsub, "Starting"),
-    thread_create(start_pubsub(Supervisor), _, [alias(pubsub)]),
-    wait_for_actor(pubsub).
-
-start(Supervisor, _, _, _) :-
-    start(Supervisor).
-
-stop(_) :-
-    log(debug, pubsub, "Stopping"),
-    send_control(pubsub, stop).
-
-kill(_) :-
-    log(debug, pubsub, "Dying"),
-    send_control(pubsub, die).
 
 % Singleton thread's name
 name(pubsub).
 
 %% Public
 
-subscribe_all([]).
-subscribe_all([Topic | Others]) :-
-    subscribe(Topic),
-    subscribe_all(Others).
-    
+
+subscribe_all(Topics) :-
+    self(Subscriber), 
+    subscribe_all(Subscriber, Topics).
+
+subscribe_all(_, []).
+subscribe_all(Subscriber, [Topic | Others]) :-
+    subscribe(Subscriber, Topic),
+    subscribe_all(Subscriber, Others).
 
 subscribe(Topic) :-
-   name(Name),
-   is_thread(Name) -> 
-        (thread_self(Subscriber),
-        send(Name, subscribe(Subscriber, Topic))
-        )
-        ;
-        true.
+    self(Subscriber),
+    subscribe(Subscriber, Topic).
+
+subscribe(Subscriber, Topic) :-
+    name(Pubsub),
+    send_message(Pubsub, subscribe(Subscriber, Topic)).
 
 unsubscribe(Topic) :-
-   name(Name),
-   is_thread(Name) -> 
-        (thread_self(Subscriber),
-        send(Name, unsubscribe(Subscriber, Topic))
-        )
-        ;
-        true.
+    self(Subscriber),
+    unsubscribe(Subscriber, Topic).
 
+unsubscribe(Subscriber, Topic) :-
+    name(Pubsub),
+    send_message(Pubsub, unsubscribe(Subscriber, Topic)).
 
 unsubscribe_all :-
-    name(Name),
-    is_thread(Name) ->
-        (thread_self(Subscriber),
-        send(pubsub, unsubscribe(Subscriber))
-        )
-        ;
-        true.
+    self(Subscriber),
+    unsubscribe_all(Subscriber).
+
+unsubscribe_all(Subscriber) :-
+    name(Pubsub),
+    send_message(Pubsub, unsubscribe_all(Subscriber)).
 
 publish(Topic, Payload) :-
-    name(Name),
-    is_thread(Name) ->
-        (thread_self(Source),
-        send(pubsub, event(Topic, Payload, Source))
-        )
-        ;
-        true.
+    self(Source),
+    name(Pubsub),
+    send_message(Pubsub, event(Topic, Payload, Source)).
 
 %% Private
 
-start_pubsub(Supervisor) :-
-    catch(start_run, Exit, process_exit(Exit, Supervisor)).
+init(_, State) :-
+    log(info, pubsub, 'Initializing pubsub'),
+    empty_state(EmptyState),
+    put_state(EmptyState, [subscriptions-[]], State).
 
-start_run :-
-    % Do some initializations here
-    run.
+% Called when worker exits
+terminate :-
+    log(info, pubsub, 'Pubsub ~@ terminated', [self]).
 
-process_exit(Exit, Supervisor) :-
-    log(debug, pubsub,  "Exit ~p~n", [Exit]),
-    thread_detach(pubsub), 
-    % race condition?
-    notify_supervisor(Supervisor, Exit),
-    thread_exit(true).
+process_signal(control(stop)) :-
+    log(debug, pubsub, 'Stopping pubsub'),
+    worker:stop.
 
+handle(message(subscribe(Subscriber, Topic), _), State, NewState) :-
+    log(debug, pubsub, "Subscribing ~w to topic ~w~n", [Subscriber, Topic]),
+    add_subscription(Subscriber, Topic, State, NewState).
 
-run :-
-    log(debug, pubsub, "Waiting..."),
-    thread_get_message(Message),
-    process_message(Message),
-    run.
+handle(message(unsubscribe(Subscriber, Topic), _), State, NewState) :-
+    log(debug, pubsub, "Unsubscribing ~w from topic ~w~n", [Subscriber, Topic]),
+    remove_subscription(Subscriber, Topic, State, NewState).
 
-process_message(subscribe(Name, Topic)) :-
-    log(debug, pubsub, "Subscribing ~w to topic ~w~n", [Name, Topic]),
-    assertz(subscription(Name, Topic)).
+handle(message(unsubscribe_all(Subscriber), _), State, NewState) :-
+    remove_all_subscriptions(Subscriber, State, NewState).
 
-process_message(unsubscribe(Name, Topic)) :-
-    log(debug, pubsub, "Unsubscribing ~w from topic ~w~n", [Name, Topic]),
-    retract(subscription(Name, Topic)).
+handle(message(event(Topic, Payload, Source), _), State, State) :-
+    broadcast(event(Topic, Payload, Source), State).
 
-process_message(unsubscribe(Name)) :-
-    retractall(subscription(Name, _)).
+broadcast(event(Topic, Payload, Source), State) :-
+    get_state(State, subscriptions, Subscriptions),
+    foreach(member(subscription(Name, Topic), Subscriptions), send_event_to(event(Topic, Payload, Source), Name)).
 
-process_message(control(stop)) :-
-    log(debug, pubsub, "Stopping"),
-    retractall(subscription/2),
-    throw(exit(normal)).
-
-process_message(control(die)) :-
-    log(debug, pubsub, "Dying"),
-    retractall(subscription/2),
-    thread_detach(pubsub), 
-    thread_exit(true).
-
-process_message(event(Topic, Payload, Source)) :-
-    broadcast(event(Topic, Payload, Source)).
-
-broadcast(event(Topic, Payload, Source)) :-
-    foreach(subscription(Name, Topic), send_event(event(Topic, Payload, Source), Name)).
-
-send_event(Event, Name) :-
+send_event_to(Event, Name) :-
     log(debug, pubsub, "Sending event ~p to ~w~n", [Event, Name]),
     send(Name, Event).
 
-% Inform supervisor of the exit
-notify_supervisor(Supervisor, Exit) :-
-    name(Name),
-    send(Supervisor, exited(pubsub, Name, Exit)).
+add_subscription(Subscriber, Topic, State, NewState) :-
+    get_state(State, subscriptions, Subscriptions),
+    (member(subscription(Subscriber, Topic), Subscriptions) ->
+        true
+    ;
+        put_state(State, subscriptions, [subscription(Subscriber, Topic) | Subscriptions], NewState)
+    ).
+
+remove_subscription(Subscriber, Topic, State, NewState) :-
+    get_state(State, subscriptions, Subscriptions),
+    delete(Subscriptions, subscription(Subscriber, Topic), Subscriptions1),
+    put_state(State, subscriptions, Subscriptions1, NewState).
+
+remove_all_subscriptions(Subscriber, State, NewState) :-
+    get_state(State, subscriptions, Subscriptions),
+    delete(Subscriptions, subscription(Subscriber, _), Subscriptions1),
+    put_state(State, subscriptions, Subscriptions1, NewState).    

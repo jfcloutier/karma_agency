@@ -17,13 +17,20 @@ An effector CA
 
 */
 
-:- module(effector_ca, []).
-:- use_module(actor_model(actor_utils)).
 
+
+:- module(effector_ca, []).
+
+:- [load].
+
+:- use_module(actor_model(actor_utils)).
+:- use_module(actor_model(pubsub)).
+:- use_module(actor_model(worker)).
 :- use_module(code(logger)).
+:- use_module(agent(body)).
 
 name_from_effector(Effector, Name) :-
-    atomic_list_concat([effector, Effector.id], ':', Name).
+	atomic_list_concat([effector, Effector.id], ':', Name).
 
 % An effector CA has no latency
 latency(0).
@@ -32,58 +39,59 @@ latency(0).
 level(0).
 
 init(Options, State) :-
-    log(info, effector_ca, 'Initiating with ~p', [Options]),
-    empty_state(EmptyState),
-    option(effectors(Effectors), Options),
-    put_state(EmptyState, effectors, Effectors, State1),
-    action_domain(State1, ActionDomain),
-    put_state(State1, [action_domain-ActionDomain], State),
-    publish(ca_started, []).
+	log(info, effector_ca, 'Initiating with ~p', [Options]), 
+	empty_state(EmptyState), 
+	option(
+		effectors(Effectors), Options), 
+	put_state(EmptyState, effectors, Effectors, State1), 
+	action_domain(State1, ActionDomain), 
+	put_state(State1, [action_domain - ActionDomain], State), 
+	publish(ca_started, []).
+
+process_signal(control(stop)) :-
+	worker : stop.
 
 terminate :-
-    log(warn, effector_ca, 'Terminated').
+	log(warn, effector_ca, 'Terminated').
 
 handle(message(actuate(Action), _), State, State) :-
-    actuate(State, Action).
+	actuate(State, Action).
 
 handle(message(Message, Source), State, State) :-
-   log(debug, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(debug, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(Topic, Payload, Source), State, State) :-
-    log(debug, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+	log(debug, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
-    self(Name).
+	self(Name).
 
 handle(query(type), _, ca).
 
 handle(query(level), _, Level) :-
-    level(Level).
+	level(Level).
 
 handle(query(latency), _, Latency) :-
-    latency(Latency).
+	latency(Latency).
 
 handle(query(belief_domain), _, []).
 
 handle(query(action_domain), State, ActionDomain) :-
-    get_state(State, action_domain, ActionDomain).
+	get_state(State, action_domain, ActionDomain).
 
 handle(query(Query), _, tbd) :-
-    log(debug, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
-
-handle(terminating, _) :-
-    log(info, effector_ca, '~@ is terminating', [self]).
+	log(debug, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 %%%%
 
 action_domain(State, ActionDomain) :-
-    findall(Action, (member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
+	findall(Action, 
+		(
+			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
 action_url(State, Action, ActionUrl) :-
-    member(Effector, State.effectors),
-    Action == Effector.capabilities.action,
-    ActionUrl = Effector.url.
+	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
 
 actuate(State, Action) :-
-    action_url(State, Action, ActionUrl),
-    body:actuate(ActionUrl).
+	action_url(State, Action, ActionUrl), 
+	body : actuate(ActionUrl).

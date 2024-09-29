@@ -37,73 +37,92 @@ State:
 
 :- module(ca, []).
 
+:- [load].
+
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
+:- use_module(actor_model(worker)).
 :- use_module(library(uuid)).
 
+% Thread statis state
+:- thread_local level/1, timer/1.
+
 name_from_level(Level, Name) :-
-    uuid(ID),
-    atomic_list_concat([ca, level, Level, id, ID], ":", Name).
+	uuid(ID), 
+	atomic_list_concat([ca, level, Level, id, ID], ":", Name).
 
 % A meta-cognition actor re-evaluates the  state of its layer of the SOM every 2 ** Level seconds
+
 latency(Level, Latency) :-
-    Latency is (2 ** Level) * 100.
+	Latency is (2**Level)*100.
 
 level(Name, Level) :-
-    send_query(Name, level, Level).
+	send_query(Name, level, Level).
 
 umwelt(Name, Umwelt) :-
-    send_query(Name, umwelt, Umwelt).
+	send_query(Name, umwelt, Umwelt).
 
 % Worker
 
 init(Options, State) :-
-    log(info, ca, "Initiating ca with ~p", [Options]),
-    empty_state(EmptyState),
-    option(level(Level), Options),
-    option(umwelt(Umwelt), Options),
-    self(Name),
-    latency(Level, Latency),
-    send_at_interval(Name, framer, message(start_frame, Name), Latency, Timer),
-    send_message(Name, start_frame),
-    put_state(EmptyState, [level-Level, timer-Timer, umwelt-Umwelt, frame-0, history-[]], State),
-    publish(ca_started, [level(Level)]).
+	log(info, ca, "Initiating ca with ~p", [Options]), 
+	empty_state(EmptyState), 
+	option(
+		level(Level), Options), 
+	assert(
+		level(Level)), 
+	option(
+		umwelt(Umwelt), Options), 
+	self(Name), 
+	latency(Level, Latency), 
+	send_at_interval(Name, framer, 
+		message(start_frame, Name), Latency, Timer), 
+	assert(
+		timer(Timer)), 
+	send_message(Name, start_frame), 
+	put_state(EmptyState, [umwelt - Umwelt, frame - 0, history - []], State), 
+	publish(ca_started, 
+		[level(Level)]).
+
+process_signal(control(stop)) :-
+	worker : stop.
 
 terminate :-
-    log(warn, ca, 'Terminated').
-
-handle(terminating, State) :-
-    log(warn, ca, '~@ terminating', [self]),
-    get_state(State, timer, Timer),
-    get_state(State, level, Level),
-    timer:stop(Timer),
-    publish(ca_terminated, [level(Level)]).
+	log(warn, ca, '~@ terminating', [self]), 
+	timer(Timer), 
+	timer : stop(Timer), 
+	level(Level), 
+	publish(ca_terminated, 
+		[level(Level)]), 
+	log(warn, ca, 'Terminated ~@', [self]).
 
 % End current frame, if any, and start new frame
+
 handle(message(start_frame, _), State, NewState) :-
-    end_frame(State, State1),
-    start_frame(State1, NewState).
+	end_frame(State, State1), 
+	start_frame(State1, NewState).
 
 handle(message(Message, Source), State, State) :-
-   log(info, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(info, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(query(type), _, ca).
 
-handle(query(level), State, Level) :-
-    get_state(State, level, Level).
+handle(query(level), _, Level) :-
+	level(Level).
 
 handle(query(umwelt), State, Umwelt) :-
-    get_state(State, umwelt, Umwelt).
-
+	get_state(State, umwelt, Umwelt).
 
 handle(query(Query), _, unknown) :-
-    log(info, ca, '~@ is NOT handling query ~p', [self, Query]).
+	log(info, ca, '~@ is NOT handling query ~p', [self, Query]).
 
 % TODO
+
 end_frame(State, State) :-
-    log(info, ca, 'CA ~@ is ending the current frame', [self]).
+	log(info, ca, 'CA ~@ is ending the current frame', [self]).
 
 % TODO
+
 start_frame(State, State) :-
-    log(info, ca, 'CA ~@ is starting a new frame', [self]).
+	log(info, ca, 'CA ~@ is starting a new frame', [self]).

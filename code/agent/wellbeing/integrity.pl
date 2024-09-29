@@ -6,26 +6,32 @@ The feeling of pain.
 
 :- module(integrity, []).
 
+:- [load].
+
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
+:- use_module(actor_model(worker)).
 
 name(integrity).
 
 init(_, State) :-
-    log(info, integrity, 'Initiating'),
-    empty_state(State),
-    send_message(start).
+	log(info, integrity, 'Initiating'), 
+	empty_state(State), 
+	send_message(start).
+
+process_signal(control(stop)) :-
+	worker : stop.
 
 terminate :-
-    log(info, integrity, 'Terminating').
+	log(info, integrity, 'Terminating').
 
 handle(message(Message, Source), State, State) :-
-   log(info, integrity, '~@ is NOT handling message ~p from ~w in state ~p', [self, Message, Source, State]).
-    
+	log(info, integrity, '~@ is NOT handling message ~p from ~w in state ~p', [self, Message, Source, State]).
+
 handle(event(Topic, Payload, Source), State, State) :-
-    log(info, integrity, '~@ is NOT handling event event(~w, ~p, ~w) in state ~p', [self, Topic, Payload, Source, State]).
+	log(info, integrity, '~@ is NOT handling event event(~w, ~p, ~w) in state ~p', [self, Topic, Payload, Source, State]).
 
 handle(query(Query), State, tbd) :-
-    log(info, integrity, '~@ is NOT handling query ~p in state ~p', [self, Query, State]).
+	log(info, integrity, '~@ is NOT handling query ~p in state ~p', [self, Query, State]).
 
 handle(terminating, _).

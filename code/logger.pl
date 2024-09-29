@@ -1,5 +1,7 @@
 :- module(logger, [log/3, log/4, log/5, set_log_level/1, log_level/1, ignore_log_topic/1, reset_logging/0, log_to/1, no_log_to/0]).
 
+[load].
+
 /*
 [load].
 [code(logger)].
@@ -108,24 +110,38 @@ log(Level, Topic, Message, sleep(Secs)) :-
     sleep(Secs), !.
 
 log(Level, Topic, Message, Params) :-
+    catch(
+        do_log(Level, Topic, Message, Params),
+        Exception,
+        (format('Error doing log(~w,~w,~w,~p): ~p~n', [Level, Topic, Message, Params, Exception], true))
+    ).
+
+log(Level, Topic, Message) :-
+    catch(
+        do_log(Level, Topic, Message),
+        Exception,
+        (format('Error doing log(~w,~w,~w): ~p~n', [Level, Topic, Message, Exception], true))
+    ).
+
+do_log(Level, Topic, Message, Params) :-
     level_covered(Level),
     topic_covered(Topic),
     add_meta(Level, Topic, Message, Params, Line, ParamsPlus),
     format(Line, ParamsPlus), 
-    (is_stream(log_file) -> format(log_file, Line, ParamsPlus), flush_output(log_file); true),
-    !.
+    (is_stream(log_file) -> format(log_file, Line, ParamsPlus), flush_output(log_file); true), !.
 
-log(_, _, _, _).
+do_log(_, _, _, _) :-
+    format('@@@ FAILED TO LOG 4~n').
 
-log(Level, Topic, Message) :-
+do_log(Level, Topic, Message) :-
     level_covered(Level),
     topic_covered(Topic),
     add_meta(Level, Topic, Message, [], Line, Params),
     format(Line, Params), 
-    (is_stream(log_file) -> format(log_file, Line, Params), flush_output(log_file); true),
-    !.
+    (is_stream(log_file) -> format(log_file, Line, Params), flush_output(log_file); true), !.
 
-log(_, _, _).
+do_log(_, _, _) :-
+    format('@@@ FAILED TO LOG 3~n').
 
 add_meta(Level, Topic, Message, Params, Line, [Time, Level, Topic | Params]) :-
     string_concat(Message, '~n', Message1),

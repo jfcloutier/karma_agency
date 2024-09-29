@@ -2,49 +2,64 @@
 
 :- module(alice, []).
 
+:- [load].
+
+:- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).
 :- use_module(actor_model(pubsub), [publish/2]).
 
+name(alice).
+
 %% Worker callbacks
 
 init(Options, State) :-
-   option(mood(Mood), Options, bored),
-    format("[alice] Initializing with mood ~w~n", [Mood]),
-    empty_state(EmptyState),
-    put_state(EmptyState, mood, Mood, State).
+	option(
+		mood(Mood), Options, bored), 
+	log(info, alice, "Initializing with mood ~w", [Mood]), 
+	empty_state(EmptyState), 
+	put_state(EmptyState, mood, Mood, State).
+
+process_signal(control(stop)) :-
+	worker : stop.
 
 terminate :-
-   writeln("[alice] Terminating").
+	writeln("[alice] Terminating").
+
+handle(control(exit), _, _) :-
+	throw(
+		exit(normal)).
 
 % Ignore all events from self
-handle(event(_,_, alice)).
+handle(event(_,_, alice), State, State).
 
 handle(event(party, PartyGoers, _), State, NewState) :-
-   format("[alice] Ready to party with ~w~n", [PartyGoers]),
-   put_state(State, mood, pleased, NewState),
-   contact_others(PartyGoers),
-   publish(police, "Anything wrong, officer?").
+	log(info, alice, "Ready to party with ~w", [PartyGoers]), 
+	put_state(State, mood, pleased, NewState), 
+	contact_others(PartyGoers), 
+	publish(police, "Anything wrong, officer?").
 
 handle(event(police, Payload, _), State, NewState) :-
-   format("[alice] Police! ~w~n", [Payload]),
-   put_state(State, mood, displeased, NewState).
+	log(info, alice, "Police! ~w", [Payload]), 
+	put_state(State, mood, displeased, NewState).
 
 handle(query(mood), State, Response) :-
-   get_state(State, mood, Response),
-   format("Alice is ~p~n", [Response]).
+	get_state(State, mood, Response), 
+	log(info, alice, "Alice is ~p", [Response]).
 
 handle(query(_), _, "Pardon?").
 
 handle(message(Message, Source), State, State) :-
-    format("[alice] Received ~w from ~w~n", [Message, Source]).
+	log(info, alice, "Received ~w from ~w", [Message, Source]).
  
 %% Private
 
 contact_others([]).
-contact_others([alice | Others]) :-
-   contact_others(Others).
-contact_others([Name | Others]) :-
-   worker:send_message(Name, "Alice says howdy!"),
-   contact_others(Others).
+
+contact_others([alice|Others]) :-
+	contact_others(Others).
+
+contact_others([Name|Others]) :-
+	worker : send_message(Name, "Alice says howdy!"), 
+	contact_others(Others).
 
