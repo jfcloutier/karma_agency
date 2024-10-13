@@ -23,8 +23,10 @@ Events:
   * wards - [CAName, ...]
     
 State:
+    * level - integer (duplicated in thread local where it is needed for termination)
     * busy - true|false
     * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
+	* meta_ca_below - the meta_ca one level down -- TODO
 
 */
 
@@ -37,7 +39,9 @@ State:
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(worker)).
+:- use_module(actor_model(timer)).
 :- use_module(som(ca)).
+:- use_module(actor_model(task)).
 
 % Static state
 :- thread_local level/1, timer/1.
@@ -48,7 +52,7 @@ name_from_level(Level, Name) :-
 % A meta-cognition actor re-evaluates the state of its layer of the SOM every 2 ** Level seconds
 
 latency(Level, Latency) :-
-	Latency is (2**Level)*2.
+	Latency is (2**Level)*Level.
 
 %% Worker
 
@@ -66,7 +70,7 @@ init(Options, State) :-
 		message(curate, Name), Latency, Timer), 
 	assert(
 		timer(Timer)), 
-	put_state(EmptyState, [wards - unknown, busy - false], State), 
+	put_state(EmptyState, [level - Level, wards - unknown, busy - false], State), 
 	publish(mca_started, 
 		[level(Level)]).
 
@@ -82,14 +86,15 @@ terminate :-
 		[level(Level)]), 
 	log(warn, meta_ca, 'Terminated ~@', [self]).
 
-handle(message(curate, _), State, NewState) :-
-	get_state(State, busy, false)
-	 ->
-			curate(State, NewState);
+handle(message(curate, _), State, State) :-
+	get_state(State, busy, false), !, 
+	curate(State).
+
+handle(message(curate, _), State, State) :-
 	log(debug, meta_ca, 'Skipping curating because busy').
 
-handle(message(busy, _), State, NewState) :-
-	put_state(State, busy, true, NewState).
+handle(message(busy(Busy), _), State, NewState) :-
+	put_state(State, busy, Busy, NewState).
 
 handle(message(Message, Source), State, State) :-
 	log(info, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
@@ -97,14 +102,14 @@ handle(message(Message, Source), State, State) :-
 handle(event(ca_started, Payload, CA), State, NewState) :-
 	option(
 		level(Level), Payload), 
-	level(Level), !, 
+	get_state(State, level, Level), !, 
 	find_wards(State, Wards), 
 	put_state(State, wards, [CA|Wards], NewState).
 
 handle(event(ca_terminated, Payload, CA), State, NewState) :-
 	option(
 		level(Level), Payload), 
-	level(Level), !, 
+	get_state(State, level, Level), !, 
 	find_wards(State, Wards), 
 	delete(Wards, CA, RemainingWards), 
 	put_state(State, wards, RemainingWards, NewState).
@@ -130,31 +135,41 @@ handle(query(Query), _, unknown) :-
 %   adding a ward CA to increase coverage (if needed)
 %   and/or retiring a useless ward CA (if needed)
 
-curate(State, NewState) :-
-	send_message(busy), 
-	level(Level), 
-	log(debug, meta_ca, '~@ curating level ~w', [self, Level]), 
-	cull(State), 
-	grow(State), 
-	put_state(State, busy, false, NewState).
+curate(State) :-
+	send_message(
+		busy(true)), 
+	self(Name), 
+	% Curate in a task to free up the meta_ca's to process other messages
+	do_and_then(
+		meta_ca : do_curate(Name, State), 
+		send_message(Name, 
+			busy(false))).
+
+%% Run in task thread
+
+do_curate(Name, State) :-
+	get_state(State, level, Level), 
+	log(debug, meta_ca, '~@ is curating level ~w', [self, Level]), 
+	cull(Name, State), 
+	grow(Name, State).
 
 % For each ward that is not dependent on by a CA at a higher level,
 % evaluate if it is persistently useless.
 % If so, terminate it.
 % TODO
-cull(_).
+cull(_, _).
 
 % Add a CA to the metaCA's level L if leve L - 1 is complete and level L is not.
 
-grow(State) :-
-	level(Level), 
-	log(debug, meta_ca, '~@ is growing level ~w ', [self, Level]), UmweltLevel is Level - 1, 
+grow(Name, State) :-
+	get_state(State, level, Level), 
+	log(debug, meta_ca, '~w is growing level ~w ', [Name, Level]), UmweltLevel is Level - 1, 
 	level_is_complete(UmweltLevel, State), 
 	 \+ level_is_complete(Level, State), !, 
 	log(info, meta_ca, 'Adding new ca at level ~w', [Level]), 
 	add_ca(State, NewCA), 
 	log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
-grow(_).
+grow(_, _).
 
 level_is_complete(0, _).
 
@@ -182,18 +197,18 @@ covered_by_any(UmweltCA, CAs) :-
 % Then assemble an umwelt of at least 1 or more non-covered CA and 0 or more covered CAs from level L - 1
 % Create a CA with that umwelt at level L
 
-add_ca(State, Name) :-
-	level(Level), 
-	ca : name_from_level(Level, Name), 
+add_ca(State, CAName) :-
+	get_state(State, level, Level), 
+	ca : name_from_level(Level, CAName), 
 	pick_umwelt(State, Umwelt), 
-	supervisor : start_worker_child(som, ca, Name, 
+	supervisor : start_worker_child(som, ca, CAName, 
 		[init(
 			[level(Level), 
 			umwelt(Umwelt)])]), 
-	log(info, meta_ca, 'Added new CA ~w at level ~w with umwelt ~p', [Name, Level, Umwelt]).
+	log(info, meta_ca, 'Added new CA ~w at level ~w with umwelt ~p', [CAName, Level, Umwelt]).
 
 pick_umwelt(State, Umwelt) :-
-	level(Level), 
+	get_state(State, level, Level), 
 	effector_cas(Level, EffectorCAs), 
 	pick_uncovered_cas(State, UncoveredCAs), 
 	pick_covered_cas(State, CoveredCAs), 
@@ -210,7 +225,7 @@ effector_cas(1, EffectorCAs) :-
 effector_cas(_, []).
 
 pick_uncovered_cas(State, UncoveredCAs) :-
-	level(Level), 
+	get_state(State, level, Level), 
 	get_state(State, wards, Wards), UmweltLevel is Level - 1, 
 	level_cas(UmweltLevel, CAs), 
 	findall(CA, 
@@ -220,7 +235,7 @@ pick_uncovered_cas(State, UncoveredCAs) :-
 	pick_some(AllUncoveredCAs, UncoveredCAs).
 
 pick_covered_cas(State, CoveredCAs) :-
-	level(Level), 
+	get_state(State, level, Level), 
 	get_state(State, wards, Wards), UmweltLevel is Level - 1, 
 	level_cas(UmweltLevel, CAs), 
 	findall(CA, 
@@ -231,7 +246,7 @@ pick_covered_cas(State, CoveredCAs) :-
 
 find_wards(State, Wards) :-
 	get_state(State, wards, unknown), !, 
-	level(Level), 
+	get_state(State, level, Level), 
 	level_cas(Level, Wards).
 
 find_wards(State, Wards) :-
