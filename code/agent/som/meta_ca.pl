@@ -14,8 +14,8 @@ Events:
   * ca_terminated, [level(Level)]
 
 * Out
-  * mca_started, [level(Level)]
-  * mca_terminated, [level(Level)]
+  * meta_ca_started, [level(Level)]
+  * meta_ca_terminated, [level(Level)]
 
 * Queries
   * type - meta-ca
@@ -26,7 +26,8 @@ State:
     * level - integer (duplicated in thread local where it is needed for termination)
     * busy - true|false
     * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
-	* meta_ca_below - the meta_ca one level down -- TODO
+	* meta_ca_below - the meta_ca one level down, if level > 0
+	* sensor_count, effector_count - if level == 0
 
 */
 
@@ -40,6 +41,8 @@ State:
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(worker)).
 :- use_module(actor_model(timer)).
+:- use_module(som(sensor_ca)).
+:- use_module(som(effector_ca)).
 :- use_module(som(ca)).
 :- use_module(actor_model(task)).
 
@@ -63,16 +66,44 @@ init(Options, State) :-
 		level(Level), Options), 
 	assert(
 		level(Level)), 
-	subscribe_all([ca_started, ca_terminated]), 
+	subscribe_all([ca_started, ca_terminated, meta_ca_started, meta_ca_terminated]), 
 	latency(Level, Latency), 
 	self(Name), 
-	send_at_interval(Name, curator, 
-		message(curate, Name), Latency, Timer), 
-	assert(
-		timer(Timer)), 
-	put_state(EmptyState, [level - Level, wards - unknown, busy - false], State), 
-	publish(mca_started, 
+	(
+		Level == 0 ->
+			(
+			option(
+				sensors(Sensors), Options), 
+			option(
+				effectors(Effectors), Options), 
+			start_sensor_cas(Sensors, SensorCount), 
+			start_effector_cas(Effectors, EffectorCount),
+			maybe_start_meta_ca_above(Name, Level), 
+			put_state(EmptyState, [level - Level, sensor_count - SensorCount, effector_count - EffectorCount, wards - [], busy - false], State));
+		(
+			option(
+				meta_ca_below(MetaCABelow), Options), 
+			send_at_interval(Name, curator, 
+				message(curate, Name), Latency, Timer), 
+			assert(
+				timer(Timer)), 
+			put_state(EmptyState, [level - Level, meta_ca_below - MetaCABelow, wards - [], busy - false], State))), 
+	publish(meta_ca_started, 
 		[level(Level)]).
+
+% Start meta_ca above Name which is at level Level, if not already started
+
+maybe_start_meta_ca_above(Name, Level) :-
+	LevelAbove is Level + 1, 
+	meta_ca : name_from_level(LevelAbove, MetaCAAbove), 
+	(
+		 \+ is_thread(MetaCAAbove)
+		 ->
+				supervisor : start_worker_child(som, meta_ca, MetaCAAbove, 
+			[init(
+				[level(LevelAbove), 
+				meta_ca_below(Name)])]);
+				true).
 
 process_signal(control(stop)) :-
 	worker : stop.
@@ -82,7 +113,7 @@ terminate :-
 	timer(Timer), 
 	timer : stop(Timer), 
 	level(Level), 
-	publish(ca_terminated, 
+	publish(meta_ca_terminated, 
 		[level(Level)]), 
 	log(warn, meta_ca, 'Terminated ~@', [self]).
 
@@ -97,25 +128,31 @@ handle(message(busy(Busy), _), State, NewState) :-
 	put_state(State, busy, Busy, NewState).
 
 handle(message(Message, Source), State, State) :-
-	log(info, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(debug, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+
+handle(event(meta_ca_started, Payload, MetaCA), State, NewState) :-
+	get_state(State, level, Level), LevelBelow is Level - 1, 
+	option(
+		level(LevelBelow), Payload), !, 
+	put_state(State, meta_ca_below, MetaCA, NewState).
 
 handle(event(ca_started, Payload, CA), State, NewState) :-
 	option(
 		level(Level), Payload), 
 	get_state(State, level, Level), !, 
-	find_wards(State, Wards), 
+	get_state(State, wards, Wards), 
 	put_state(State, wards, [CA|Wards], NewState).
 
 handle(event(ca_terminated, Payload, CA), State, NewState) :-
 	option(
 		level(Level), Payload), 
 	get_state(State, level, Level), !, 
-	find_wards(State, Wards), 
+	get_state(State, wards, Wards), 
 	delete(Wards, CA, RemainingWards), 
 	put_state(State, wards, RemainingWards, NewState).
 
 handle(event(Topic, Payload, Source), State, State) :-
-	log(info, meta_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+	log(debug, meta_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
 	self(Name).
@@ -128,8 +165,53 @@ handle(query(level), State, Level) :-
 handle(query(wards), State, Wards) :-
 	get_state(State, wards, Wards).
 
+% Level 0 - all sensor and effector CA are wards
+handle(query(is_complete), State, true) :-
+	get_state(State, level, 0),
+	get_state(State, sensor_count, SensorCount),
+	get_state(State, effector_count, EffectorCount),
+	get_state(State, wards, Wards),
+	length(Wards, WardCount), !,
+	WardCount is SensorCount + EffectorCount.
+
+handle(query(is_complete), State, true) :-
+	get_state(State, level, Level), Level \= 0, 
+	level_is_complete(State), !.
+
+handle(query(is_complete), _, false).
+
 handle(query(Query), _, unknown) :-
-	log(info, meta_ca, '~@ is NOT handling query ~p', [self, Query]).
+	log(debug, meta_ca, '~@ is NOT handling query ~p', [self, Query]).
+
+%% Level 0
+
+start_sensor_cas([], 0).
+
+start_sensor_cas([Sensor|Others], SensorCount) :-
+	sensor_ca : name_from_sensor(Sensor, Name), 
+	supervisor : start_worker_child(som, sensor_ca, Name, 
+		[init(
+			[sensor(Sensor)])]), 
+	start_sensor_cas(Others, OtherCount),
+	SensorCount is OtherCount + 1.
+
+% The body presents each possible action by an actual effector as a separate effector capability.
+% We combine them into a single effector CA
+start_effector_cas([], 0).
+
+start_effector_cas([Effector|Others], EffectorCount) :-
+	findall(Twin, 
+		(
+			member(Twin, Others), Twin.id == Effector.id), Twins), 
+	effector_ca : name_from_effector(Effector, Name), 
+	supervisor : start_worker_child(som, effector_ca, Name, 
+		[init(
+			[effectors([Effector|Twins])])]), 
+	subtract(Others, Twins, Rest), 
+	start_effector_cas(Rest, RestCount),
+	EffectorCount is RestCount + 1.
+
+%% Curating
 
 % Curate by 
 %   adding a ward CA to increase coverage (if needed)
@@ -138,8 +220,8 @@ handle(query(Query), _, unknown) :-
 curate(State) :-
 	send_message(
 		busy(true)), 
-	self(Name), 
-	% Curate in a task to free up the meta_ca's to process other messages
+	self(Name), % Curate in a task to free up the meta_ca's to process other messages
+	
 	do_and_then(
 		meta_ca : do_curate(Name, State), 
 		send_message(Name, 
@@ -163,24 +245,39 @@ cull(_, _).
 
 grow(Name, State) :-
 	get_state(State, level, Level), 
-	log(debug, meta_ca, '~w is growing level ~w ', [Name, Level]), UmweltLevel is Level - 1, 
-	level_is_complete(UmweltLevel, State), 
-	 \+ level_is_complete(Level, State), !, 
+	get_state(State, meta_ca_below, MetaCABelow), 
+	log(debug, meta_ca, '~w is growing level ~w ', [Name, Level]), 
+	level_below_is_complete(State, MetaCABelow), 
+	 \+ level_is_complete(State), !, 
 	log(info, meta_ca, 'Adding new ca at level ~w', [Level]), 
 	add_ca(State, NewCA), 
 	log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
+
+grow(Name, State) :-
+	level_is_complete(State), !, 
+	get_state(State, level, Level), 
+	maybe_start_meta_ca_above(Name, Level).
+
 grow(_, _).
 
-level_is_complete(0, _).
+level_is_complete(State) :-
+	get_state(State, level, 0), !.
 
-level_is_complete(Level, State) :-
-	Level \= 0, UmweltLevel is Level - 1, 
-	level_cas(UmweltLevel, UmweltCAs), 
-	log(debug, meta_ca, 'Level ~w has umwelt CAs ~p', [Level, UmweltCAs]), 
-	find_wards(State, WardCAs), 
+level_is_complete(State) :-
+	cas_below(State, CASBelow), 
+	get_state(State, level, Level), 
+	log(debug, meta_ca, 'Level ~w has umwelt CAs ~p', [Level, CASBelow]), 
+	get_state(State, wards, WardCAs), 
 	log(debug, meta_ca, 'Level ~w has wards CAs ~p', [Level, WardCAs]), 
-	all_covered_by(UmweltCAs, WardCAs).
+	all_covered_by(CASBelow, WardCAs).
 
+cas_below(State, CASBelow) :-
+	get_state(State, meta_ca_below, MetaCABelow), 
+	send_query(MetaCABelow, wards, CASBelow).
+
+level_below_is_complete(State, MetaCABelow) :-
+	get_state(State, meta_ca_below, MetaCABelow), 
+	send_query(MetaCABelow, is_complete, true).
 
 all_covered_by([], _).
 
@@ -215,11 +312,11 @@ pick_umwelt(State, Umwelt) :-
 	flatten([EffectorCAs, UncoveredCAs, CoveredCAs], Umwelt).
 
 effector_cas(1, EffectorCAs) :-
-	supervisor : children(som, Children), 
+	meta_ca : name_from_level(0, MetaCA0),
+	send_query(MetaCA0, wards, Wards), 
 	findall(Name, 
 		(
-			member(
-				child(worker, Name), Children), 
+			member(Name, Wards), 
 			type_of(Name, effector)), EffectorCAs).
 
 effector_cas(_, []).
@@ -244,36 +341,9 @@ pick_covered_cas(State, CoveredCAs) :-
 			covered_by_any(CA, Wards)), AllUncoveredCAs), 
 	pick_some(AllUncoveredCAs, CoveredCAs).
 
-find_wards(State, Wards) :-
-	get_state(State, wards, unknown), !, 
-	get_state(State, level, Level), 
-	level_cas(Level, Wards).
-
-find_wards(State, Wards) :-
-	get_state(State, wards, Wards).
-
 level_cas(Level, CAs) :-
-	supervisor : children(som, Children), 
-	findall(Name, 
-		(
-			member(
-				child(worker, Name), Children), 
-			type_of(Name, ca), 
-			level_of(Name, Level)), CAs).
-
-type_of(Name, ca) :-
-	atomic_list_concat([Header|_], ':', Name), 
-	member(Header, [sensor, effector, ca]), !.
-
-type_of(Name, metaca) :-
-	atomic_list_concat([metaca|_], ':', Name), !.
+	meta_ca : name_from_level(Level, MetaCA),
+	send_query(MetaCA, wards, CAs).
 
 type_of(Name, Type) :-
 	atomic_list_concat([Type|_], ':', Name).
-
-level_of(Name, 0) :-
-	atomic_list_concat([Header|_], ':', Name), 
-	member(Header, [sensor, effector]), !.
-
-level_of(Name, Level) :-
-	atomic_list_concat([_, level, L|_], ':', Name), !, L == Level.

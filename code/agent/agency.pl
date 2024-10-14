@@ -13,7 +13,7 @@ It integrates services and actors:
 % Start karma_world server then karma_body server
 [load].
 [agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub), som(meta_ca)].
-set_log_level(debug).
+set_log_level(info).
 agency:start('localhost:4000').
 threads.
 send_query('som', children, SOMChildren).
@@ -41,8 +41,6 @@ threads.
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
 :- use_module(agent(body)).
-:- use_module(som(sensor_ca)).
-:- use_module(som(effector_ca)).
 :- use_module(som(meta_ca)).
 :- use_module(wellbeing(engagement)).
 :- use_module(wellbeing(fullness)).
@@ -64,44 +62,22 @@ start(BodyHost) :-
 		
 	worker(engagement, 
 		[topics([]), 
-		restart(permanent)])], AgencyChildren = [pubsub, 
+		restart(permanent)])], 
+		
+	AgencyChildren = [pubsub, 
 	supervisor(wellbeing, 
 		[children(WellbeingChildren), 
 		restart(permanent)]), 
 	supervisor(som, 
-		[restart(permanent)])], 
+		[restart(permanent)])],
+
 	supervisor : start(agency, 
 		[children(AgencyChildren)]), % Start the SOM with the sensor and effector CAs (at level 0)
 		
-	start_sensor_cas(Sensors), 
-	start_effector_cas(Effectors), % Start a metacognition actor at level 1
-	
-	meta_ca : name_from_level(1, Name), 
+	% Start level 0 meta CA
+	meta_ca : name_from_level(0, Name), 
 	supervisor : start_worker_child(som, meta_ca, Name, 
 		[init(
-			[level(1)])]).
-
-    start_sensor_cas([]).
-
-start_sensor_cas([Sensor|Others]) :-
-	sensor_ca : name_from_sensor(Sensor, Name), 
-	supervisor : start_worker_child(som, sensor_ca, Name, 
-		[init(
-			[sensor(Sensor)])]), 
-	start_sensor_cas(Others).
-
-    % The body presents each possible action by an actual effector as a separate effector capability.
-    % We combine them into a single effector CA
-    start_effector_cas([]).
-
-start_effector_cas([Effector|Others]) :-
-	findall(Twin, 
-		(
-			member(Twin, Others), Twin.id == Effector.id), Twins), 
-	effector_ca : name_from_effector(Effector, Name), 
-	supervisor : start_worker_child(som, effector_ca, Name, 
-		[init(
-			[effectors([Effector|Twins])])]), 
-	subtract(Others, Twins, Rest), 
-	start_effector_cas(Rest).
-    
+			[level(0), 
+			sensors(Sensors), 
+			effectors(Effectors)])]).

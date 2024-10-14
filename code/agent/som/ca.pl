@@ -104,7 +104,7 @@ handle(message(start_frame, _), State, NewState) :-
 	start_frame(State1, NewState).
 
 handle(message(Message, Source), State, State) :-
-	log(info, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(debug, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(query(type), _, ca).
 
@@ -115,7 +115,7 @@ handle(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
 
 handle(query(Query), _, unknown) :-
-	log(info, ca, '~@ is NOT handling query ~p', [self, Query]).
+	log(debug, ca, '~@ is NOT handling query ~p', [self, Query]).
 
 % TODO
 

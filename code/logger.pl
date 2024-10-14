@@ -130,8 +130,7 @@ do_log(Level, Topic, Message, Params) :-
     format(Line, ParamsPlus), 
     (is_stream(log_file) -> format(log_file, Line, ParamsPlus), flush_output(log_file); true), !.
 
-do_log(_, _, _, _) :-
-    format('@@@ FAILED TO LOG 4~n').
+do_log(_, _, _, _).
 
 do_log(Level, Topic, Message) :-
     level_covered(Level),
@@ -140,8 +139,7 @@ do_log(Level, Topic, Message) :-
     format(Line, Params), 
     (is_stream(log_file) -> format(log_file, Line, Params), flush_output(log_file); true), !.
 
-do_log(_, _, _) :-
-    format('@@@ FAILED TO LOG 3~n').
+do_log(_, _, _).
 
 add_meta(Level, Topic, Message, Params, Line, [Time, Level, Topic | Params]) :-
     string_concat(Message, '~n', Message1),

@@ -37,6 +37,7 @@ A sensor CA
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
+:- use_module(actor_model(worker)).
 
 % The name of the sensor CA given the sensor it wraps
 name_from_sensor(Sensor, Name) :-
@@ -57,7 +58,7 @@ init(Options, State) :-
     subcribe_to_predictions(State1, Topics),
     empty_reading(State1, Reading),
     put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
-    publish(ca_started, []).
+    publish(ca_started, [level(0)]).
 
 process_signal(control(stop)) :-
     terminate,
@@ -67,7 +68,7 @@ terminate :-
     log(warn, sensor_ca, 'Terminated').
 
 handle(message(Message, Source), State, State) :-
-   log(info, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+   log(debug, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 % Sense is the belief name
 handle(event(prediction(Sense), Payload, Source), State, NewState) :-

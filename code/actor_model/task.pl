@@ -1,4 +1,4 @@
-:- module(task, [do_and_then/2]).
+:- module(task, [do_and_then/2, do_after/2]).
 
 :- [load].
 
@@ -6,6 +6,13 @@
 :- use_module(code(logger)).
 
 do_and_then(Task, Completion) :-
-    log(debug, task, 'Task ~w doing ~p and then ~p', [Id, Task, Completion]),
+    log(debug, task, 'Doing task ~p and then ~p', [Task, Completion]),
 	thread_create(Task, Id, [detached(true), at_exit(Completion)]),
     log(debug, task, 'Task ~w completed doing ~p', [Id, Task]).
+
+do_after(Task, DelaySecs) :-
+    log(debug, task, 'Doing task ~p and after ~w seconds delay', [Task, DelaySecs]),
+    sleep(DelaySecs),
+	thread_create(Task, Id, [detached(true)]),
+    log(debug, task, 'Task ~w completed doing ~p after ~w seconds', [Id, Task, DelaySecs]).
+ 
