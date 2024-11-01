@@ -28,6 +28,7 @@ State:
     * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
 	* meta_ca_below - the meta_ca one level down, if level > 0
 	* sensor_count, effector_count - if level == 0
+	* complete - whether coverage is complete
 
 */
 
@@ -77,9 +78,9 @@ init(Options, State) :-
 			option(
 				effectors(Effectors), Options), 
 			start_sensor_cas(Sensors, SensorCount), 
-			start_effector_cas(Effectors, EffectorCount),
+			start_effector_cas(Effectors, EffectorCount), 
 			maybe_start_meta_ca_above(Name, Level), 
-			put_state(EmptyState, [level - Level, sensor_count - SensorCount, effector_count - EffectorCount, wards - [], busy - false], State));
+			put_state(EmptyState, [level - Level, sensor_count - SensorCount, effector_count - EffectorCount, wards - [], busy - false, complete - true], State));
 		(
 			option(
 				meta_ca_below(MetaCABelow), Options), 
@@ -87,7 +88,7 @@ init(Options, State) :-
 				message(curate, Name), Latency, Timer), 
 			assert(
 				timer(Timer)), 
-			put_state(EmptyState, [level - Level, meta_ca_below - MetaCABelow, wards - [], busy - false], State))), 
+			put_state(EmptyState, [level - Level, meta_ca_below - MetaCABelow, wards - [], busy - false, complete - false], State))), 
 	publish(meta_ca_started, 
 		[level(Level)]).
 
@@ -136,12 +137,27 @@ handle(event(meta_ca_started, Payload, MetaCA), State, NewState) :-
 		level(LevelBelow), Payload), !, 
 	put_state(State, meta_ca_below, MetaCA, NewState).
 
+% Check if the level is now complete and remember it
+
 handle(event(ca_started, Payload, CA), State, NewState) :-
 	option(
 		level(Level), Payload), 
 	get_state(State, level, Level), !, 
 	get_state(State, wards, Wards), 
-	put_state(State, wards, [CA|Wards], NewState).
+	put_state(State, wards, [CA|Wards], State1), 
+	(
+		level_is_complete(State1)
+		 ->
+				put_state(State1, complete, true, NewState);
+				NewState = State1).
+
+% Mark level as not complete if a CA was added at the level below
+
+handle(event(ca_started, Payload, _), State, NewState) :-
+	get_state(State, level, Level), LevelBelow is Level - 1, 
+	option(
+		level(LevelBelow), Payload), !, 
+	put_state(State, complete, false, NewState).
 
 handle(event(ca_terminated, Payload, CA), State, NewState) :-
 	option(
@@ -166,13 +182,13 @@ handle(query(wards), State, Wards) :-
 	get_state(State, wards, Wards).
 
 % Level 0 - all sensor and effector CA are wards
+
 handle(query(is_complete), State, true) :-
-	get_state(State, level, 0),
-	get_state(State, sensor_count, SensorCount),
-	get_state(State, effector_count, EffectorCount),
-	get_state(State, wards, Wards),
-	length(Wards, WardCount), !,
-	WardCount is SensorCount + EffectorCount.
+	get_state(State, level, 0), 
+	get_state(State, sensor_count, SensorCount), 
+	get_state(State, effector_count, EffectorCount), 
+	get_state(State, wards, Wards), 
+	length(Wards, WardCount), !, WardCount is SensorCount + EffectorCount.
 
 handle(query(is_complete), State, true) :-
 	get_state(State, level, Level), Level \= 0, 
@@ -192,8 +208,7 @@ start_sensor_cas([Sensor|Others], SensorCount) :-
 	supervisor : start_worker_child(som, sensor_ca, Name, 
 		[init(
 			[sensor(Sensor)])]), 
-	start_sensor_cas(Others, OtherCount),
-	SensorCount is OtherCount + 1.
+	start_sensor_cas(Others, OtherCount), SensorCount is OtherCount + 1.
 
 % The body presents each possible action by an actual effector as a separate effector capability.
 % We combine them into a single effector CA
@@ -208,8 +223,7 @@ start_effector_cas([Effector|Others], EffectorCount) :-
 		[init(
 			[effectors([Effector|Twins])])]), 
 	subtract(Others, Twins, Rest), 
-	start_effector_cas(Rest, RestCount),
-	EffectorCount is RestCount + 1.
+	start_effector_cas(Rest, RestCount), EffectorCount is RestCount + 1.
 
 %% Curating
 
@@ -248,20 +262,21 @@ grow(Name, State) :-
 	get_state(State, meta_ca_below, MetaCABelow), 
 	log(debug, meta_ca, '~w is growing level ~w ', [Name, Level]), 
 	level_below_is_complete(State, MetaCABelow), 
-	 \+ level_is_complete(State), !, 
+	\+ level_is_complete(State), !, 
 	log(info, meta_ca, 'Adding new ca at level ~w', [Level]), 
 	add_ca(State, NewCA), 
 	log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
 
 grow(Name, State) :-
-	level_is_complete(State), !, 
+	level_is_complete(State),
+	level_is_mature(State), !, 
 	get_state(State, level, Level), 
 	maybe_start_meta_ca_above(Name, Level).
 
 grow(_, _).
 
 level_is_complete(State) :-
-	get_state(State, level, 0), !.
+	get_state(State, complete, true), !.
 
 level_is_complete(State) :-
 	cas_below(State, CASBelow), 
@@ -275,6 +290,8 @@ cas_below(State, CASBelow) :-
 	get_state(State, meta_ca_below, MetaCABelow), 
 	send_query(MetaCABelow, wards, CASBelow).
 
+level_below_is_complete(State, _) :-
+	get_state(State, level, 1), !.
 level_below_is_complete(State, MetaCABelow) :-
 	get_state(State, meta_ca_below, MetaCABelow), 
 	send_query(MetaCABelow, is_complete, true).
@@ -289,6 +306,13 @@ covered_by_any(UmweltCA, CAs) :-
 	member(CA, CAs), 
 	ca : umwelt(CA, Umwelt), 
 	member(UmweltCA, Umwelt).
+
+% TODO
+
+level_is_mature(State) :-
+	get_state(State, level, 0).
+level_is_mature(_) :-
+	fail.
 
 % If at level 1, always include all effector_ca's
 % Then assemble an umwelt of at least 1 or more non-covered CA and 0 or more covered CAs from level L - 1
@@ -307,12 +331,12 @@ add_ca(State, CAName) :-
 pick_umwelt(State, Umwelt) :-
 	get_state(State, level, Level), 
 	effector_cas(Level, EffectorCAs), 
-	pick_uncovered_cas(State, UncoveredCAs), 
-	pick_covered_cas(State, CoveredCAs), 
+	pick_uncovered_cas(State, EffectorCAs, UncoveredCAs), 
+	pick_covered_cas(State, EffectorCAs, CoveredCAs), 
 	flatten([EffectorCAs, UncoveredCAs, CoveredCAs], Umwelt).
 
 effector_cas(1, EffectorCAs) :-
-	meta_ca : name_from_level(0, MetaCA0),
+	meta_ca : name_from_level(0, MetaCA0), 
 	send_query(MetaCA0, wards, Wards), 
 	findall(Name, 
 		(
@@ -321,28 +345,30 @@ effector_cas(1, EffectorCAs) :-
 
 effector_cas(_, []).
 
-pick_uncovered_cas(State, UncoveredCAs) :-
+pick_uncovered_cas(State, EffectorCAs, UncoveredCAs) :-
 	get_state(State, level, Level), 
 	get_state(State, wards, Wards), UmweltLevel is Level - 1, 
 	level_cas(UmweltLevel, CAs), 
 	findall(CA, 
 		(
 			member(CA, CAs), 
+			 \+ member(CA, EffectorCAs), 
 			 \+ covered_by_any(CA, Wards)), AllUncoveredCAs), 
 	pick_some(AllUncoveredCAs, UncoveredCAs).
 
-pick_covered_cas(State, CoveredCAs) :-
+pick_covered_cas(State, EffectorCAs, CoveredCAs) :-
 	get_state(State, level, Level), 
 	get_state(State, wards, Wards), UmweltLevel is Level - 1, 
 	level_cas(UmweltLevel, CAs), 
 	findall(CA, 
 		(
 			member(CA, CAs), 
-			covered_by_any(CA, Wards)), AllUncoveredCAs), 
-	pick_some(AllUncoveredCAs, CoveredCAs).
+			 \+ member(CA, EffectorCAs), 
+			covered_by_any(CA, Wards)), AllCoveredCAs), 
+	pick_some(AllCoveredCAs, CoveredCAs).
 
 level_cas(Level, CAs) :-
-	meta_ca : name_from_level(Level, MetaCA),
+	meta_ca : name_from_level(Level, MetaCA), 
 	send_query(MetaCA, wards, CAs).
 
 type_of(Name, Type) :-

@@ -43,14 +43,16 @@ put_state(State, Key, Value, NewState) :-
 	is_dict(State, state), 
 	put_dict(Key, State, Value, NewState).
 
-% Pick a random subset of a list. Deterministic.
+% Pick a random subset of a list, at least one but no more than half. Deterministic.
 pick_some([], []).
 pick_some([E], [E]).
 
 pick_some(List, SubList) :-
-	random_permutation(List, PermutedList), 
-	length(List, L), 
-	random_between(1, L, N), 
+	sort(List, Set),
+	random_permutation(Set, PermutedList), 
+	length(Set, L), 
+	Max is max(1, round(L / 2)),
+	random_between(1, Max, N), 
 	take(N, PermutedList, SubList).
 
 take(_, [], []).
