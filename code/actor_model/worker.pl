@@ -31,8 +31,10 @@ start(Name, Module, Options, Supervisor) :-
 	log(debug, worker, 'Starting ~w implemented by ~w with options ~p supervised by ~w', [Name, Module, Options, Supervisor]), 
 	option(
 		topics(Topics), Options, []), 
-	option(
-		init(Args), Options, []), Handler =.. [ : , Module, handle], Init =.. [ : , Module, init, Args], Terminate =.. [ : , Module, terminate], 
+	option(init(Args), Options, []),
+	Handler =.. [ : , Module, handle], 
+	Init =.. [ : , Module, init, Args], 
+	Terminate =.. [ : , Module, terminate], 
 	log(debug, worker, "Creating worker ~w", [Name]), 
 	start_actor(Name, 
 		worker : start_worker(Module, Name, Topics, Init, Handler, Supervisor), 
@@ -95,16 +97,18 @@ process_message(unsubscribe(Topic), _, _, _) :-
 	unsubscribe(Topic).
 
 process_message(query(Question, From), Handler, State, State) :-
-	Handler =.. [ : , Module, Head], Goal =.. [Head, 
-	query(Question), State, Answer], ModuleGoal =.. [ : , Module, Goal], 
+	Handler =.. [ : , Module, Head], 
+	Goal =.. [Head, query(Question), State, Answer], 
+	ModuleGoal =.. [ : , Module, Goal], 
 	thread_self(Name), 
 	log(debug, worker, "~w got query ~p from ~w", [Name, Question, From]), 
+	!,
 	call(ModuleGoal), 
-	send(From, 
-		response(Answer, Question, Name)).
+	send(From, response(Answer, Question, Name)).
 
 process_message(Message, Handler, State, NewState) :-
-	Handler =.. [ : , Module, Head], Goal =.. [Head, Message, State, NewState], 
+	Handler =.. [ : , Module, Head], 
+	Goal =.. [Head, Message, State, NewState], 
 	ModuleGoal =.. [ : , Module, Goal], 
 	thread_self(Name), 
 	log(debug, worker, "~w received ~p", [Name, Message]), 

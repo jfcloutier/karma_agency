@@ -1,37 +1,71 @@
 /*
 Cognition actor (CA)
 
-A CA strives to become increasingly compentent at making sense of its umwelt and at altering its own beliefs.
+A CA operates one timeframe at a time. Within each time frame, it updates its beliefs and acts on its umwelt to impact current valued beliefs.
 
-A CA makes sense of its umwelt by predicting observations (i.e. beliefs of umwelt CAs)
-and by deriving beliefs from past observations, beliefs that then become observations available to parent CAs (higher-level CAs that have the CA in their umwelts).
+The higher the CA's level within the SOM hierarchy, the longer the timeframe. CA timeframes are not synchronized.
+
+A CA strives to become increasingly competent at making sense of its umwelt and at altering or re-enforcing its consequent beliefs via effective policies.
+
+A CA makes sense of observations of its umwelt by predicting beliefs of umwelt CAs and by deriving beliefs from its own past and current observations.
+
+The CA's beliefs then become observations available for parent CAs to make predictions about. An umwelt CA receives predictions about its current beliefs from parent CAs. 
+It responds with prediction errors if the predictions are off.
+
+A CA obtains, and refreshes as needed, a causal theory from the Apperception Engine. It uses its causal theory to make predictions about umwelt beliefs and anout
+the projected efficacy of candidate policies.
+
+A CA's current observations are the sum of its latest uncontradicated predictions plus the latest prediction errors it received.
 
 A CA is effective at impacting its umwelt if it has reliable policies it can execute to validate pleasant beliefs or invalidate unpleasant beliefs.
 
-The more competent a CA is, the more likely it is that its parents CAs will be competent as well and survive,
-and thus the more likely it is that the CA itself will survive since orphaned CAs are susceptible to being removed.
+A large errors-to-predictions ratio lowers confidence in the CA's causal theory and thus in its predictions, observations from them, consequent beliefs,
+and thus the prediction errors it itself emits. At some point, a CA will try to replace a disappointing causal theory with a new one.
 
-Event: 
+A CA strives to survive; the more competent a CA is, the more likely it is that its parents CAs will be competent as well and survive, and thus the more likely it is that
+the CA itself will survive since orphaned CAs are the ones susceptible to being removed.
+
+A CA emits events that are used by wellbeing agents to compute the current levels of fullness, integrity and engagement. Fluctuations in wellbeing cause fluctuations in belief values.
+
+Events: 
 * In
-  * fullness, [level(0..1)]
-  * integrity, [level{0..1)]
-  * engagement, [level(0..1)]
-
+  * wellbeing, [Kind(Level)] - Kind in fullness, integrity, engagement - Level in 0..1 
+  * prediction, dicted(BeliefName, Domain)
+  * prediction_error, contradicted(Prediction, Actuality) - Prediction = dicted(BeliefName, Domain) - Actuality is actual_domain(Domain) or terminated
+  * goal, impact(BeliefName, Actuality]
+  * definition, concept(BeliefName, Domain) or affordance(ActionName)
+  * execution, action(ActonName)
+  * causal_theory(Theory)
 * Out
   * ca_started, [level(Level)]
   * ca_terminated, [level(Level)]
+  * belief_domain, [belief_types([BeliefType, ...])] 
+  * prediction_error, [prediction(Prediction), correction(Correction), confidence(0..1)]
+  * causal_theory_needed
 
 * Queries
   * type - ca
   * level - Integer > 0
-  * umwelt - list of CA names
+  * umwelt - CA names
+  * belief_domain - belief predicate types
     
-State:
+Thread locals:
     * level - 1..? - the level of the CAs it is responsible for
     * timer - the frame timer
-    * umwelt - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
-    * frame - Integer
+
+State:
+    * umwelt - child CAs
+    * frame - the current frame
+	  * start_time
+	  * status - initiating or started or ending
+	  * wellness
+	  * predictions
+	  * prediction_errors
+	  * beliefs
+	  * causal_theory
+	  * policy
     * history - [Frame, ...]
+	* 
 
 */
 
@@ -46,16 +80,16 @@ State:
 :- use_module(library(uuid)).
 
 % Thread statis state
-:- thread_local level/1, timer/1.
+:- thread_local level/1, timer/3, buffered_events/1.
 
 name_from_level(Level, Name) :-
 	uuid(ID), 
 	atomic_list_concat([ca, level, Level, id, ID], ":", Name).
 
-% A meta-cognition actor re-evaluates the  state of its layer of the SOM every 2 ** Level seconds
+% A cognition actor completes a time frame every 2 ** Level seconds
 
 latency(Level, Latency) :-
-	Latency is (2**Level)*100.
+	Latency is (2**Level).
 
 level(Name, Level) :-
 	send_query(Name, level, Level).
@@ -76,30 +110,56 @@ init(Options, State) :-
 		umwelt(Umwelt), Options), 
 	self(Name), 
 	latency(Level, Latency), 
-	send_at_interval(Name, framer, 
-		message(start_frame, Name), Latency, Timer), 
+    start_ticking(Name, Latency, Timer),
 	assert(
-		timer(Timer)), 
-	send_message(Name, start_frame), 
-	put_state(EmptyState, [umwelt - Umwelt, frame - 0, history - []], State), 
-	publish(ca_started, 
-		[level(Level)]).
+		timer(Timer)),
+	empty_frame(0, Frame), 
+	put_state(EmptyState, [umwelt - Umwelt, frame - Frame, history - [], buffered_events - [], status - initiating], State), 
+	send_message(Name, start_frame).
+
+start_ticking(Name, Delay, Timer) :-
+	send_at_interval(Name, framer, 
+		message(tick, Name), Delay, TimerName), 
+	Timer = timer(TimerName, Goal, Delay),
+	assert(Timer).
+
+reset_ticking :-
+	timer(TimerName, Goal, Delay),
+	retractall(timer/3),
+	timer : stop(TimerName),
+	start_ticking(Name, Delay, Timer).
+
+empty_frame(Level, EmptyFrame) :-
+	get_time(Now),
+	put_state(frame{}, [start_time - Now, wellness - [], predictions - [], prediction_errors - [], beliefs - []], EmptyFrame).
 
 process_signal(control(stop)) :-
 	worker : stop.
 
 terminate :-
 	log(warn, ca, '~@ terminating', [self]), 
-	timer(Timer), 
-	timer : stop(Timer), 
+	timer(TimerName, _, _), 
+	timer : stop(TimerName), 
 	level(Level), 
 	publish(ca_terminated, 
 		[level(Level)]), 
 	log(warn, ca, 'Terminated ~@', [self]).
 
-% End current frame, if any, and start new frame
+% Initial start
+handle_message(message(start_frame, _), State, NewState) :-
+	get_state(State, status, initiating),
+	start_frame(State, NewState),
+	get_state(State, level, Level),
+    publish(ca_started, [level(Level)]).
 
-handle(message(start_frame, _), State, NewState) :-
+% Start the next frame
+handle_message(message(start_frame, _), State, NewState) :-
+	get_state(State, status, ending),
+	start_frame(State, NewState).
+
+% Only end frame if started. Then start the next frame.
+handle(message(tick, _), State, NewState) :-
+	get_state(State, status, started),
 	end_frame(State, State1), 
 	start_frame(State1, NewState).
 
@@ -117,12 +177,45 @@ handle(query(umwelt), State, Umwelt) :-
 handle(query(Query), _, unknown) :-
 	log(debug, ca, '~@ is NOT handling query ~p', [self, Query]).
 
+handle(event(Topic, Payload, Source), State, NewState) :-
+	get_state(State, status, started), !,
+	handle_event_now(event(Topic, Payload, Source), State, NewState).
+
+handle(event(Topic, Payload, Source), State, NewState) :-
+	get_state(State, buffered_events, BufferedEvents),
+	put_state(State, buffered_events, [event(Topic, Payload, Source) | BufferedEvents], NewState).
+
 % TODO
+handle_event_now(event(prediction, belief(Belief), Source), State, State).
+handle_event_now(event(prediction_error, prediction(Belief), Source), State, State).
+handle_event_now(event(Topic, Payload, Source), State, State) :-
+	log(info, ca, "CA ~@ is NOT handling event event(~w, ~p, ~w)", [self, Topic, Payload, Source]).
 
-end_frame(State, State) :-
-	log(info, ca, 'CA ~@ is ending the current frame', [self]).
+% The previous frame becomes the new frame by updating the start_time,
+% processing buffered events and re-activating processing events upon receipt
+start_frame(State, NewState) :-
+	log(info, ca, 'CA ~@ is starting a new frame', [self]),
+	process_suspended_events(State, State1),
+	reset_ticking,
+	put_state(State1, status, started, NewState).
 
-% TODO
+process_suspended_events(State, NewState) :-
+	get_state(State, buffered_events, BufferedEvents),
+	reverse(BufferedEvents, Events),
+	handle_events_now(Events, State, NewState).
 
-start_frame(State, State) :-
-	log(info, ca, 'CA ~@ is starting a new frame', [self]).
+handle_events_now([], State, State).
+handle_events_now([event(Topic, Payload, Source) | Rest], State, NewState) :-
+	handle_event_now(event(Topic, Payload, Source), State, State1),
+	handle_events_now(Rest, State1, NewState).
+
+% Ending a frame means suspending processing events, 
+% completing the frame (updating beliefs, maybe taking action, and assessing efficacy of prior actions),
+% then putting the frame in history.
+end_frame(State, NewState) :-
+	put_state(State, status, ending, State1),
+	log(info, ca, 'CA ~@ is completing its current frame', [self]),
+	update_beliefs(State1, State2),
+	make_predictions(State2, State3),
+	execute_policy(State3, State4),
+	update_history(State4, NewState).

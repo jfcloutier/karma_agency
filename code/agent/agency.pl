@@ -47,37 +47,39 @@ threads.
 :- use_module(wellbeing(integrity)).
 
 start(BodyHost) :-
-	log(info, agency, 'Starting agency'), 
-	body : capabilities(BodyHost, Sensors, Effectors), 
-	log(info, agency, 'Sensors: ~p', [Sensors]), 
-	log(info, agency, 'Effectors: ~p', [Effectors]), WellbeingChildren = [% Energy level
-	
-	worker(fullness, 
-		[topics([]), 
-		restart(permanent)]), % Physical integrity
-		
-	worker(integrity, 
-		[topics([]), 
-		restart(permanent)]), % Moving and learning?
-		
-	worker(engagement, 
-		[topics([]), 
-		restart(permanent)])], 
-		
-	AgencyChildren = [pubsub, 
-	supervisor(wellbeing, 
-		[children(WellbeingChildren), 
-		restart(permanent)]), 
-	supervisor(som, 
-		[restart(permanent)])],
-
-	supervisor : start(agency, 
-		[children(AgencyChildren)]), % Start the SOM with the sensor and effector CAs (at level 0)
-		
+	log(info, agency, 'Starting agency'),
+	body : capabilities(BodyHost, Sensors, Effectors),
+	log(info, agency, 'Sensors: ~p', [Sensors]),
+	log(info, agency, 'Effectors: ~p', [Effectors]),
+	WellbeingChildren = [
+		worker(fullness,
+			% Energy level
+			[
+				topics([]),
+				restart(permanent)]),
+		worker(integrity,
+			% Physical integrity
+			[
+				topics([]),
+				restart(permanent)]),
+		worker(engagement,
+			% Moving and learning?
+			[
+				topics([]),
+				restart(permanent)])],
+	AgencyChildren = [
+		pubsub,
+		supervisor(wellbeing,
+			[children(WellbeingChildren), restart(permanent)]),
+		supervisor(som,
+			[restart(permanent)])],
+	supervisor : start(agency,
+		[children(AgencyChildren)]),
+	% Start the SOM with the sensor and effector CAs (at level 0)
 	% Start level 0 meta CA
-	meta_ca : name_from_level(0, Name), 
-	supervisor : start_worker_child(som, meta_ca, Name, 
-		[init(
-			[level(0), 
-			sensors(Sensors), 
-			effectors(Effectors)])]).
+	meta_ca : name_from_level(0, Name),
+	supervisor : start_worker_child(som,
+		meta_ca,
+		Name,
+		[
+			init([level(0), sensors(Sensors), effectors(Effectors)])]).

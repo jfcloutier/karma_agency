@@ -22,12 +22,15 @@ Events:
   * level - Integer > 0
   * wards - [CAName, ...]
     
-State:
+Thread locals:
     * level - integer (duplicated in thread local where it is needed for termination)
-    * busy - true|false
+	* timer - the curator timer
+
+State:
     * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
 	* meta_ca_below - the meta_ca one level down, if level > 0
 	* sensor_count, effector_count - if level == 0
+    * busy - true|false
 	* complete - whether coverage is complete
 
 */
@@ -132,9 +135,10 @@ handle(message(Message, Source), State, State) :-
 	log(debug, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 handle(event(meta_ca_started, Payload, MetaCA), State, NewState) :-
-	get_state(State, level, Level), LevelBelow is Level - 1, 
-	option(
-		level(LevelBelow), Payload), !, 
+	get_state(State, level, Level),
+	LevelBelow is Level - 1, 
+	option(level(LevelBelow), Payload), 
+	!, 
 	put_state(State, meta_ca_below, MetaCA, NewState).
 
 % Check if the level is now complete and remember it
@@ -154,9 +158,9 @@ handle(event(ca_started, Payload, CA), State, NewState) :-
 % Mark level as not complete if a CA was added at the level below
 
 handle(event(ca_started, Payload, _), State, NewState) :-
-	get_state(State, level, Level), LevelBelow is Level - 1, 
-	option(
-		level(LevelBelow), Payload), !, 
+	get_state(State, level, Level),
+	LevelBelow is Level - 1, 
+	option(level(LevelBelow), Payload), !, 
 	put_state(State, complete, false, NewState).
 
 handle(event(ca_terminated, Payload, CA), State, NewState) :-

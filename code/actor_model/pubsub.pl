@@ -1,8 +1,7 @@
 /*
 The PubSub singleton actor. 
 
-It receives sibscriptions to topics from listening actors and
-dispatches events published to it to topic listeners.
+It receives subscriptions to topics from listening actors and dispatches events received to topic listeners.
 */
 
 
@@ -13,6 +12,7 @@ dispatches events published to it to topic listeners.
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).
 :- use_module(actor_utils).
+:- use_module(worker).
 
 % Singleton thread's name
 name(pubsub).
