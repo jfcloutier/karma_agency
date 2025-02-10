@@ -78,6 +78,7 @@ State:
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
 :- use_module(library(uuid)).
+:- use_module(library(check)).
 
 % Thread statis state
 :- thread_local level/1, timer/3, buffered_events/1.

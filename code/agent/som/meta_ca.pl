@@ -30,7 +30,7 @@ State:
     * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
 	* meta_ca_below - the meta_ca one level down, if level > 0
 	* sensor_count, effector_count - if level == 0
-    * busy - true|false
+    * busy - true|false - busy while curating - we don't want to start curating while already curating
 	* complete - whether coverage is complete
 
 */
@@ -50,13 +50,13 @@ State:
 :- use_module(som(ca)).
 :- use_module(actor_model(task)).
 
-% Static state
+% Static thread state
 :- thread_local level/1, timer/1.
 
 name_from_level(Level, Name) :-
 	atomic_list_concat([metaca, level, Level], ":", Name).
 
-% A meta-cognition actor re-evaluates the state of its layer of the SOM every 2 ** Level seconds
+% A meta-cognition actor re-evaluates the state of its layer of the SOM every (2 ** Level) * Level seconds
 
 latency(Level, Latency) :-
 	Latency is (2**Level)*Level.
@@ -112,6 +112,7 @@ maybe_start_meta_ca_above(Name, Level) :-
 process_signal(control(stop)) :-
 	worker : stop.
 
+% Called on thread exit
 terminate :-
 	log(warn, meta_ca, '~@ terminating', [self]), 
 	timer(Timer), 
@@ -134,6 +135,7 @@ handle(message(busy(Busy), _), State, NewState) :-
 handle(message(Message, Source), State, State) :-
 	log(debug, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
+% In case the meta-ca below is restarted
 handle(event(meta_ca_started, Payload, MetaCA), State, NewState) :-
 	get_state(State, level, Level),
 	LevelBelow is Level - 1, 
@@ -156,7 +158,6 @@ handle(event(ca_started, Payload, CA), State, NewState) :-
 				NewState = State1).
 
 % Mark level as not complete if a CA was added at the level below
-
 handle(event(ca_started, Payload, _), State, NewState) :-
 	get_state(State, level, Level),
 	LevelBelow is Level - 1, 
@@ -285,7 +286,7 @@ level_is_complete(State) :-
 level_is_complete(State) :-
 	cas_below(State, CASBelow), 
 	get_state(State, level, Level), 
-	log(debug, meta_ca, 'Level ~w has umwelt CAs ~p', [Level, CASBelow]), 
+	log(debug, meta_ca, 'Level ~w has umwelt-able CAs ~p', [Level, CASBelow]), 
 	get_state(State, wards, WardCAs), 
 	log(debug, meta_ca, 'Level ~w has wards CAs ~p', [Level, WardCAs]), 
 	all_covered_by(CASBelow, WardCAs).
@@ -302,24 +303,24 @@ level_below_is_complete(State, MetaCABelow) :-
 
 all_covered_by([], _).
 
-all_covered_by([UmweltCA|Others], CAs) :-
-	covered_by_any(UmweltCA, CAs), !, 
-	all_covered_by(Others, CAs).
+all_covered_by([UmweltCA|Others], WardCAs) :-
+	covered_by_any(UmweltCA, WardCAs), !, 
+	all_covered_by(Others, WardCAs).
 
-covered_by_any(UmweltCA, CAs) :-
-	member(CA, CAs), 
+covered_by_any(UmweltCA, WardCAs) :-
+	member(CA, WardCAs), 
 	ca : umwelt(CA, Umwelt), 
 	member(UmweltCA, Umwelt).
 
-% TODO
-
+% Level 0 is always mature
 level_is_mature(State) :-
 	get_state(State, level, 0).
+% TODO
 level_is_mature(_) :-
 	fail.
 
-% If at level 1, always include all effector_ca's
-% Then assemble an umwelt of at least 1 or more non-covered CA and 0 or more covered CAs from level L - 1
+% If adding a CA at level 1, always include all effector_ca's in its umwelt (to ensure all CAs transitively have access to all effectors)
+% Then assemble an umwelt of at least 1 or more non-covered CA and 0 or more covered CAs from level L - 1 (to always grow coverage and maybe create umwelt overlap)
 % Create a CA with that umwelt at level L
 
 add_ca(State, CAName) :-
@@ -351,7 +352,8 @@ effector_cas(_, []).
 
 pick_uncovered_cas(State, EffectorCAs, UncoveredCAs) :-
 	get_state(State, level, Level), 
-	get_state(State, wards, Wards), UmweltLevel is Level - 1, 
+	get_state(State, wards, Wards), 
+	UmweltLevel is Level - 1, 
 	level_cas(UmweltLevel, CAs), 
 	findall(CA, 
 		(
