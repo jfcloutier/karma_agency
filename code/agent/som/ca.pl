@@ -1,31 +1,57 @@
 /*
 Cognition actor (CA)
 
-A CA operates one timeframe at a time. Within each time frame, it updates its beliefs and acts on its umwelt to impact current valued beliefs.
-
-The higher the CA's level within the SOM hierarchy, the longer the timeframe. CA timeframes are not synchronized.
-
-A CA strives to become increasingly competent at making sense of its umwelt and at altering or re-enforcing its consequent beliefs via effective policies.
-
-A CA makes sense of observations of its umwelt by predicting beliefs of umwelt CAs and by deriving beliefs from its own past and current observations.
-
-The CA's beliefs then become observations available for parent CAs to make predictions about. An umwelt CA receives predictions about its current beliefs from parent CAs. 
-It responds with prediction errors if the predictions are off.
-
-A CA obtains, and refreshes as needed, a causal theory from the Apperception Engine. It uses its causal theory to make predictions about umwelt beliefs and anout
-the projected efficacy of candidate policies.
-
-A CA's current observations are the sum of its latest uncontradicated predictions plus the latest prediction errors it received.
-
-A CA is effective at impacting its umwelt if it has reliable policies it can execute to validate pleasant beliefs or invalidate unpleasant beliefs.
-
-A large errors-to-predictions ratio lowers confidence in the CA's causal theory and thus in its predictions, observations from them, consequent beliefs,
-and thus the prediction errors it itself emits. At some point, a CA will try to replace a disappointing causal theory with a new one.
-
 A CA strives to survive; the more competent a CA is, the more likely it is that its parents CAs will be competent as well and survive, and thus the more likely it is that
 the CA itself will survive since orphaned CAs are the ones susceptible to being removed.
 
-A CA emits events that are used by wellbeing agents to compute the current levels of fullness, integrity and engagement. Fluctuations in wellbeing cause fluctuations in belief values.
+A CA operates one timeframe at a time. Within each time frame, it updates its beliefs and acts on its umwelt to impact current valued beliefs.
+
+The higher the CA's level within the SOM hierarchy, the longer the timeframe. Timeframes are not synchronized across CAs.
+
+A CA strives to become increasingly competent at making sense of its umwelt and at altering or re-enforcing its consequent beliefs via effective policies.
+
+A CA makes sense of observations of its umwelt by predicting beliefs of umwelt CAs (using a discovered causal model) and by deriving beliefs from its own past and current observations.
+
+A CA obtains, and refreshes as needed, a causal theory from the Apperception Engine. It uses its current causal theory to make predictions about umwelt beliefs and about
+the projected efficacy of candidate policies. The initial causal theory is essentially "it is what it is". Eventually, a CA gathers enough observations to have the Apperception Engine induce
+a more discerning causal theory.
+
+A CA derives its beliefs from objects and relations abduced by its current causal model, and from the detection of patterns (or termination thereof) in its observations over
+remembered timeframes.
+
+The CA's beliefs become observations available for parent CAs to make predictions about. An umwelt CA receives predictions about its current beliefs from parent CAs. 
+It responds with prediction errors if the predictions are off.
+
+An observation predicted by a CA becomes an actual observation of the CA if is not contradicted by a prediction error from a CA in its umwelt for the duration of the timeframe
+within which the prediction was made. A prediction error could arrive in a subsequent timeframe to contradict the triggering prediction or a subsequent one.
+
+A CA's current observations are the sum of its latest uncontradicated predictions, plus the latest contradicting prediction errors it received.
+
+A large errors-to-predictions ratio lowers confidence in the CA's causal theory and thus in its predictions, observations from them, consequent beliefs,
+and thus the prediction errors it itself emits. At some point, a CA will try to replace an unacceptably inaccurate causal theory with a new one.
+
+A CA informws its parent CAs (those in which umwelts it sits) of the types and domains of the predicates it synthesized to express its beliefs, so the parent CAs can produce predictions
+about the CA's beliefs.
+
+Wellbeing measures are a function of events received from all CAs and from the passage of time. Are the CAs reducing the fullness of the agent or increasing it?
+Are detected bumps decreasing the agent's integrity faster and outpacing its self-healing (which speed depends on fullness)?
+
+A CA emits events about the activities it carries out that are used by wellbeing agents to compute the current levels of fullness, integrity and engagement.
+Fluctuations in wellbeing cause fluctuations in belief values. For example, a CA obtaining a new causal theory is cosltly and it sends an event that reduces the agent's fullness.
+
+Sensor and effector CAs send events whenever a motor is activated (a fullness cost), or touch is sensed (an integrity cost). Combined sensor and effector events
+can also be interpreted as affecting wellness: Running the feeding motor (mouth) while sensing food color (green) increases fullness,
+whereas running the feeding motor (mouth) when sensing poison color (red) decreases integrity.
+
+The value of a CA's belief is determined by the known (to the CA) wellness metrics at the time the belief is formed or last updated. Wellness measures are not aggregated;
+a belief might be associated with high fullness but low integrity measures. A belief is pleasant if it is associated with no negative wellness measures. A belief is unpleasnat
+if it is associated with one or more negative wellness measures. A belief is neutral if it is associated with neither positive nor negative wellness measures.
+
+A CA is effective at impacting its umwelt if it has reliable policies it can execute to validate pleasant beliefs or invalidate unpleasant beliefs. The unpleasantness of a belief 
+is the value of its most negative adjusted wellness measure. A wellness measure is adjusted by the relative priority of each type of wellness: integrity > fullness > engagement.
+
+A CA prioritizes the beliefs to impact: The most unpleasant belief gets the most attention
+
 
 Events: 
 * In
