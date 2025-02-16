@@ -50,7 +50,18 @@ if it is associated with one or more negative wellness measures. A belief is neu
 A CA is effective at impacting its umwelt if it has reliable policies it can execute to validate pleasant beliefs or invalidate unpleasant beliefs. The unpleasantness of a belief 
 is the value of its most negative adjusted wellness measure. A wellness measure is adjusted by the relative priority of each type of wellness: integrity > fullness > engagement.
 
-A CA prioritizes the beliefs to impact: The most unpleasant belief gets the most attention
+A CA has a limited time (the current timeframe) to act on its beliefs and thus must decide which beliefs to impact first until the current timeframe ends.
+Unpleasant beliefs get immediate attention (i.e. the CA formulates policies to invalidate them) with the most unpleasant belief getting the most attention.
+Then, if time allows, pleasant beliefs get attention (the CA formulates policies to validate them). Neutral beliefs are ignored. If time allows, the CA may act randomly (babble),
+just to "see what happens".
+
+Upon selecting a belief (pleasant vs unpleasant) to impact (persist vs terminate), a CA composes a policy to that effect. Since a belief is synthesized from a history of observations,
+a policy to impact this belief will attempt to alter future observations so that the synthesis of that belief is further underwritten (for pleasant beliefs) or undermined (for
+unpleasant beliefs). The choice of observations to affect and how they are to be affected depends on the nature of the synthesis that led to the belief.
+
+The CA emits a policy to its umwelt CAs, in essence directing them to impact their own beliefs (as observed by the CA). When a CA receives a policy from a parent CA, it behaves
+the same way as if it had decided to impact each beliefs referenced in the policy, assuming it holds them. In fact, for a CA, impacting its own beliefs at the request of a parent CA
+takes priority.
 
 
 Events: 
