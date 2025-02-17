@@ -112,53 +112,84 @@ An *ending* belief captures the fact that an observation from a previous time fr
 
 To further an ending belief is simply to prevent the ended onservation from being made again (to keep it "ended"), whereas disrupting it is to make the observation again (to "un-end" it).
 
-## Achieving a goal by executing a policy
+## Impacting a belief by executing a policy
 
-A policy is a set of goals to be realized by the receiving CA's own umwelt, unless the CA is an *effector CA*, in which case goals received are simply to activate effectors, like spinning a wheel forward or backward. Effector CAs are at the bottom level of the hierarchy of CAs and are indirectly and transitively in the umwelts of every CAs. A policy is ultimately realized via cumulated actions taken by effector CAs.
+A policy is a set of goals to be realized by a CA's umwelt in order to impact a belief held by the parent CA.
 
-A CA executes a policy it formulated or received as it closes its current time frame. In the next time frame, the CA determines whether or not the policy achieved the intended goal.
+A goal is either
 
-At the end of a time frame, a CA with no goal in play
+* an observed belief plus a desired impact (the umwelt is free to formulate an appropriate policy)
+* an observed intent (a specific policy that was once observed as having been executed in the umwelt and then incorporated in the parent CA's causal model)
 
-* selects a goal (belief and a sought impact to it),
-* then formulates a policy (a list of sub-goals, i.e. observation-impact pairs, to achieve the goal),
-* then marks the goal as "in play", 
-* then emits the policy to its umwelt CAs together with its priority (which is proportional to how unpleasant/pleasant the belief to impact is).
+If the the CA is an *effector CA*, the goals it receives will simply be to activate effectors, like spinning a wheel forward or backward. Effector CAs are at the bottom level of the hierarchy of CAs and are indirectly and transitively in the umwelts of every CAs. A policy is thus ultimately realized via cumulated actions taken by effector CAs.
 
-The received policy is rejected by the receiving umwelt CA and the rejection is communicated to the originting CA if
+A CA executes a policy it formulated or received at the close of the current time frame. 
 
-* none of the goals are relevant to the umwelt CA (none reference beliefs it holds or could hold)
-* or the CA has a prior goal in play that is not in the received policy such that
-  * the prior goal is marked as "executable" or has higher priority
+In the next time frame, the CA determines whether or not the policy, if executed, achieved the intended goal.
 
-If the CA has a goal from the received policy that is already in play from a prior received policy, the goal remains in play and its priority is adjusted if the received policy has higher priority.
+### Algorithm
 
-For each other goal in the received policy that's relevant to the CA
+Note: The algorithm implements something akin to two-phase commits on transactions with sub-transactions.
 
-* the received goal is marked "in play".
-* If the CA is an effector, the CA communicates to the CA of origin that the goal is "executable".
-* Else, the CA formulates a policy to realize the received goal, etc.
+At the end of a time frame, a CA with no active goal (in play or executable)
 
-A CA that emitted a policy to its umwelt waits for either
+* selects a goal -this becomes a "top" goal because it originated with the CA-
+* and formulates a new policy or retrieves a named policy (as a conjunction of sub-goals, i.e. observation-impact pairs, to achieve the goal),
+* and marks the goal as "in play",
+* and emits the policy to its umwelt CAs together with its priority (a number proportional to how unpleasant/pleasant the belief to impact is).
 
-* Any goal in the policy to be rejected by all umwelt CAs
-  * The CA then communicates to the originating CA that the received goal, for which the CA formulated the rejected policy, was rejected
-* All goals in the policy to be reported as executable by any umwelt CA
-  * The CA then communicates to the originating CA, if any, that the received goal, for which the CA formulated the policy, is executable
+A CA keeps a list of the policies (as a conjunction of goals)  it receives within its current timeframe.
 
-When all goals in the "top" policy are marked as "executable", the CA that formulated it instructs it umwelt CAs to execute each (sub)goal in the policy.
+At the end of its current timeframe, a CA:
+
+* rejects irrelevant policies (none of the goals of the policy reference beliefs the CA holds or could hold),
+* sorts the remaining policies by priority (highest first),
+* accepts the highest priority policy remaining, if any,
+* notifies originating CAs that it has rejected all other received policies,
+* processes the accepted policy, if any
+
+Note: A CA processes at most one policy at a time. A new time frame is started only once the accepted policy, if any, is rejected or executed. A CA's timeframe must thus be qualitatively longer than that of its umwelt CAs, to the point where, to an observer, it operates on a different time scale.
+
+For each other goal in the accepted policy:
+
+* If it is relevant to the CA
+  * If the CA is an effector, the goal is marked as "executable" and the CA communicates to the CA of origin that the goal is "executable"
+  * else, the goal is marked "in play" and the CA formulates a policy to realize it, etc.
+* If it is not relevant to the CA, the goal is rejected and the originating CA is notified
+
+A CA that emitted a policy to its umwelt CAs to achieve a goal (i.e. impact a belief it holds) keeps the goal in play:
+
+* Until **any** goal in the emitted policy is reported as rejected by **all** umwelt CAs
+  * The CA then communicates to the originating CA that the received goal, for which the CA formulated the rejected policy, was rejected, taking the goal out of play
+* Or untll **all** goals in the policy are reported as executable by **any** umwelt CA
+  * The CA then communicates to the originating CA, if any, that the received goal, for which the CA formulated the policy, is executable, and moves it from in play to executable
+
+When the "top" goal is ultimately marked as "executable", the CA that formulated the policy for it now instructs its umwelt CAs to execute each (sub)goal in the policy.
 
 When a CA receives the instruction to execute a goal it has in play
 
 * If the CA is an effector CA that can execute the goal
-  * It carries out the action-as-goal and reports it as executed to the instructing CA
+  * the CA instructs the target effector to carry out the action-as-goal
+  * and **immediately** reports it as executed to the originating CA (though the action may take a while to complete)
 * Else, for each sub-goal in the policy it formulated to achieve the received goal
-  * It instructs umwelts CAs to execute the sub-goal
+  * It instructs umwelts CAs to execute their policy for the sub-goal
 
-Once all the goals of the policy a CA emitted are reported as "executed", the received goal for which the policy was formulated by the CA is reported as executed to the originating CA, and it is no longer in play.
+Once all the (sub)goals in the policy a CA emitted are reported to it as "executed", the goal for which the policy was formulated by the CA is reported as executed to the originating CA, and it is no longer active.
 
-## Determining the success or failure of executing a policy
+When all goals of a CA are inactivated (rejected or executed), a new frame is started. For each goal that was executed, the goal with their associated policy is stored with what has now become the previous frame.
 
-???
+## Observing executed policies as intent beliefs
 
-A CA remembers past time frames and associated completed intents. Eventually old time frames will be forgotten but, until they are, completed intents and the effectiveness of their policies remain available to the CA.
+When a CA executes a policy it formulated, the execution of the policy becomes an *intent belief* in the next timeframe of the CA.
+
+The intent belief is given a predicate name unique to its construction (the conjunction of goals). The predicate arguments are the targeted belief and the desired impact that motivated formulating the intent belief's policy.
+
+The policy's construction is known to the CA but is hidden to observers (its parent CAs).
+
+The intent belief, like any other belief of the CA, is observable by a parent CA, and thus can be incorporated into the parent CA's causal model.
+
+The CA remembers named intent beliefs (and their unique policies) for as long as parent CAs references them in their causal models.
+
+When a CA observes a new intent belief in its umwelt, it requests an updated causal model.
+
+An executed policy is considered effective if it is picked up as a cause in a causal model of a parent CA.
