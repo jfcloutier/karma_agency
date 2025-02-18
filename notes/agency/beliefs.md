@@ -97,3 +97,7 @@ Expressed as `attempted(Belief, Value)` where
 
 * `Belief` is any belief expression
   * `attempted(Belief, Value)`
+
+## About naming synthetic beliefs
+
+Names are generated in such as way as to be unique to the structure and contents of the belief, and determined by it such that if two CAs synthesize smeantically identical beliefs, they will be named identically without requiring concertation between CAs.
