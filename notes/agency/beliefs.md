@@ -1,73 +1,84 @@
 # Beliefs
 
-> A Cognition Actor (CA) synthesizes beliefs for the current time frame by abstracting observation from the current and past time frames.
-
-The observations are of the beliefs of the CA's umwelt. They are taken as synchronous within each time frame.
-A CA observes the beliefs of CAs in its umwelt and nothing else.
+> A Cognition Actor (CA) derives beliefs for the current time frame by abstracting observations from the current and past time frames.
 
 A belief is an inference a CA makes on the basis of its observations past and present.
+The beliefs are made observable to parent CAs (i.e. to the CAs in which umwelts they sit).
+A CA observes the beliefs of CAs in its umwelt and nothing else.
 
-The beliefs of a CA are observable by its parent CAs but not their derivation/construction,
+Observations in a given time frame are considered synchronous, as are the beliefs derived in the time frame.
+
+The beliefs of a CA are expressed for observation by obfuscating their derivation,
 i.e. observed beliefs are opaque to the observer as to how they were inferred.
 
-Sensor CAs have sensors as umwelts (one sensor per sensor CA). A sensor CA simply observes the value of its assigned sensor
-and synthesizes a belief by translating it into an abduced property.
+The "bottom" beliefs (not derived from other beliefs) are those of the sensor CAs.
+Sensor CAs sit at the bottom of the hierarchy of CAs and have sensors as their umwelts (one sensor per sensor CA).
+A sensor CA simply observes the value of its attached sensor and translates it into a belief.
 
-There are five kinds of beliefs: **abductions**, **counts**, **trends**, **endings** and **attempts**.
+There are five kinds of beliefs: **abductions**, **counts**, **trends**, **ends** and **attempts**.
+
+Each belief is expressed as a `property` (linking an object and a value) or as a `relation` (linking two objects).
+
+A property is expressed as `Property(ObjectType(Object), Value)` where
+
+* `Property` is a property name
+* `ObjectType` is `agent`, , `policy`, `goal`, `counted`, `trending`, or `ending`
+* `Value` is a literal belonging to the property's domain (e.g. blue, up, true, 4, slowly, etc.)
+* `Object` is the unique name of an agent, policy, or goal, or of what's trending, ending or being counted,
+  * e.g. `self`, `ahsd34ahsdjh`
+  * the identity (derivation) of the named object is known only to the CA that named it
+  * note that objects are not necessarily physical "things" (only an agent is)
+
+A relation is expressed as  `Relation(ObjectType(Object), ObjectType(Object))`, where
+
+* `Relation` is a relation name
+* others as above
 
 ## Abduction
 
-> Relation or property created in order to formulate a causal theory or to describe a sensor reading
+> The translation of a sensor reading, or something unobserved needed to formulate a causal theory.
 
-Abduction is the only mechanism by which non-synthetic beliefs (not derived from observed beliefs) are created.
+Abduction **conjures** up properties or relations to either translate a sensor reading or to posit occulted observations needed to causally explain direct observations.
 
 * What
   * A relation or property
-* Expressed as `Property(Type(Object), Value)` or `Relation(ObjectType(Object), ObjectType(Object))`, where
-  * `Property` is a property name
-  * `Relation` is a relation name
-  * `ObjectType` is `agent`, `belief`, `policy` or `goal`
-  * `Value` is a literal belonging to the property's domain (e.g. blue, up, true, 4, etc.)
-  * `Object` is the unique name of the agent or of a policy, or it is an observed belief, or it is a goal,
-    * e.g. `self`, `ahsd34ahsdjh`, `count(487cba2, 3)`, `goal(Belief, Impact)` - note that objects are not necessarily physical "things"
-  * `Belief` is a belief as observed (i.e. opaque as to its derivation)
-  * `Impact` is either `persist` or `terminate`
+* Observed as-is (i.e. unobfuscated)
 
 ## Count
 
-> Property expressing number of relations an object has with other objects, relations of a given type and directionality
+> How many relations of a given type and directionality an object has with other objects.
 
 e.g. this policy was attempted twice to achieve this goal
 
 * What
-  * The number of relations of a given type involving a given item
-* Expressed as `count(belief(Object), Value)` where
-  * `Object` is a unique name created from `relations_counted(RelationName, to/from, ObjectType(ObjectInFocus))`
+  * A property
+* Observed as `count(counted(Object), Value)` where
+  * `Object` is a unique name created from `relations(RelationName, Direction, ObjectType(ObjectInRelation))`
+  * `Direction` is `to` or `from`
   * `Value` is a positive, non-zero integer
 
 ## Trend
 
-> Property expressing how an object is changing
+> How the values of a property of an object are trending, as observed over time frames leading to the current frame.
 
 e.g. luminance increases (trend)
 e.g. the increase in luminance persists (trending trend)
 
 * What
-  * Property expressing how the values of a property of an object trend, as observed over frames leading to the current frame
-* Expressed as `trend(belief(Object), Value)` where
-  * `Object` is a unique name created from `property_trending(PropertyName, ObjectType(Object))`
+  * A property
+* Observed as `trend(trending(Object), Value)` where
+  * `Object` is a unique name created from `properties(PropertyName, ObjectType(Object))`
   * `Value` is `stable`, `unstable`, `up` or `down`
 
-## Ending
+## End
 
-> Property expressing how long before something observed in past time frames ends in the current time frame
+> How long before something observed in past time frames ends in the current time frame.
 
 e.g. increase in luminance ended suddenly
 
 * What
-  * The valued property of a given object
-  * Or a given relation between two objects
-* Expressed as `ended(belief(Object), Value)` where
+  * A property
+* Observed as `end(ending(Object), Value)` where
   * `Object` is a unique name created from
     * `property_ending(Object, Value)`
     * or `relation_ending(RelationName, ObjectType(Object), ObjectType(Object))`
@@ -75,18 +86,18 @@ e.g. increase in luminance ended suddenly
 
 ## Attempt
 
-> A relationship expressing a policy executed to achieve a goal
+> The **fact** that the CA executed a policy to achieve a goal.
 
 e.g. attempted to stop distance getting smaller
 
 * What
-  * A relationship between a policy and a goal
-* Expressed as `attempted(policy(Object1), goal(Object2))` where
+  * A relation
+* Observed as `attempted(policy(Object1), goal(Object2))` where
   * `Object1` is a unique name created from `sub_goals([Goal, ...])`
   * `Object2` is a unique name created from `intent(belief(Object), Value)` where
     * `Value` is `persist` or `terminate`
 
 ## About naming of objects in beliefs
 
-Names of objects are generated in such as way as to be unique to the semantics of an object,
-such that identical objects will have the same name across CAs.
+Names of objects are generated in such as way as to be unique to the semantics of an object.
+Objects with the same structure and content will have the same name across CAs.
