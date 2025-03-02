@@ -60,7 +60,7 @@ When a CA receives a policy from a parent CA, it determines which goals and comm
 Commands are pre-constructed policies and need only be executed if known. Goals name beliefs and impacts and it's up to the receiving CA to construct a policy for each one that's relevant to the CA.
 
 Once a CA has identified (or been told by a parent CA of) a belief to persist or terminate, the CA must determine a policy to achieve this goal.
-The composition of the policy depends on the nature of the belief (count, trend or ending) and on the desired impact (persisting/terminating).
+The composition of the policy depends on the nature of the belief (count, trend or end) and on the desired impact (persisting/terminating).
 
 The nature of the belief and the desired impact determine the *base of support* of the belief to be impacted. A belief is synthesized from observations (its base of support) which are themselves beliefs once
 or currently held in the CA's umwelt. To impact a belief a CA holds, the CA needs to impact supporting beliefs observed to be held by CAs in its own umwelt.
@@ -77,7 +77,7 @@ A causal theory has three kinds of rules
 (An additional but implied rule is that a previous observation survives as a current observation if it does not contradict any constraint or static rule.)
 
 A CA's belief is a synthesis of multiple observations (of beliefs in the CA's umwelt), either within the bounds of the current timeframe (abduction or count belief)
-or integrating past and current timeframes (trend and ending beliefs). A belief can also be a record of an executed policy.
+or integrating past and current timeframes (trend and end beliefs). A belief can also be a record of an executed policy.
 
 These observations constitute the base of support of the belief targeted for impact. To impact a belief (to persist or terminate it), the CA will want to impact all or some of the supporting observations.
 These observations being themselves beliefs held in the umwelt of the CA, one can see how acting becomes a recursive operation that will unfold across multiple layers of CAs and over multiple CA timeframes,
@@ -98,7 +98,7 @@ Let's say a CA wants to impact an observation A that supports a belief it intend
 * A and B must co-exist under some condition
 * B causes A under some condition
 
-How a CA could impact a held belief is further modulated by the kind of belief it is. The only types of beliefs that can be impacted are count, trend or ending beliefs.
+How a CA could impact a held belief is further modulated by the kind of belief it is. The only types of beliefs that can be impacted are count, trend or end beliefs.
 
 An *abduction* belief can not be impacted. This would be tantamount to neurosis. The abduced beliefs are posited as given, until a new causal model is acquired that is without them.
 
@@ -134,11 +134,11 @@ If the nature of the trend to impact is
   * to disrupt it, increase or stabilize the values of the observed, trending belief
   * to further it, decrease the values of the observed, trending belief
 
-### Impacting an ending belief
+### Impacting an end belief
 
-An *ending* belief captures the fact that an observation from a previous timeframe has disappeared from all timeframes since.
+An *end* belief captures the fact that an observation from a previous timeframe has disappeared from all timeframes since.
 
-To further an ending belief is simply to prevent the ended onservation from being made again (to keep it "ended"), whereas disrupting it is to make the observation again (to "un-end" it).
+To further an end belief is simply to prevent the ended onservation from being made again (to keep it "ended"), whereas disrupting it is to make the observation again (to "un-end" it).
 
 ## Impacting a belief by executing a policy
 
@@ -223,8 +223,6 @@ For each goal that was executed, the goal with their associated policy is stored
 ## Observing executed policies as attempt beliefs
 
 When a CA executes a policy it formulated, the execution of the policy becomes an *attempt belief* held by the CA in its next timeframe.
-
-The attempt belief is `action(Name)` where the name is unique to the canonical conjunction of goals and is determined by it (similarly to the naming of beliefs)
 
 The attempt belief, like any other belief of the CA, is observable by a parent CA, and thus can be incorporated into the parent CA's causal model.
 

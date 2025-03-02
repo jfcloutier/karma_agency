@@ -15,7 +15,7 @@ The "bottom" beliefs (not derived from other beliefs) are those of the sensor CA
 Sensor CAs sit at the bottom of the hierarchy of CAs and have sensors as their umwelts (one sensor per sensor CA).
 A sensor CA simply observes the value of its attached sensor and translates it into a belief.
 
-There are five kinds of beliefs: **abductions**, **counts**, **trends**, **ends** and **attempts**.
+There are five kinds of beliefs: **abduction**, **count**, **trend**, **end** and **attempt**.
 
 Each belief is expressed as a `property` (linking an object and a value) or as a `relation` (linking two objects).
 
