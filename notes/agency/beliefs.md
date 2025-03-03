@@ -4,7 +4,7 @@
 
 The mind of an agent is an evolving hierarchy of cognition actors (CA). Each CA is a separate process always trying to make sense of what it observes in order to cause the agent to act in ways that are hopefully beneficial.
 
-A CA observes its umwelt (by definition). The umwelt is composed of lower-level CAs. The CAs and their umwelts form a hierarchy.
+A CA, by definition, observes its umwelt (via predictions and prediction errors). The umwelt is composed of lower-level CAs. The CAs and their umwelts form a hierarchy.
 
 Observations in a given time frame are considered synchronous, as are the beliefs derived in the time frame.
 

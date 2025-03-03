@@ -12,15 +12,14 @@ They signal risks, present or absent, to the survivability of the entire collect
 Beliefs associated with low/decreasing risks are pleasant. Others are neutral. A CA acts on its umwelt in response to the pleasantness or unpleasantness of its current beliefs.
 
 A CA operates one timeframe after another. Each timeframe corresponds to a "thick now". The timeframe of a CA starts and stops independently of other CAs;
-timeframes are not synchronized. CAs higher up in the collective's hierarchy have qualitatively longer timeframes. During its current timeframe, a CA observes the latest beliefs in its umwelt
-(via predictions and prediction errors), reads the broadcasted global wellbeing measures, refreshes its set of beliefs by integrating the latest observations
+timeframes are not synchronized. CAs higher up in the collective's hierarchy have qualitatively longer timeframes. During its current timeframe, a CA observes the latest beliefs in its umwelt (via predictions and prediction errors), reads the broadcasted global wellbeing measures, refreshes its set of beliefs by integrating the latest observations
 with past ones, and assigns up-to-date normative values (pleasantness/unpleasantness) to its updated beliefs.
 
 At the end of the current timeframe, a CA decides whether to act on updated beliefs and, if so, which ones and how.
 
-## Intents to act
+## Intents
 
-A CA can at most *intend* to take actions to impact its beliefs; an intent is not guaranteed to be realized. After all, a CA participates in a collective
+A CA can at most *intend* to take action to impact its beliefs; an intent is not guaranteed to be realized. After all, a CA participates in a collective
 and there is only one agent that the collective animates. Simultaneous intents to alter beliefs coming from multiple CAs must be resolved so that only one course of action,
 the one with highest priority, is carried out by the agent at any point in time.
 
@@ -33,39 +32,37 @@ An intent by a CA consists of
 A policy is a list of directives, to be communicated to the umwelt CAs. A directive is either a goal (a belief to impact) to be achieved by the umwelt however it chooses,
 or it is a command, a named and previously executed policy known to the umwelt, to be executed again by the umwelt.
 
-The policy's directives are communicated all at once by the CA to its CA's umwelt at the end of the CA's current timeframe.
+The policy's directives are communicated all at once by the CA to its umwelt at the end of the CA's current timeframe.
 Keep in mind that, any point in time, multiple CAs may be intending to act.
 
 ## Attention and action thresholds
 
 The first step to acting is to identify a belief to attend to, assuming a parent CA has not already directed the CA to impact one of its own choosing.
 
-Which belief is identified depends on its normativity and whether or not it is *sufficiently* pleasant or unpleasant (the normativity threshold) for the CA to pay attention to it.
+Only certain types of beliefs can be acted on and impacted, namely count, trend and end. The others, abduction and attempt, represent "facts" that can not be changed.
 
-The normativity threshold for action is set by the current wellbeing context which is shared by the entire collective. In a low fullness context
+Which actionable belief is identified depends on its pleasantness/unpleasantness and whether or not it is *sufficiently* pleasant or unpleasant (activation threshold) for the CA to pay attention to it.
+
+The activation threshold is set by the current wellbeing context which is shared by the entire collective. In a low fullness context
 (depleted energy stores), a CA raises the threshold for action (conserve energy!), whereas, when energy is plentiful and agent engagement is low,
-a CA lowers the threshold for action (try doing something, anything!). Only a belief with normativity above the dynamic threshold is deemed worthy of action.
+a CA lowers the threshold for action (try doing something, anything!). Only a belief with normativity (pleasantness/unpleasantness) above the dynamic threshold is deemed worthy of action.
 
-The normativity of a belief is set as a combination of absolute wellness values and their gradient. A positive wellness value but one that has been falling sharply will yield unpleasantness,
-whereas a negative wellness value that is rising sharply will yield pleasantness.
+The normativity of a belief is set as a combination of absolute wellness values and their gradient. A positive wellness value but one that has been falling sharply will yield unpleasantness, whereas a negative wellness value that is rising sharply will yield pleasantness.
 
-The CA selects which belief, if any, is *most worthy* of action in the current timeframe. Invalidating an unpleasant belief it cares about takes precedence over validating a pleasant belief.
-Typically, the CA will intend to terminate the most unpleasant, action-worthy belief. Else it will intend to persist the most pleasant, action-worthy belief, or do neither
-if there is no action-worthy belief.
+The CA selects which belief, if any, is *most worthy* of action in the current timeframe. Invalidating an unpleasant belief it cares about takes precedence over validating a pleasant belief. Typically, the CA will intend to terminate the most unpleasant, action-worthy belief. Else it will intend to persist the most pleasant, action-worthy belief, or do do something random (babble) if there is no action-worthy belief.
 
 ## Constructing a policy
 
 When a CA receives a policy from a parent CA, it determines which goals and commands are relevant to it; the others are likely relevant to sibling CAs participating in the same umwelt.
 
-Commands are pre-constructed policies and need only be executed if known. Goals name beliefs and impacts and it's up to the receiving CA to construct a policy for each one that's relevant to the CA.
+Commands are pre-constructed policies and need be executed only if known. Goals name beliefs and impacts and it's up to the receiving CA to construct a policy for each one that's relevant to the CA.
 
 Once a CA has identified (or been told by a parent CA of) a belief to persist or terminate, the CA must determine a policy to achieve this goal.
-The composition of the policy depends on the nature of the belief (count, trend or end) and on the desired impact (persisting/terminating).
+The composition of the policy depends on the nature of the belief (count, trend or end) and on the desired impact (persist/terminate).
 
-The nature of the belief and the desired impact determine the *base of support* of the belief to be impacted. A belief is synthesized from observations (its base of support) which are themselves beliefs once
-or currently held in the CA's umwelt. To impact a belief a CA holds, the CA needs to impact supporting beliefs observed to be held by CAs in its own umwelt.
+The nature of the belief and the desired impact determine the *base of support* of the belief to be impacted. A belief is synthesized from observations (its base of support) which are themselves beliefs once or currently held in the CA's umwelt. To impact a belief a CA holds, the CA needs to impact supporting beliefs observed to be held by CAs in its own umwelt.
 
-Unless it only just got started, a CA will have a causal theory it can use to predict changes to the beliefs of its umwelt (i.e. incoming observations) as a result of executing
+Unless it only just got started, a CA will have a causal theory. The CA can use it to predict changes to the beliefs of its umwelt (i.e. incoming observations) as a result of executing
 particular directives (goals or commands). This can be put to use when shaping a policy.
 
 A causal theory has three kinds of rules
@@ -76,12 +73,12 @@ A causal theory has three kinds of rules
 
 (An additional but implied rule is that a previous observation survives as a current observation if it does not contradict any constraint or static rule.)
 
-A CA's belief is a synthesis of multiple observations (of beliefs in the CA's umwelt), either within the bounds of the current timeframe (abduction or count belief)
-or integrating past and current timeframes (trend and end beliefs). A belief can also be a record of an executed policy.
+A CA's belief can be a synthesis of multiple observations (of beliefs in the CA's umwelt), either within the bounds of the current timeframe (count belief)
+or integrating past and current timeframes (trend and end beliefs). A belief can also be a record of an executed policy (attempt) or an imagined property/relation (abduction).
 
 These observations constitute the base of support of the belief targeted for impact. To impact a belief (to persist or terminate it), the CA will want to impact all or some of the supporting observations.
-These observations being themselves beliefs held in the umwelt of the CA, one can see how acting becomes a recursive operation that will unfold across multiple layers of CAs and over multiple CA timeframes,
-until effector CAs become involved and actually effect change  to the agent or its environment.
+
+Observations of the CA being themselves beliefs held in the umwelt of the CA, one can see how acting becomes a recursive operation that will unfold across multiple layers of CAs and over multiple CA timeframes, until effector CAs become involved and actually effect change to the agent or its environment.
 
 The task of constructing a policy -in order to impact a belief held by the CA- consists in deciding which supporting beliefs (observed umwelt beliefs) to impact and how.
 There will likely be many possible combinations of supporting beliefs to impact and thus there could be many alternate policies to choose from.
@@ -98,11 +95,11 @@ Let's say a CA wants to impact an observation A that supports a belief it intend
 * A and B must co-exist under some condition
 * B causes A under some condition
 
-How a CA could impact a held belief is further modulated by the kind of belief it is. The only types of beliefs that can be impacted are count, trend or end beliefs.
+How a CA could impact a held belief is further modulated by the kind of belief it is. The only types of beliefs that can be impacted are count, trend and end beliefs.
 
-An *abduction* belief can not be impacted. This would be tantamount to neurosis. The abduced beliefs are posited as given, until a new causal model is acquired that is without them.
+An *abduction* belief can not be impacted. This would be tantamount to neurosis. A belief abduced by a causal model it posited as given, until a new causal model is acquired that is without it.
 
-An *intent* belief also can not be impacted for the same reason: It is a record of action already taken.
+An *attempt* belief also can not be impacted for the same reason: It is a record of action already taken.
 
 ### Impacting a count belief
 
@@ -114,15 +111,20 @@ To terminate a count belief, a CA's policy would direct its umwelt CAs to termin
 
 ### Impacting a trend belief
 
-A *trend* belief captures how a given kind of observed belief is changing across the latest timeframes of the CA, for example, "the distance to an obstacle keeps dminishing".
+A *trend* belief captures how a given kind of observed belief is changing across the latest timeframes of the CA, for example, "distance keeps dminishing" is a "down" trend.
 
 To persist a trend belief, a CA's policy would direct its umwelt to **further** the trend. To terminate a trend belief, a CA's policy would direct its umwelt
 to **disrupt** the trend. How this is to be accomplished depends on the nature of the trend (stable, up, down or unstable).
 
+A `stable` trend captures an unchanging value for a given property of a given object.
+An `unstable` trend captures a seemingly randomly changing value for a given property of a given object.
+An `up` trend captures an upwardly changing ordinal value for a given property of a given object.
+A `down` trend captures a downwardly changing ordinal value for a given property of a given object.
+
 If the nature of the trend to impact is
 
 * stable
-  * to disrupt it, make the observed, trending belief unstable (or up or down) instead (i.e. make it take a new value)
+  * to disrupt it, make the observed, trending belief unstable (or up or down) instead (i.e. make it take a different value)
   * to further it, keep the observed, trending belief stable (i.e. make it take the same value)
 * unstable
   * to disrupt it, make the observed, trending belief stable instead
@@ -157,9 +159,9 @@ A CA executes a policy it formulates or has received only at the close of its cu
 
 ### Algorithm for executing policies
 
-Note: The algorithm implements something akin to two-phase commits on transactions with sub-transactions.
+Note: The algorithm implements something akin to two-phase commits on composite transactions (only once a policy in play is recursively marked as executable is it recursively executed).
 
-At the end of a timeframe, a CA with no active goal (in play or executable)
+At the end of a timeframe, a CA
 
 * selects a goal -this becomes a "top" goal because it originated with the CA-
 * and formulates a policy to achieve the goal,
@@ -209,8 +211,8 @@ When a CA receives the instruction to execute a goal it has in play
 * Else, for each directive in the policy it formulated to achieve the received goal
   * It randomly selects one umwelt CA ready to execute the directive (more than one umwelt CA might be ready, making the others redundant)
     * It instructs the selected umwelt CA
-      * to execute its policy if the directive is a goal
-      * to execute the named policy if the directive is a command
+      * to execute the policy it built if the directive is a goal
+      * to execute the named, pre-built policy if the directive is a command
     * It instructs any redundant umwelt CA to consider the directive as executed
 
 Once all the directives in the policy a CA emitted are reported to it as "executed", the goal for which the policy was formulated by the CA is reported as executed
@@ -224,12 +226,12 @@ For each goal that was executed, the goal with their associated policy is stored
 
 When a CA executes a policy it formulated, the execution of the policy becomes an *attempt belief* held by the CA in its next timeframe.
 
-The attempt belief, like any other belief of the CA, is observable by a parent CA, and thus can be incorporated into the parent CA's causal model.
+The attempt belief, like any other belief of the CA, is observable by a parent CA, and, crucially, can be incorporated into the parent CA's causal model.
 
 The policy's contents (a list of goals for the CA's umwelt) is known to the CA but is hidden to its observers (i.e. parent CAs).
 
 The CA remembers named attempt beliefs (and their unique policies) for as long as parent CAs references them in their causal models.
 
-When a CA observes a new attempt belief in its umwelt, its causal model becomes obsolete and ought to be replaced.
+When a CA observes a new (as yet unobserved) attempt belief in its umwelt, its causal model becomes obsolete and ought to be replaced.
 
-An executed policy is considered effective if it is picked up as a cause in a causal model of a parent CA.
+An executed policy is considered effective if it is picked up (in the form of an attempt belief) as a cause in a causal model of a parent CA.
