@@ -1,15 +1,18 @@
 # Beliefs
 
-> A Cognition Actor (CA) derives beliefs for the current time frame by abstracting observations from the current and past time frames.
+## About beliefs
 
-A belief is an inference a CA makes on the basis of its observations past and present.
-The beliefs are made observable to parent CAs (i.e. to the CAs in which umwelts they sit).
-A CA observes the beliefs of CAs in its umwelt and nothing else.
+The mind of an agent is an evolving hierarchy of cognition actors (CA). Each CA is a separate process always trying to make sense of what it observes in order to cause the agent to act in ways that are hopefully beneficial.
+
+A CA observes its umwelt (by definition). The umwelt is composed of lower-level CAs. The CAs and their umwelts form a hierarchy.
 
 Observations in a given time frame are considered synchronous, as are the beliefs derived in the time frame.
 
-The beliefs of a CA are expressed for observation by obfuscating their derivation,
-i.e. observed beliefs are opaque to the observer as to how they were inferred.
+A CA derives its beliefs from noticing quantities, trends, endings etc. in its umwelt.  What it observes are the beliefs, past and present, of its "child" CAs accumulating, trending, ending, etc. The CA makes its own, more abstract beliefs available for observation by its "parent" CAs. And so on, up an abstraction hierarchy of beliefs about beliefs about beliefs etc.
+
+Each CA decides how to act on the basis of its beliefs plus how it felt when deriving them. So beliefs are central to agency.
+
+The beliefs of a CA are expressed for observation by obfuscating their derivation, i.e. observed beliefs are opaque to the observer as to how they were inferred.
 
 The "bottom" beliefs (not derived from other beliefs) are those of the sensor CAs.
 Sensor CAs sit at the bottom of the hierarchy of CAs and have sensors as their umwelts (one sensor per sensor CA).
