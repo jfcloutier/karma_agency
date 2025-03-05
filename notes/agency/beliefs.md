@@ -8,7 +8,7 @@ A CA, by definition, observes its umwelt (via predictions and prediction errors)
 
 Observations in a given time frame are considered synchronous, as are the beliefs derived in the time frame.
 
-A CA derives its beliefs from noticing quantities, trends, endings etc. in its umwelt.  What it observes are the beliefs, past and present, of its "child" CAs accumulating, trending, ending, etc. The CA makes its own, more abstract beliefs available for observation by its "parent" CAs. And so on, up an abstraction hierarchy of beliefs about beliefs about beliefs etc.
+A CA derives its beliefs from noticing quantities, trends, endings etc. in its umwelt.  What it observes are the (accumulating, trending, ending) beliefs, past and present, of its "child" CAs. The CA makes its own, more abstract beliefs available for observation by its "parent" CAs. And so on, up an abstraction hierarchy of beliefs about beliefs about beliefs etc.
 
 Each CA decides how to act on the basis of its beliefs plus how it felt when deriving them. So beliefs are central to agency.
 
@@ -18,14 +18,14 @@ The "bottom" beliefs (not derived from other beliefs) are those of the sensor CA
 Sensor CAs sit at the bottom of the hierarchy of CAs and have sensors as their umwelts (one sensor per sensor CA).
 A sensor CA simply observes the value of its attached sensor and translates it into a belief.
 
-There are five kinds of beliefs: **abduction**, **count**, **trend**, **end** and **attempt**.
+There are five kinds of beliefs: **abduction**, **count**, **comparison**, **trend**, **end** and **attempt**.
 
 Each belief is expressed as a `property` (linking an object and a value) or as a `relation` (linking two objects).
 
 A property is expressed as `Property(ObjectType(Object), Value)` where
 
 * `Property` is a property name
-* `ObjectType` is `agent`, , `policy`, `goal`, `counted`, `trending`, or `ending`
+* `ObjectType` is `agent`, , `policy`, `goal`, `counted`, `compared`, `trending`, or `ending`
 * `Value` is a literal belonging to the property's domain (e.g. blue, up, true, 4, slowly, etc.)
 * `Object` is the unique name of an agent, policy, or goal, or of what's trending, ending or being counted,
   * e.g. `self`, `ahsd34ahsdjh`
@@ -59,6 +59,18 @@ e.g. this policy was attempted twice to achieve this goal
   * `Object` is a unique name created from `relations(RelationName, Direction, ObjectType(ObjectInRelation))`
   * `Direction` is `to` or `from`
   * `Value` is a positive, non-zero integer
+
+## Comparison
+
+> Whether there is more of something than of something else
+
+e.g. there are more attempts to achieve this goal than attempts to achieve this other goal
+
+* What
+  * A relation
+* Observed as `more(compared(Object1), compared(Object2))` where
+  * `Object1` is a unique name created from `count(counted(Object), Value)`
+  * `Object2` is a unique name created from `count(counted(Object), Value)`
 
 ## Trend
 

@@ -39,7 +39,7 @@ Keep in mind that, any point in time, multiple CAs may be intending to act.
 
 The first step to acting is to identify a belief to attend to, assuming a parent CA has not already directed the CA to impact one of its own choosing.
 
-Only certain types of beliefs can be acted on and impacted, namely count, trend and end. The others, abduction and attempt, represent "facts" that can not be changed.
+Only certain types of beliefs can be acted on and impacted, namely `count`, `comparison`, `trend` and `end`. The others, `abduction` and `attempt`, represent "facts" that can not be changed.
 
 Which actionable belief is identified depends on its pleasantness/unpleasantness and whether or not it is *sufficiently* pleasant or unpleasant (activation threshold) for the CA to pay attention to it.
 
@@ -47,7 +47,7 @@ The activation threshold is set by the current wellbeing context which is shared
 (depleted energy stores), a CA raises the threshold for action (conserve energy!), whereas, when energy is plentiful and agent engagement is low,
 a CA lowers the threshold for action (try doing something, anything!). Only a belief with normativity (pleasantness/unpleasantness) above the dynamic threshold is deemed worthy of action.
 
-The normativity of a belief is set as a combination of absolute wellness values and their gradient. A positive wellness value but one that has been falling sharply will yield unpleasantness, whereas a negative wellness value that is rising sharply will yield pleasantness.
+The normativity of a belief is set as a combination of absolute wellbeing values and their gradient. A positive wellbeing value but one that has been falling sharply will yield unpleasantness, whereas a negative wellbeing value that is rising sharply will yield pleasantness.
 
 The CA selects which belief, if any, is *most worthy* of action in the current timeframe. Invalidating an unpleasant belief it cares about takes precedence over validating a pleasant belief. Typically, the CA will intend to terminate the most unpleasant, action-worthy belief. Else it will intend to persist the most pleasant, action-worthy belief, or do do something random (babble) if there is no action-worthy belief.
 
@@ -58,7 +58,7 @@ When a CA receives a policy from a parent CA, it determines which goals and comm
 Commands are pre-constructed policies and need be executed only if known. Goals name beliefs and impacts and it's up to the receiving CA to construct a policy for each one that's relevant to the CA.
 
 Once a CA has identified (or been told by a parent CA of) a belief to persist or terminate, the CA must determine a policy to achieve this goal.
-The composition of the policy depends on the nature of the belief (count, trend or end) and on the desired impact (persist/terminate).
+The composition of the policy depends on the nature of the belief (`count`, `comparison`, `trend` or `end`) and on the desired impact (persist/terminate).
 
 The nature of the belief and the desired impact determine the *base of support* of the belief to be impacted. A belief is synthesized from observations (its base of support) which are themselves beliefs once or currently held in the CA's umwelt. To impact a belief a CA holds, the CA needs to impact supporting beliefs observed to be held by CAs in its own umwelt.
 
@@ -73,7 +73,7 @@ A causal theory has three kinds of rules
 
 (An additional but implied rule is that a previous observation survives as a current observation if it does not contradict any constraint or static rule.)
 
-A CA's belief can be a synthesis of multiple observations (of beliefs in the CA's umwelt), either within the bounds of the current timeframe (count belief)
+A CA's belief can be a synthesis of multiple observations (of beliefs in the CA's umwelt), either within the bounds of the current timeframe (`count` and `comparison` beliefs)
 or integrating past and current timeframes (trend and end beliefs). A belief can also be a record of an executed policy (attempt) or an imagined property/relation (abduction).
 
 These observations constitute the base of support of the belief targeted for impact. To impact a belief (to persist or terminate it), the CA will want to impact all or some of the supporting observations.
@@ -108,6 +108,14 @@ A *count* belief encapsulates how many of a given kind of observed beliefs there
 To persist a count belief, a CA's policy would direct its umwelt CAs to persist *all of* the counted (observed) beliefs.
 
 To terminate a count belief, a CA's policy would direct its umwelt CAs to terminate *any of* the counted beliefs, or to add a counted belief.
+
+### Impacting a comparison belief
+
+A *comparison* belief expresses that more of an object was counted than another.
+
+To persist a comparison belief, a CA's policy would direct its umwelt CAs to persist both compared counts.
+
+To terminate a count belief, a CA's policy would direct its umwelt CAs to reduce the first counts, or to grow the second count.
 
 ### Impacting a trend belief
 
