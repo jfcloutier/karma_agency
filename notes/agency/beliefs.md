@@ -49,7 +49,7 @@ Abduction **conjures** up properties or relations to either translate a sensor r
 
 ## Count
 
-> How many relations of a given type and directionality an object has with other objects.
+> How many relations of a given type and directionality an object has with other objects in the current time frame.
 
 e.g. this policy was attempted twice to achieve this goal
 
@@ -62,9 +62,9 @@ e.g. this policy was attempted twice to achieve this goal
 
 ## Comparison
 
-> Whether there is more of something than of something else
+> Whether there has been more of something than of something else, as observed over time frames leading to, and including, the current time frame.
 
-e.g. there are more attempts to achieve this goal than attempts to achieve this other goal
+e.g. there have been more attempts to achieve this goal than attempts to achieve this other goal
 
 * What
   * A relation
@@ -74,7 +74,7 @@ e.g. there are more attempts to achieve this goal than attempts to achieve this 
 
 ## Trend
 
-> How the values of a property of an object are trending, as observed over time frames leading to the current frame.
+> How the values of a property of an object are trending, as observed over time frames leading to, and including, the current time frame.
 
 e.g. luminance increases (trend)
 e.g. the increase in luminance persists (trending trend)
@@ -101,7 +101,7 @@ e.g. increase in luminance ended suddenly
 
 ## Attempt
 
-> The **fact** that the CA executed a policy to achieve a goal.
+> The **fact** that the CA executed a policy to achieve a goal in the current time frame.
 
 e.g. attempted to stop distance getting smaller
 
