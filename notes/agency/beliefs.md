@@ -49,7 +49,7 @@ Abduction **conjures** up properties or relations to either translate a sensor r
 
 ## Count
 
-> How many relations of a given type and directionality an object has with other objects in the current time frame.
+> How many relations of a given type and directionality an object has with other objects in the current time frame only.
 
 e.g. this policy was attempted twice to achieve this goal
 
@@ -69,8 +69,10 @@ e.g. there have been more attempts to achieve this goal than attempts to achieve
 * What
   * A relation
 * Observed as `more(compared(Object1), compared(Object2))` where
-  * `Object1` is a unique name created from `count(counted(Object), Value)`
-  * `Object2` is a unique name created from `count(counted(Object), Value)`
+  * `Object1` is a unique name created from `relations(RelationName, Direction, ObjectType(ObjectInRelation))`
+  * `Object2` is a unique name created from `relations(RelationName, Direction, ObjectType(ObjectInRelation))`
+  * `Direction` is `to` or `from`
+  * `Value` is a positive, non-zero integer
 
 ## Trend
 
