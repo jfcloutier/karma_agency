@@ -24,21 +24,21 @@ A meta-CA adds and removes CAs at the hierarchical level it manages (the level i
 
 * Bottom-up constraints
   * Level N -1 CAs determine what the level N CAs can observe and do. They...
-    * define the set of observations (beliefs they hold) available to the level N CAs which umwelts they compose
-    * define the set of synthetic actions available to the level N CAs which umwelts they compose
+    * define the set of observations (beliefs they hold) and made available to the level N CAs which umwelts they compose
+    * define the set of policies they constructed known to the level N CAs which umwelts they compose
 * Top-down constraints
   * A Level N + 1 CA
     * models the (Level N) CAs in its umwelt but not vice-versa
-      * umwelt CAs can't make sense of what's asked of/imposed on them (Froese's Irruption Theory?)
+      * umwelt CAs can't make sense of what's asked of/imposed on them - they simply accept it (Froese's Irruption Theory?)
     * reduces the agency of its umwelt
-      * restricts the causal theory search space of umwelt CAs
-        * they can not disappear trends integrated in parent CA's beliefs (esp. trends involving abduced objects/predicates)
+      * restricts the causal theory search space of umwelt CAs (by imposing restriction on the vocabulary used)
+        * they can not "unground"" parent CA's beliefs (by disappearing the vocabulary of umwelt beliefs used by the parent CAs to synthesize beliefs)
           * this imposes constraints on signatures of causal theories
             * the choice of abduced objects/predicates is reduced
-        * impose intents on Level N CAs to achieve its own goals
-          * umwelt CAs decide how to fulfill imposed intents (they are not micromanaged, just directed)
+        * impose directives (policies to execute or goals to achieve) on Level N CAs to achieve its own goals
+          * umwelt CAs decide how to fulfill received directives (they are not micromanaged, just directed)
           * they can't fulfill their own goals while fulfilling their parent CA's goals
             * they have fewer opportunity to intend their own goals and work on being/staying relevant
-    * has a better chance than its umwelt to keep the agent alive if
-      * it can detect the more abstract observation trends that are more likely to correlate with wellbeing trends
-      * and thus its goals to validate/invalidate its beliefs (these trends) are likely more effective
+    * is in a better position than its umwelt to keep the agent alive if
+      * it can detect the more abstract observation patterns that are more likely to correlate with wellbeing trends
+      * and thus can set goals (to persist/terminate its beliefs) that will be more effective at maintaining the entire SOM alive
