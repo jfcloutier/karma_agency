@@ -14,7 +14,7 @@ Start options:
 
 If the module runs a singleton actor, it must also implement `name(Name)`.
 
-An actor is started via `supervisor:start_child(Supervisor, Module, Options)` (for a singleton actor) or `start_child(Supervisor, Module, Name, Options)` (for a named actor).
+An actor is started via `supervisor:child_started(Supervisor, Module, Options)` (for a singleton actor) or `child_started(Supervisor, Module, Name, Options)` (for a named actor).
 
 A supervisor actor restarts its terminated, supervised actors according to the option `restart(Restart)` with which they were started, where Restart is one of:
 

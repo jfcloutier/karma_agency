@@ -148,14 +148,14 @@ init(Options, State) :-
 		umwelt(Umwelt), Options), 
 	self(Name), 
 	latency(Level, Latency), 
-    start_ticking(Name, Latency, Timer),
+    ticking_started(Name, Latency, Timer),
 	assert(
 		timer(Timer)),
 	empty_frame(0, Frame), 
 	put_state(EmptyState, [umwelt - Umwelt, frame - Frame, history - [], buffered_events - [], status - initiating], State), 
-	send_message(Name, start_frame).
+	send_message(Name, frame_started).
 
-start_ticking(Name, Delay, Timer) :-
+ticking_started(Name, Delay, Timer) :-
 	send_at_interval(Name, framer, 
 		message(tick, Name), Delay, TimerName), 
 	Timer = timer(TimerName, Goal, Delay),
@@ -165,7 +165,7 @@ reset_ticking :-
 	timer(TimerName, Goal, Delay),
 	retractall(timer/3),
 	timer : stop(TimerName),
-	start_ticking(Name, Delay, Timer).
+	ticking_started(Name, Delay, Timer).
 
 empty_frame(Level, EmptyFrame) :-
 	get_time(Now),
@@ -184,22 +184,22 @@ terminate :-
 	log(warn, ca, 'Terminated ~@', [self]).
 
 % Initial start
-handle_message(message(start_frame, _), State, NewState) :-
+handle_message(message(frame_started, _), State, NewState) :-
 	get_state(State, status, initiating),
-	start_frame(State, NewState),
+	frame_started(State, NewState),
 	get_state(State, level, Level),
     publish(ca_started, [level(Level)]).
 
 % Start the next frame
-handle_message(message(start_frame, _), State, NewState) :-
+handle_message(message(frame_started, _), State, NewState) :-
 	get_state(State, status, ending),
-	start_frame(State, NewState).
+	frame_started(State, NewState).
 
 % Only end frame if started. Then start the next frame.
 handle(message(tick, _), State, NewState) :-
 	get_state(State, status, started),
 	end_frame(State, State1), 
-	start_frame(State1, NewState).
+	frame_started(State1, NewState).
 
 handle(message(Message, Source), State, State) :-
 	log(debug, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
@@ -231,7 +231,7 @@ handle_event_now(event(Topic, Payload, Source), State, State) :-
 
 % The previous frame becomes the new frame by updating the start_time,
 % processing buffered events and re-activating processing events upon receipt
-start_frame(State, NewState) :-
+frame_started(State, NewState) :-
 	log(info, ca, 'CA ~@ is starting a new frame', [self]),
 	process_suspended_events(State, State1),
 	reset_ticking,

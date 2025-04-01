@@ -4,8 +4,7 @@ This is the top level module implementing a robot's agency.
 It integrates services and actors:
 
 * Body: A service providing an interface to real or virtual effectors and sensors
-* Wellbeing: The supervisor of the wellbeing workers that do survival risk assessment and broadcast consequent feelings
-* SOM: The supervisor of the dynamic collective of cognition and metacognition workers.
+* SOM: The supervisor of the dynamic collective of cognition actors.
 * PubSub: The actor via which agency actors subscribe to, publish and receive events
 */
 
@@ -41,45 +40,53 @@ threads.
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
 :- use_module(agent(body)).
-:- use_module(som(meta_ca)).
-:- use_module(wellbeing(engagement)).
-:- use_module(wellbeing(fullness)).
-:- use_module(wellbeing(integrity)).
+:- use_module(agent(sensor_cas)).
+:- use_module(agent(effector_ca)).
 
 start(BodyHost) :-
 	log(info, agency, 'Starting agency'),
 	body : capabilities(BodyHost, Sensors, Effectors),
 	log(info, agency, 'Sensors: ~p', [Sensors]),
 	log(info, agency, 'Effectors: ~p', [Effectors]),
-	WellbeingChildren = [
-		worker(fullness,
-			% Energy level
-			[
-				topics([]),
-				restart(permanent)]),
-		worker(integrity,
-			% Physical integrity
-			[
-				topics([]),
-				restart(permanent)]),
-		worker(engagement,
-			% Moving and learning?
-			[
-				topics([]),
-				restart(permanent)])],
 	AgencyChildren = [
 		pubsub,
-		supervisor(wellbeing,
-			[children(WellbeingChildren), restart(permanent)]),
+		% Start the SOM with the sensor and effector CAs (at level 0)
 		supervisor(som,
-			[restart(permanent)])],
+			[
+				init([level(0), sensors(Sensors), effectors(Effectors)]),
+				restart(permanent)])],
+	% Start agency
 	supervisor : start(agency,
 		[children(AgencyChildren)]),
-	% Start the SOM with the sensor and effector CAs (at level 0)
-	% Start level 0 meta CA
-	meta_ca : name_from_level(0, Name),
-	supervisor : start_worker_child(som,
-		meta_ca,
-		Name,
-		[
-			init([level(0), sensors(Sensors), effectors(Effectors)])]).
+	sensor_cas_started(Sensors),
+	effector_cas_started(Effectors),
+	level_one_ca_started.
+
+    % Starting sensor and effector CAs
+	sensor_cas_started([]).
+
+	sensor_cas_started([Sensor|Others]) :-
+		sensor_ca : name_from_sensor(Sensor, Name), 
+		supervisor : worker_child_started(som, sensor_ca, Name, 
+			[init(
+				[sensor(Sensor)])]), 
+				sensor_cas_started(Others).
+	
+	% The body presents each possible action by an actual effector as a separate effector capability.
+	% We combine them into a single effector CA
+	effector_cas_started([]).
+	
+	effector_cas_started([Effector|Others]) :-
+		findall(Twin, 
+			(
+				member(Twin, Others), Twin.id == Effector.id), Twins), 
+		effector_ca : name_from_effector(Effector, Name),
+		supervisor : worker_child_started(som, effector_ca, Name, 
+			[init(
+				[effectors([Effector|Twins])])]), 
+		subtract(Others, Twins, Rest), 
+		effector_cas_started(Rest).
+	
+	% TODO
+	% Create the first CA capable of mitosis
+	level_one_ca_started.

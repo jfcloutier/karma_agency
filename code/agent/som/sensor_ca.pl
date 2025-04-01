@@ -1,10 +1,11 @@
 /*
-A sensor is an a priori cognition actor that communicates with a body sensor to read one sense.
-Each sensor CA holds one belief. It is about the sense value it measures.
-It listens to prediction events about its belief and may emit a prediction error event
-based on the latest reading, if not staled, else based on a present reading.
+A sensor CA is an a priori cognition actor that communicates with a body sensor to read one sense.
+Each sensor CA holds one neutral (neither pleasant nor unpleasant) belief about the sense value it measures.
+A sensor CA has no noton of action.
+It only listens to prediction events about its belief and may emit a prediction error event
+based on the latest reading, if not stale, else based on a present reading, filtered on past readings.
 
-A sensor CA 
+A sensor CA:
 
 * listens to events about:
     * prediction(Sense), expecting payload [value(Value)]
@@ -38,6 +39,7 @@ A sensor CA
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
+:- use_module(agent(body)).
 
 % The name of the sensor CA given the sensor it wraps
 name_from_sensor(Sensor, Name) :-
@@ -117,8 +119,7 @@ belief_domain(State, [Sense-Domain]) :-
 
 subcribe_to_predictions(State, [Topic]) :-
     sense(State, Sense),
-    Topic =.. [prediction, Sense],
-    subscribe(Topic).
+    subscribe(prediction(Sense)).
 
 empty_reading(State, Reading) :-
     sense(State, Sense),

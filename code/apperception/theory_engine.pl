@@ -1232,14 +1232,14 @@ select_rand(X, List, Rest) :-
 
 %%%% UNUSED
 
-start_timer_to_trace :-
-    start_timer(trace, 1000).
+timer_started_to_trace :-
+    timer_started(trace, 1000).
 
 times_up_to_trace :-
     times_up(trace).
 
 % Starts a timer (in msecs)
-start_timer(Timer, Duration) :-
+timer_started(Timer, Duration) :-
     get_time(T),
     Deadline is T + (Duration / 1000),
     end_time(Timer, Deadline),

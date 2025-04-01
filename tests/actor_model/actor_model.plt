@@ -44,7 +44,7 @@ test(supervised_dynamic_pubsub) :-
 	supervisor : start(top), 
 	assertion(
 		is_thread(top)), 
-	supervisor : start_pubsub(top), 
+	supervisor : pubsub_started(top), 
 	assertion(
 		is_thread(pubsub)), 
 	supervisor : stop(top), 
@@ -120,7 +120,7 @@ test(supervised_dynamic_worker) :-
 	supervisor : start(top), 
 	assertion(
 		is_thread(top)), 
-	supervisor : start_worker_child(top, alice, alice, []), 
+	supervisor : worker_child_started(top, alice, alice, []), 
 	assertion(
 		is_thread(alice)), 
 	supervisor : stop(top), 
@@ -147,7 +147,7 @@ test(supervised_dynamic_supervisor) :-
 	supervisor : start(top), 
 	assertion(
 		is_thread(top)), 
-	supervisor : start_supervisor_child(top, bottom, []), 
+	supervisor : supervisor_started_child(top, bottom, []), 
 	assertion(
 		is_thread(bottom)), 
 	supervisor : stop(top), 
@@ -190,7 +190,7 @@ test(supervised_actor_restart) :-
 	wait_for_actor_stopped(alice), 
 	assertion(
 		 \+ is_thread(alice)), 
-	supervisor : stop_child(bottom, worker, bob), 
+	supervisor : child_stopped(bottom, worker, bob), 
 	assertion(
 		 \+ is_thread(bob)), 
 	supervisor : stop(top), 
@@ -216,7 +216,7 @@ test(restarting_supervised_supervisors) :-
 	assertion(
 		is_thread(middle)), % Start dynamic supervisor (bottom) as child of supervisor middle
 		
-	supervisor : start_supervisor_child(middle, bottom, 
+	supervisor : supervisor_started_child(middle, bottom, 
 		[restart(permanent)]), 
 	assertion(
 		is_thread(bottom)), % Exiting permanent supervisor bottom -a dynamic child of middle- restarts bottom
@@ -292,7 +292,7 @@ test(communicating_with_supervised_static_children) :-
 		init(
 			[mood(peaceful)]), 
 		restart(transient)])], 
-	supervisor : start_supervisor_child(top, bottom, 
+	supervisor : supervisor_started_child(top, bottom, 
 		[children(Children)]), 
 	assertion(
 		is_thread(bob)), 

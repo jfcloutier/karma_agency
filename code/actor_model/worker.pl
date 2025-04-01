@@ -36,8 +36,8 @@ start(Name, Module, Options, Supervisor) :-
 	Init =.. [ : , Module, init, Args], 
 	Terminate =.. [ : , Module, terminate], 
 	log(debug, worker, "Creating worker ~w", [Name]), 
-	start_actor(Name, 
-		worker : start_worker(Module, Name, Topics, Init, Handler, Supervisor), 
+	actor_started(Name, 
+		worker : worker_started(Module, Name, Topics, Init, Handler, Supervisor), 
 		[at_exit(Terminate)]).
 
 stop :-
@@ -52,10 +52,10 @@ stop :-
 
 %%% Private - in thread
 
-start_worker(Module, Name, Topics, Init, Handler, Supervisor) :-
+worker_started(Module, Name, Topics, Init, Handler, Supervisor) :-
 	Init =.. [ : , Module, _, _], 
 	catch(
-		start_run(Topics, Init, Handler), Exit, 
+		run_started(Topics, Init, Handler), Exit, 
 		process_exit(Module, Name, Exit, Supervisor)).
 
 process_exit(Module, Name, Exit, Supervisor) :-
@@ -64,7 +64,7 @@ process_exit(Module, Name, Exit, Supervisor) :-
 	notify_supervisor(Supervisor, Module, Name, Exit), 
 	thread_exit(true).
 
-start_run(Topics, Init, Handler) :-
+run_started(Topics, Init, Handler) :-
 	log(debug, worker, 'Start run of ~@ with topics ~p, init ~p and handler ~p', [self, Topics, Init, Handler]),
 	Init =.. [ : , Module, Head, Args], 
 	Goal =.. [Head, Args, State], 
