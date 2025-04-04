@@ -20,36 +20,36 @@ init(Options, State) :-
 	empty_state(EmptyState), 
 	put_state(EmptyState, mood, Mood, State).
 
-process_signal(control(stop)) :-
-	worker : stop.
+signal_processed(control(stopped)) :-
+	worker : stopped.
 
-terminate :-
+terminated :-
 	writeln("[alice] Terminating").
 
-handle(control(exit), _, _) :-
+handled(control(exit), _, _) :-
 	throw(
 		exit(normal)).
 
 % Ignore all events from self
-handle(event(_,_, alice), State, State).
+handled(event(_,_, alice), State, State).
 
-handle(event(party, PartyGoers, _), State, NewState) :-
+handled(event(party, PartyGoers, _), State, NewState) :-
 	log(info, alice, "Ready to party with ~w", [PartyGoers]), 
 	put_state(State, mood, pleased, NewState), 
 	contact_others(PartyGoers), 
 	publish(police, "Anything wrong, officer?").
 
-handle(event(police, Payload, _), State, NewState) :-
+handled(event(police, Payload, _), State, NewState) :-
 	log(info, alice, "Police! ~w", [Payload]), 
 	put_state(State, mood, displeased, NewState).
 
-handle(query(mood), State, Response) :-
+handled(query(mood), State, Response) :-
 	get_state(State, mood, Response), 
 	log(info, alice, "Alice is ~p", [Response]).
 
-handle(query(_), _, "Pardon?").
+handled(query(_), _, "Pardon?").
 
-handle(message(Message, Source), State, State) :-
+handled(message(Message, Source), State, State) :-
 	log(info, alice, "Received ~w from ~w", [Message, Source]).
  
 %% Private
@@ -60,6 +60,6 @@ contact_others([alice|Others]) :-
 	contact_others(Others).
 
 contact_others([Name|Others]) :-
-	worker : send_message(Name, "Alice says howdy!"), 
+	worker : message_sent(Name, "Alice says howdy!"), 
 	contact_others(Others).
 

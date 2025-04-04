@@ -30,7 +30,7 @@ sense_value(Url, Value, Tolerance) :-
 	sense_value_from_response(Response, Value, Tolerance), 
 	log(info, body, 'Sensed ~w with tolerance ~w from ~w', [Value, Tolerance, Url]).
 
-actuate(Url) :-
+actuated(Url) :-
 	http_get(Url, Response, []), 
 	log(debug, body, '~w got response ~p', [Url, Response]), 
 	actuation_value_from_response(Response, ok), 

@@ -55,7 +55,7 @@ Unpleasant beliefs get immediate attention (i.e. the CA formulates policies to i
 Then, if time allows, pleasant beliefs get attention (the CA formulates policies to validate them). Neutral beliefs are ignored. If time allows, the CA may act randomly (babble),
 just to "see what happens".
 
-Upon selecting a belief (pleasant vs unpleasant) to impact (persist vs terminate), a CA composes a policy to that effect. Since a belief is synthesized from a history of observations,
+Upon selecting a belief (pleasant vs unpleasant) to impact (persisted vs terminated), a CA composes a policy to that effect. Since a belief is synthesized from a history of observations,
 a policy to impact this belief will attempt to alter future observations so that the synthesis of that belief is further underwritten (for pleasant beliefs) or undermined (for
 unpleasant beliefs). The choice of observations to affect and how they are to be affected depends on the nature of the synthesis that led to the belief.
 
@@ -130,10 +130,10 @@ latency(Level, Latency) :-
 	Latency is (2**Level).
 
 level(Name, Level) :-
-	send_query(Name, level, Level).
+	query_sent(Name, level, Level).
 
 umwelt(Name, Umwelt) :-
-	send_query(Name, umwelt, Umwelt).
+	query_sent(Name, umwelt, Umwelt).
 
 % Worker
 
@@ -153,7 +153,7 @@ init(Options, State) :-
 		timer(Timer)),
 	empty_frame(0, Frame), 
 	put_state(EmptyState, [umwelt - Umwelt, frame - Frame, history - [], buffered_events - [], status - initiating], State), 
-	send_message(Name, frame_started).
+	message_sent(Name, frame_started).
 
 ticking_started(Name, Delay, Timer) :-
 	send_at_interval(Name, framer, 
@@ -161,91 +161,91 @@ ticking_started(Name, Delay, Timer) :-
 	Timer = timer(TimerName, Goal, Delay),
 	assert(Timer).
 
-reset_ticking :-
+ticking_reset :-
 	timer(TimerName, Goal, Delay),
 	retractall(timer/3),
-	timer : stop(TimerName),
+	timer : stopped(TimerName),
 	ticking_started(Name, Delay, Timer).
 
 empty_frame(Level, EmptyFrame) :-
 	get_time(Now),
 	put_state(frame{}, [start_time - Now, wellness - [], predictions - [], prediction_errors - [], beliefs - []], EmptyFrame).
 
-process_signal(control(stop)) :-
-	worker : stop.
+signal_processed(control(stopped)) :-
+	worker : stopped.
 
-terminate :-
+terminated :-
 	log(warn, ca, '~@ terminating', [self]), 
 	timer(TimerName, _, _), 
-	timer : stop(TimerName), 
+	timer : stopped(TimerName), 
 	level(Level), 
 	publish(ca_terminated, 
 		[level(Level)]), 
 	log(warn, ca, 'Terminated ~@', [self]).
 
 % Initial start
-handle_message(message(frame_started, _), State, NewState) :-
+message_handled(message(frame_started, _), State, NewState) :-
 	get_state(State, status, initiating),
 	frame_started(State, NewState),
 	get_state(State, level, Level),
     publish(ca_started, [level(Level)]).
 
 % Start the next frame
-handle_message(message(frame_started, _), State, NewState) :-
+message_handled(message(frame_started, _), State, NewState) :-
 	get_state(State, status, ending),
 	frame_started(State, NewState).
 
 % Only end frame if started. Then start the next frame.
-handle(message(tick, _), State, NewState) :-
+handled(message(tick, _), State, NewState) :-
 	get_state(State, status, started),
 	end_frame(State, State1), 
 	frame_started(State1, NewState).
 
-handle(message(Message, Source), State, State) :-
+handled(message(Message, Source), State, State) :-
 	log(debug, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
-handle(query(type), _, ca).
+handled(query(type), _, ca).
 
-handle(query(level), _, Level) :-
+handled(query(level), _, Level) :-
 	level(Level).
 
-handle(query(umwelt), State, Umwelt) :-
+handled(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
 
-handle(query(Query), _, unknown) :-
+handled(query(Query), _, unknown) :-
 	log(debug, ca, '~@ is NOT handling query ~p', [self, Query]).
 
-handle(event(Topic, Payload, Source), State, NewState) :-
+handled(event(Topic, Payload, Source), State, NewState) :-
 	get_state(State, status, started), !,
-	handle_event_now(event(Topic, Payload, Source), State, NewState).
+	event_handled_now(event(Topic, Payload, Source), State, NewState).
 
-handle(event(Topic, Payload, Source), State, NewState) :-
+handled(event(Topic, Payload, Source), State, NewState) :-
 	get_state(State, buffered_events, BufferedEvents),
 	put_state(State, buffered_events, [event(Topic, Payload, Source) | BufferedEvents], NewState).
 
 % TODO
-handle_event_now(event(prediction, belief(Belief), Source), State, State).
-handle_event_now(event(prediction_error, prediction(Belief), Source), State, State).
-handle_event_now(event(Topic, Payload, Source), State, State) :-
+event_handled_now(event(prediction, belief(Belief), Source), State, State).
+event_handled_now(event(prediction_error, prediction(Belief), Source), State, State).
+event_handled_now(event(Topic, Payload, Source), State, State) :-
 	log(info, ca, "CA ~@ is NOT handling event event(~w, ~p, ~w)", [self, Topic, Payload, Source]).
 
 % The previous frame becomes the new frame by updating the start_time,
 % processing buffered events and re-activating processing events upon receipt
 frame_started(State, NewState) :-
 	log(info, ca, 'CA ~@ is starting a new frame', [self]),
-	process_suspended_events(State, State1),
-	reset_ticking,
+	suspended_events_processed(State, State1),
+	ticking_reset,
 	put_state(State1, status, started, NewState).
 
-process_suspended_events(State, NewState) :-
+suspended_events_processed(State, NewState) :-
 	get_state(State, buffered_events, BufferedEvents),
 	reverse(BufferedEvents, Events),
-	handle_events_now(Events, State, NewState).
+	events_handled_now(Events, State, NewState).
 
-handle_events_now([], State, State).
-handle_events_now([event(Topic, Payload, Source) | Rest], State, NewState) :-
-	handle_event_now(event(Topic, Payload, Source), State, State1),
-	handle_events_now(Rest, State1, NewState).
+events_handled_now([], State, State).
+events_handled_now([event(Topic, Payload, Source) | Rest], State, NewState) :-
+	event_handled_now(event(Topic, Payload, Source), State, State1),
+	events_handled_now(Rest, State1, NewState).
 
 % Ending a frame means suspending processing events, 
 % completing the frame (updating beliefs, maybe taking action, and assessing efficacy of prior actions),

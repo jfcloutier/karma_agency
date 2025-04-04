@@ -28,42 +28,42 @@ init(Options, State) :-
 		timer(Timer)), 
 	put_state(EmptyState, [mood - Mood], State).
 
-process_signal(control(stop)) :-
-	log(debug, bob, 'Processing stop signal'), worker : stop.
+signal_processed(control(stopped)) :-
+	log(debug, bob, 'Processing stop signal'), worker : stopped.
 
-terminate :-
+terminated :-
 	log(debug, bob, 'bob terminating'), 
 	timer(Timer), 
-	timer : stop(Timer), 
+	timer : stopped(Timer), 
 	log(debug, bob, 'bob terminated').
 
 % Ignore all events from self
-handle(event(_,_, bob), State, State).
+handled(event(_,_, bob), State, State).
 
-handle(event(party, PartyGoers, _), State, NewState) :-
+handled(event(party, PartyGoers, _), State, NewState) :-
 	log(info, bob, "Ready to party with ~w", [PartyGoers]), 
 	put_state(State, mood, excited, NewState), 
 	contact_others(PartyGoers), 
 	publish(police, "Wassup?").
 
-handle(event(police, Payload, _), State, NewState) :-
+handled(event(police, Payload, _), State, NewState) :-
 	log(info, bob, "Police! ~w", [Payload]), 
 	put_state(State, mood, panicking, NewState).
 
-handle(event(tictoc, _, _), State, State) :-
+handled(event(tictoc, _, _), State, State) :-
 	log(info, bob, "Tictoc!").
 
-handle(query(mood), State, Answer) :-
+handled(query(mood), State, Answer) :-
 	get_state(State, mood, Answer), 
 	log(info, bob, "Bob is ~p", [Answer]).
 
-handle(query(_), _, "Ugh?").
+handled(query(_), _, "Ugh?").
 
-handle(control(exit), _, _) :-
+handled(control(exit), _, _) :-
 	throw(
 		exit(normal)).
 
-handle(message(Message, Source), State, State) :-
+handled(message(Message, Source), State, State) :-
 	log(info, bob, "Received ~w from ~w", [Message, Source]).
 
 %% Private
@@ -74,5 +74,5 @@ contact_others([bob|Others]) :-
 	contact_others(Others).
 
 contact_others([Name|Others]) :-
-	worker : send_message(Name, "Bob says howdy!"), 
+	worker : message_sent(Name, "Bob says howdy!"), 
 	contact_others(Others).

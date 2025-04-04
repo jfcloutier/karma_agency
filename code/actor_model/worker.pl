@@ -4,14 +4,14 @@
 % A worker thread subscribes to and handles broadcast events, and
 % sends/receives (semantic) messages, queries and control directives.
 % 
-% A worker is supervised and thus implements start/3 and terminate/0.
+% A worker is supervised and thus implements started/3 and terminated/0.
 %
 % A worker is started by giving it a unique name and options.
 % Options:
 %   topics - the list of topics for the events the worker wants to receive (defaults to [])
 %
 % Callbacks:
-%   handle/3 - for handling events, semantic messages and queries
+%   handled/3 - for handling events, semantic messages and queries
 %   init/1 - sets the initial state
 %
 % A worker holds a state that is updated from processing messages.
@@ -21,32 +21,32 @@
 :- [load].
 
 :- use_module(library(option)).
-:- use_module(actor_utils).
-:- use_module(pubsub).
+:- use_module(actor_model(actor_utils)).
+:- use_module(actor_model(pubsub)).
 :- use_module(code(logger)).
 
 %%% Supervised behavior
 
-start(Name, Module, Options, Supervisor) :-
+started(Name, Module, Options, Supervisor) :-
 	log(debug, worker, 'Starting ~w implemented by ~w with options ~p supervised by ~w', [Name, Module, Options, Supervisor]), 
 	option(
 		topics(Topics), Options, []), 
 	option(init(Args), Options, []),
-	Handler =.. [ : , Module, handle], 
+	Handler =.. [ : , Module, handled], 
 	Init =.. [ : , Module, init, Args], 
-	Terminate =.. [ : , Module, terminate], 
+	Terminate =.. [ : , Module, terminated], 
 	log(debug, worker, "Creating worker ~w", [Name]), 
 	actor_started(Name, 
 		worker : worker_started(Module, Name, Topics, Init, Handler, Supervisor), 
 		[at_exit(Terminate)]).
 
-stop :-
+stopped :-
 	self(Name), 
 	log(debug, worker, "Exiting ~w", [Name]), 
 	(
 		pubsub : name(Name) ->
 			true;
-			unsubscribe_all), 
+			all_unsubscribed), 
 	thread_detach(Name), 
 	thread_exit(true).
 
@@ -56,10 +56,11 @@ worker_started(Module, Name, Topics, Init, Handler, Supervisor) :-
 	Init =.. [ : , Module, _, _], 
 	catch(
 		run_started(Topics, Init, Handler), Exit, 
-		process_exit(Module, Name, Exit, Supervisor)).
+		exit_processed(Module, Name, Exit, Supervisor)).
 
-process_exit(Module, Name, Exit, Supervisor) :-
-	log(warn, worker, "Exit ~p of ~w", [Exit, Name]), unsubscribe_all, 
+exit_processed(Module, Name, Exit, Supervisor) :-
+	log(warn, worker, "Exit ~p of ~w", [Exit, Name]), 
+	all_unsubscribed, 
 	thread_detach(Name), 
 	notify_supervisor(Supervisor, Module, Name, Exit), 
 	thread_exit(true).
@@ -70,33 +71,33 @@ run_started(Topics, Init, Handler) :-
 	Goal =.. [Head, Args, State], 
 	InitGoal =.. [ : , Module, Goal],
 	call(InitGoal), 
-	subscribe_all(Topics), 
+	all_subscribed(Topics), 
 	run(Handler, State).
 
 run(Handler, State) :-
 	thread_self(Name), 
 	log(debug, worker, 'Worker ~w is waiting...', [Name]), 
 	thread_get_message(Message), 
-	process_message(Message, Handler, State, NewState), 
+	message_processed(Message, Handler, State, NewState), 
 	run(Handler, NewState).
 
-process_signal(control(stop)) :-
+signal_processed(control(stopped)) :-
 	thread_self(Name), 
 	thread_detach(Name), 
 	thread_exit(true).
 
-process_signal(Signal) :-
+signal_processed(Signal) :-
 	log(info, worker, '~@ received unknown signal ~p', [self, Signal]).
 
 % Write out the current state of the worker
 
-process_message(state, _, State, State) :-
+message_processed(state, _, State, State) :-
 	writeln(State).
 
-process_message(unsubscribe(Topic), _, _, _) :-
-	unsubscribe(Topic).
+message_processed(unsubscribed(Topic), _, _, _) :-
+	unsubscribed(Topic).
 
-process_message(query(Question, From), Handler, State, State) :-
+message_processed(query(Question, From), Handler, State, State) :-
 	Handler =.. [ : , Module, Head], 
 	Goal =.. [Head, query(Question), State, Answer], 
 	ModuleGoal =.. [ : , Module, Goal], 
@@ -104,9 +105,9 @@ process_message(query(Question, From), Handler, State, State) :-
 	log(debug, worker, "~w got query ~p from ~w", [Name, Question, From]), 
 	!,
 	call(ModuleGoal), 
-	send(From, response(Answer, Question, Name)).
+	sent(From, response(Answer, Question, Name)).
 
-process_message(Message, Handler, State, NewState) :-
+message_processed(Message, Handler, State, NewState) :-
 	Handler =.. [ : , Module, Head], 
 	Goal =.. [Head, Message, State, NewState], 
 	ModuleGoal =.. [ : , Module, Goal], 
@@ -117,5 +118,5 @@ process_message(Message, Handler, State, NewState) :-
 % Inform supervisor of the exit
 
 notify_supervisor(Supervisor, Module, Name, Exit) :-
-	send(Supervisor, 
+	sent(Supervisor, 
 		exited(worker, Module, Name, Exit)).

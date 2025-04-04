@@ -62,18 +62,18 @@ init(Options, State) :-
     put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
     publish(ca_started, [level(0)]).
 
-process_signal(control(stop)) :-
-    terminate,
-    worker:stop.
+signal_processed(control(stopped)) :-
+    terminated,
+    worker:stopped.
 
-terminate :-
+terminated :-
     log(warn, sensor_ca, 'Terminated').
 
-handle(message(Message, Source), State, State) :-
+handled(message(Message, Source), State, State) :-
    log(debug, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
 % Sense is the belief name
-handle(event(prediction(Sense), Payload, Source), State, NewState) :-
+handled(event(prediction(Sense), Payload, Source), State, NewState) :-
     self(Name),
     option(value(Value), Payload),
     log(debug, sensor_ca, '~w received prediction ~w is ~w by ~w', [Name, Sense, Value, Source]),
@@ -83,31 +83,31 @@ handle(event(prediction(Sense), Payload, Source), State, NewState) :-
     (prediction_accurate(Sense, Value, Reading) ->
         log(info, sensor_ca, '~w received accurate prediction ~p about ~w from ~w', [Name, Value, Sense, Source])
         ;
-        make_prediction_error(Sense, Value, Reading, PredictionError),
-        send_message(Source, PredictionError),
+        prediction_error(Sense, Value, Reading, PredictionError),
+        message_sent(Source, PredictionError),
         log(info, sensor_ca, '~w sent prediction error ~p to ~w', [Name, PredictionError, Source])
     ).
 
-handle(event(Topic, Payload, Source), State, State) :-
+handled(event(Topic, Payload, Source), State, State) :-
     log(debug, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
 
-handle(query(name), _, Name) :-
+handled(query(name), _, Name) :-
     self(Name).
 
-handle(query(type), _, ca).
+handled(query(type), _, ca).
 
-handle(query(level), _, Level) :-
+handled(query(level), _, Level) :-
     level(Level).
 
-handle(query(latency), _, Latency) :-
+handled(query(latency), _, Latency) :-
     latency(Latency).
 
-handle(query(belief_domain), State, BeliefDomain) :-
+handled(query(belief_domain), State, BeliefDomain) :-
     get_state(State, belief_domain, BeliefDomain).
 
-handle(query(action_domain), _, []).
+handled(query(action_domain), _, []).
 
-handle(query(Query), _, unknown) :-
+handled(query(Query), _, unknown) :-
     log(debug, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
 
 %%%%
@@ -119,7 +119,7 @@ belief_domain(State, [Sense-Domain]) :-
 
 subcribe_to_predictions(State, [Topic]) :-
     sense(State, Sense),
-    subscribe(prediction(Sense)).
+    subscribed(prediction(Sense)).
 
 empty_reading(State, Reading) :-
     sense(State, Sense),
@@ -139,7 +139,7 @@ current_reading(State, Reading, NewState) :-
     last_reading(State, LastReading),
     (reading_stale(LastReading) ->
         sense(State, Sense),
-        read_sense(State, Sense, Reading),
+        sense_read(State, Sense, Reading),
         put_state(State, readings, [Reading | State.readings], NewState)
         ;
         Reading = LastReading,
@@ -163,13 +163,13 @@ prediction_accurate(Sense, PredictedValue, reading(Sense, Value, Tolerance, _)) 
     Delta is abs(PredictedValue - Value),
     Delta =< Tolerance.
 
-read_sense(State, Sense, reading(Sense, Value, Tolerance, Timestamp)) :-
+sense_read(State, Sense, reading(Sense, Value, Tolerance, Timestamp)) :-
     sense_url(State, Url),
     body:sense_value(Url, Value, Tolerance),
     get_time(Timestamp).
 
 % Sense is the belief name
-make_prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _, _), 
+prediction_error(Sense, PredictedValue, reading(Sense, ActualValue, _, _), 
                         prediction_error([belief_name(Sense), 
                                           predicted_value(PredictedValue), 
                                           actual_value(ActualValue), 

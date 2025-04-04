@@ -180,15 +180,15 @@ best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, SearchedTempl
          best_theories(ApperceptionLimits, SequenceAsTrace, TemplateEngine, Templates, Iteration1, Epoch, Theories)
         ),
         error(Thrown, Context),
-        handle_exception(Thrown, Context, Theories)
+        exception_handled(Thrown, Context, Theories)
     ).
 
-handle_exception(Thrown, context(apperception_engine, Theories), Theories) :-
+exception_handled(Thrown, context(apperception_engine, Theories), Theories) :-
     member(Thrown, [found_good_enough_theory, time_expired, search_completed, template_exhausted, stopped]),
     !,
     log(note, apperception_engine, 'Search terminated by ~p', [Thrown]).
 
-handle_exception(Thrown, Context, []) :-
+exception_handled(Thrown, Context, []) :-
     log(note, apperception_engine, 'EXCEPTION ~p, in context ~p', [Thrown, Context]).
 
 next_iteration(ApperceptionLimits, Templates) :-

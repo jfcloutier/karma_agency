@@ -13,14 +13,14 @@ It integrates services and actors:
 [load].
 [agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub), som(meta_ca)].
 set_log_level(info).
-agency:start('localhost:4000').
+agency:started('localhost:4000').
 threads.
-send_query('som', children, SOMChildren).
-% send('sensor:ultrasonic-in4:distance', state).
-send('tacho_motor-outA', state).
-send_query('tacho_motor-outA', action_domain, Answer).
-send_message('tacho_motor-outA', actuate(spin)).
-send_message('tacho_motor-outA', actuate(reverse_spin)).
+query_sent('som', children, SOMChildren).
+% sent('sensor:ultrasonic-in4:distance', state).
+sent('tacho_motor-outA', state).
+query_sent('tacho_motor-outA', action_domain, Answer).
+message_sent('tacho_motor-outA', actuated(spin)).
+message_sent('tacho_motor-outA', actuated(reverse_spin)).
 
 body:execute_actions('localhost:4000').
 
@@ -28,7 +28,7 @@ publish(prediction(distance), [value(130)]).
 publish(prediction(distance), [value(0)]).
 thread_get_message(Message).
 
-supervisor:stop(agency, 60).
+supervisor:stopped(agency, 60).
 threads.
 */
 
@@ -40,23 +40,23 @@ threads.
 :- use_module(actor_model(supervisor)).
 :- use_module(actor_model(pubsub)).
 :- use_module(agent(body)).
-:- use_module(agent(sensor_cas)).
-:- use_module(agent(effector_ca)).
+:- use_module(som(sensor_ca)).
+:- use_module(som(effector_ca)).
 
-start(BodyHost) :-
+started(BodyHost) :-
 	log(info, agency, 'Starting agency'),
 	body : capabilities(BodyHost, Sensors, Effectors),
 	log(info, agency, 'Sensors: ~p', [Sensors]),
 	log(info, agency, 'Effectors: ~p', [Effectors]),
 	AgencyChildren = [
 		pubsub,
-		% Start the SOM with the sensor and effector CAs (at level 0)
+		% Start the SOM supervisor with sensors and effectors
 		supervisor(som,
 			[
 				init([level(0), sensors(Sensors), effectors(Effectors)]),
-				restart(permanent)])],
+				restarted(permanent)])],
 	% Start agency
-	supervisor : start(agency,
+	supervisor : started(agency,
 		[children(AgencyChildren)]),
 	sensor_cas_started(Sensors),
 	effector_cas_started(Effectors),

@@ -19,35 +19,35 @@ run_tests(actor_model:subscribing_unsubscribing).
 :- use_module(alice).
 
 test(supervisor) :-
-	supervisor : start(top), 
+	supervisor : started(top), 
 	assertion(
 		is_thread(top)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)).
 
 test(supervised_static_pubsub) :-
 	Children = [pubsub], 
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
 	assertion(
 		is_thread(pubsub)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)), 
 	assertion(
 		 \+ is_thread(pubsub)).
 
 test(supervised_dynamic_pubsub) :-
-	supervisor : start(top), 
+	supervisor : started(top), 
 	assertion(
 		is_thread(top)), 
 	supervisor : pubsub_started(top), 
 	assertion(
 		is_thread(pubsub)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)), 
 	assertion(
@@ -56,7 +56,7 @@ test(supervised_dynamic_pubsub) :-
 test(stop_supervisor_with_static_children) :-
 	Children = [worker(bob, 
 		[topics([party])]), pubsub], 
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
@@ -73,7 +73,7 @@ test(stop_supervisor_with_static_children) :-
 	assertion(
 		member(
 			child(worker, pubsub), Answer)), 
-	supervisor : stop(top), % No need to wait since it mas signalled
+	supervisor : stopped(top), % No need to wait since it mas signalled
 	
 	assertion(
 		 \+ is_thread(bob)), 
@@ -87,7 +87,7 @@ test(stop_supervisor_with_static_children) :-
 test(exit_supervisor_with_static_children) :-
 	Children = [worker(bob, 
 		[topics([party])]), pubsub], 
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
@@ -117,13 +117,13 @@ test(exit_supervisor_with_static_children) :-
 		 \+ is_thread(top)).
 
 test(supervised_dynamic_worker) :-
-	supervisor : start(top), 
+	supervisor : started(top), 
 	assertion(
 		is_thread(top)), 
 	supervisor : worker_child_started(top, alice, alice, []), 
 	assertion(
 		is_thread(alice)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)), 
 	assertion(
@@ -131,26 +131,26 @@ test(supervised_dynamic_worker) :-
 
 test(supervised_static_supervisor) :-
 	Children = [supervisor(bottom, [])], 
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
 	assertion(
 		is_thread(bottom)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)), 
 	assertion(
 		 \+ is_thread(bottom)).
 
 test(supervised_dynamic_supervisor) :-
-	supervisor : start(top), 
+	supervisor : started(top), 
 	assertion(
 		is_thread(top)), 
-	supervisor : supervisor_started_child(top, bottom, []), 
+	supervisor : supervisor_child_started(top, bottom, []), 
 	assertion(
 		is_thread(bottom)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(top)), 
 	assertion(
@@ -162,13 +162,13 @@ test(supervised_actor_restart) :-
 		[topics([]), 
 		init(
 			[mood(bored)]), 
-		restart(permanent)]), 
+		restarted(permanent)]), 
 	worker(alice, 
 		[topics([]), 
 		init(
 			[mood(peaceful)]), 
-		restart(transient)])], 
-	supervisor : start(top, 
+		restarted(transient)])], 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
@@ -179,21 +179,21 @@ test(supervised_actor_restart) :-
 	assertion(
 		is_thread(alice)), % Checking restart
 		
-	exit_actor(bob), % Wait for restart of permanent bob
+	actor_exited(bob), % Wait for restart of permanent bob
 	
-	wait_for_actor(bob), 
+	actor_ready(bob), 
 	assertion(
 		is_thread(bob)), % Stopping
 		
-	exit_actor(alice), % alice is transient
+	actor_exited(alice), % alice is transient
 	
-	wait_for_actor_stopped(alice), 
+	actor_stopped(alice), 
 	assertion(
 		 \+ is_thread(alice)), 
 	supervisor : child_stopped(bottom, worker, bob), 
 	assertion(
 		 \+ is_thread(bob)), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	sleep(1), 
 	assertion(
 		 \+ is_thread(alice)), 
@@ -208,16 +208,16 @@ test(restarting_supervised_supervisors) :-
 	% Starting supervisor (top) with a static child supervisor (middle)
 
 	Children = [supervisor(middle, 
-		[restart(permanent)])], 
-	supervisor : start(top, 
+		[restarted(permanent)])], 
+	supervisor : started(top, 
 		[children(Children)]), 
 	assertion(
 		is_thread(top)), 
 	assertion(
 		is_thread(middle)), % Start dynamic supervisor (bottom) as child of supervisor middle
 		
-	supervisor : supervisor_started_child(middle, bottom, 
-		[restart(permanent)]), 
+	supervisor : supervisor_child_started(middle, bottom, 
+		[restarted(permanent)]), 
 	assertion(
 		is_thread(bottom)), % Exiting permanent supervisor bottom -a dynamic child of middle- restarts bottom
 		
@@ -226,14 +226,14 @@ test(restarting_supervised_supervisors) :-
 	assertion(
 		is_thread(bottom)), % Stop the middle supervisor does not restart its dynamic children: bottom are not restarted (even though it is permanent)
 		
-	supervisor : stop(middle), 
+	supervisor : stopped(middle), 
 	sleep(1), 
 	assertion(
 		 \+ is_thread(middle)), 
 	assertion(
 		 \+ is_thread(bottom)), % Stop the top supervisor and thus every descendant.
 			
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	sleep(1), 
 	assertion(
 		 \+ is_thread(top)), 
@@ -241,18 +241,18 @@ test(restarting_supervised_supervisors) :-
 		 \+ is_thread(middle)).
 
 test(subscribing_unsubscribing) :-
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children([pubsub, 
 			worker(bob, 
 				[topics([party, police]), 
 				init(
 					[mood(bored)]), 
-				restart(transient)]), 
+				restarted(transient)]), 
 			worker(alice, alice, 
 				[topics([]), 
 				init(
 					[mood(peaceful)]), 
-				restart(transient)])])]), 
+				restarted(transient)])])]), 
 	assertion(
 		is_thread(top)), 
 	assertion(
@@ -261,11 +261,11 @@ test(subscribing_unsubscribing) :-
 		is_thread(bob)), 
 	assertion(
 		is_thread(alice)), 
-	unsubscribe(bob, party), 
-	subscribe_all(alice, [party, police]), 
-	unsubscribe_all(alice), 
+	unsubscribed(bob, party), 
+	all_subscribed(alice, [party, police]), 
+	all_unsubscribed(alice), 
 	sleep(1), 
-	supervisor : stop(top), 
+	supervisor : stopped(top), 
 	assertion(
 		 \+ is_thread(pubsub)), 
 	assertion(
@@ -276,7 +276,7 @@ test(subscribing_unsubscribing) :-
 		 \+ is_thread(top)).
 
 test(communicating_with_supervised_static_children) :-
-	supervisor : start(top, 
+	supervisor : started(top, 
 		[children([pubsub])]), 
 	assertion(
 		is_thread(top)), 
@@ -286,13 +286,13 @@ test(communicating_with_supervised_static_children) :-
 		[topics([party, police]), 
 		init(
 			[mood(bored)]), 
-		restart(permanent)]), 
+		restarted(permanent)]), 
 	worker(alice, alice, 
 		[topics([party, police]), 
 		init(
 			[mood(peaceful)]), 
-		restart(transient)])], 
-	supervisor : supervisor_started_child(top, bottom, 
+		restarted(transient)])], 
+	supervisor : supervisor_child_started(top, bottom, 
 		[children(Children)]), 
 	assertion(
 		is_thread(bob)), 
@@ -300,23 +300,23 @@ test(communicating_with_supervised_static_children) :-
 		is_thread(alice)), % Querying
 		
 	assertion(
-		send_query(bob, mood, bored)), 
+		query_sent(bob, mood, bored)), 
 	assertion(
-		send_query(alice, mood, peaceful)), % Eventing
+		query_sent(alice, mood, peaceful)), % Eventing
 		
 	publish(party, [alice, bob]), % Give time for workers to respond to published messages
 	
 	sleep(1), % Checking state changes from event
 	
 	assertion(
-		 \+ send_query(bob, mood, bored)), 
+		 \+ query_sent(bob, mood, bored)), 
 	assertion(
-		 \+ send_query(peter, mood, bored)), 
+		 \+ query_sent(peter, mood, bored)), 
 	assertion(
-		send_query(bob, mood, panicking)), % Unsubscribing
+		query_sent(bob, mood, panicking)), % Unsubscribing
 		
-	unsubscribe(bob, party), 
-	supervisor : stop(top), 
+	unsubscribed(bob, party), 
+	supervisor : stopped(top), 
 	sleep(1), 
 	assertion(
 		 \+ is_thread(pubsub)), 

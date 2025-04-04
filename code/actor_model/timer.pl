@@ -8,14 +8,14 @@ Timer creates threads to periodically call goals until stopped.
 
 :- use_module(code(logger)).
 
-start(Timer, Goal, Delay) :-
+started(Timer, Goal, Delay) :-
 	log(debug, timer, 'Timer ~w will be executing ~p every ~w seconds', [Timer, Goal, Delay]), 
 	thread_create(
 		run(Goal, Delay), _, 
 		[alias(Timer), 
 		detached(true)]).
 
-stop(Timer) :-
+stopped(Timer) :-
 	log(info, timer, 'Stopping timer ~w', [Timer]), 
 	is_thread(Timer)
 	 ->
