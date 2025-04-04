@@ -50,6 +50,7 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 */
 
+[load].
 
 :- use_module(code(logger)).
 :- use_module(apperception(template_engine)).
@@ -57,6 +58,7 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 :- use_module(apperception(type_signature)).
 :- use_module(apperception(rating)).
 :- use_module(library(chr)).
+
 
 % Constraints
 
