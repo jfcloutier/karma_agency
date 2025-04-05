@@ -119,7 +119,8 @@ belief_domain(State, [Sense-Domain]) :-
 
 subcribe_to_predictions(State, [Topic]) :-
     sense(State, Sense),
-    subscribed(prediction(Sense)).
+    Topic = prediction(Sense),
+    subscribed(Topic).
 
 empty_reading(State, Reading) :-
     sense(State, Sense),

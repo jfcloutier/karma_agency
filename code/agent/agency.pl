@@ -11,16 +11,14 @@ It integrates services and actors:
 /*
 % Start karma_world server then karma_body server
 [load].
-[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub), som(meta_ca)].
+[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub)].
 set_log_level(info).
 agency:started('localhost:4000').
 threads.
 query_sent('som', children, SOMChildren).
-% sent('sensor:ultrasonic-in4:distance', state).
-sent('tacho_motor-outA', state).
-query_sent('tacho_motor-outA', action_domain, Answer).
-message_sent('tacho_motor-outA', actuated(spin)).
-message_sent('tacho_motor-outA', actuated(reverse_spin)).
+query_sent('effector:tacho_motor-outA', action_domain, Answer).
+message_sent('effector:tacho_motor-outA', actuated(spin)).
+message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).
 
 body:execute_actions('localhost:4000').
 
@@ -50,12 +48,10 @@ started(BodyHost) :-
 	log(info, agency, 'Effectors: ~p', [Effectors]),
 	AgencyChildren = [
 		pubsub,
-		% Start the SOM supervisor with sensors and effectors
+		% Start the SOM supervisor with no children yet
 		supervisor(som,
-			[
-				init([level(0), sensors(Sensors), effectors(Effectors)]),
-				restarted(permanent)])],
-	% Start agency
+			[restarted(permanent)])],
+	% Start agency - the top supervisor
 	supervisor : started(agency,
 		[children(AgencyChildren)]),
 	sensor_cas_started(Sensors),

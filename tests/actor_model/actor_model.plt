@@ -6,6 +6,7 @@
 set_log_level(debug).
 run_tests(actor_model:subscribing_unsubscribing).
 */
+[load].
 
 :- begin_tests(actor_model).
 

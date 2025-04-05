@@ -19,12 +19,11 @@ name(pubsub).
 
 %% Public
 
-
 all_subscribed(Topics) :-
     self(Subscriber), 
     all_subscribed(Subscriber, Topics).
 
-all_subscribed(_, []).
+all_subscribed(_, []) :- !.
 all_subscribed(Subscriber, [Topic | Others]) :-
     subscribed(Subscriber, Topic),
     all_subscribed(Subscriber, Others).
