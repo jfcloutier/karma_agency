@@ -4,7 +4,7 @@ The interface to the robot's effectors and sensors.
 
 :- module(body, []).
 
-:- [load].
+
 
 :- use_module(code(logger)).
 :- use_module(library(http/http_client)).

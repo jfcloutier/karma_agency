@@ -6,7 +6,7 @@
     empty_state/1, get_state/3, put_state/3, put_state/4,
     pick_some/2]).
 
-:- [load].
+
 
 :- use_module(code(logger)).
 :- use_module(actor_model(timer)).

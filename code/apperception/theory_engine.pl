@@ -1119,6 +1119,10 @@ valid_body_predicate(BodyPredicate, Head, BodyPredicates) :-
     all_different(PredicatesWithNumerizedVars),
     \+ contradiction_in(PredicatesWithNumerizedVars).
 
+numerize_vars(Predicates, PredicatesWithNumerizedVars) :-
+    copy_term_nat(Predicates, PredicatesWithNumerizedVars),
+    numbervars(PredicatesWithNumerizedVars, 1, _).
+
 all_different([]).
 all_different([Term | Rest]) :-
     \+ memberchk_equal(Term, Rest),

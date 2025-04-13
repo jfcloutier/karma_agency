@@ -4,7 +4,7 @@ Timer creates threads to periodically call goals until stopped.
 
 :- module(timer, []).
 
-:- [load].
+
 
 :- use_module(code(logger)).
 

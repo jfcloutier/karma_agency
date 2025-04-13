@@ -2,8 +2,6 @@
 
 :- module(bob, []).
 
-:- [load].
-
 :- use_module(actor_model(worker)).
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).

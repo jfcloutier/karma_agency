@@ -33,7 +33,7 @@ A sensor CA:
 
 :- module(sensor_ca, []).
 
-:- [load].
+
 
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).

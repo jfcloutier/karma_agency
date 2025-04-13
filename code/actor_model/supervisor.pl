@@ -21,7 +21,7 @@ run_tests(actor_model:restarting_supervised_supervisors).
 */
 :- module(supervisor, []).
 
-:- [load].
+
 
 :- use_module(library(option)).
 :- use_module(actor_utils).

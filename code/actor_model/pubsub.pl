@@ -7,7 +7,7 @@ It receives subscriptions to topics from listening actors and dispatches events 
 
 :- module(pubsub, [subscribed/1, subscribed/2, all_subscribed/1, all_subscribed/2, all_unsubscribed/0, all_unsubscribed/1, unsubscribed/1, unsubscribed/2, publish/2]).
 
-:- [load].
+
 
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).

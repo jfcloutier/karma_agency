@@ -5,8 +5,6 @@
 run_tests.
 */
 
-:- [load].
-
 :- begin_tests(logger).
 
 :- use_module(code(logger)).

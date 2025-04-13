@@ -6,8 +6,6 @@ The feeling of pain.
 
 :- module(integrity, []).
 
-:- [load].
-
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).

@@ -50,8 +50,6 @@ apperceive(Sequence, ApperceptionLimits, Theories).
 
 */
 
-[load].
-
 :- use_module(code(logger)).
 :- use_module(apperception(template_engine)).
 :- use_module(apperception(theory_engine)).

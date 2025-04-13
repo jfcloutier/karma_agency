@@ -37,8 +37,6 @@ State:
 
 :-module(meta_ca, []).
 
-:- [load].
-
 :- use_module(actor_model(actor_utils)).
 :- use_module(code(logger)).
 :- use_module(actor_model(pubsub)).

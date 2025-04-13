@@ -21,7 +21,7 @@ An effector CA
 
 :- module(effector_ca, []).
 
-:- [load].
+
 
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).

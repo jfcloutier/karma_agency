@@ -18,7 +18,7 @@
 %%%
 :- module(worker, []).
 
-:- [load].
+
 
 :- use_module(library(option)).
 :- use_module(actor_model(actor_utils)).

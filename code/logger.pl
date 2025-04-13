@@ -1,7 +1,5 @@
 :- module(logger, [log/3, log/4, log/5, set_log_level/1, log_level/1, ignore_log_topic/1, reset_logging/0, log_to/1, no_log_to/0]).
 
-[load].
-
 /*
 [load].
 [code(logger)].
