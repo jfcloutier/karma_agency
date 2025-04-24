@@ -300,20 +300,20 @@ test(communicating_with_supervised_static_children) :-
 		is_thread(alice)), % Querying
 		
 	assertion(
-		query_sent(bob, mood, bored)), 
+		query_answered(bob, mood, bored)), 
 	assertion(
-		query_sent(alice, mood, peaceful)), % Eventing
+		query_answered(alice, mood, peaceful)), % Eventing
 		
 	publish(party, [alice, bob]), % Give time for workers to respond to published messages
 	
 	sleep(1), % Checking state changes from event
 	
 	assertion(
-		 \+ query_sent(bob, mood, bored)), 
+		 \+ query_answered(bob, mood, bored)), 
 	assertion(
-		 \+ query_sent(peter, mood, bored)), 
+		 \+ query_answered(peter, mood, bored)), 
 	assertion(
-		query_sent(bob, mood, panicking)), % Unsubscribing
+		query_answered(bob, mood, panicking)), % Unsubscribing
 		
 	unsubscribed(bob, party), 
 	supervisor : stopped(top), 

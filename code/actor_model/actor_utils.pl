@@ -2,7 +2,7 @@
     self/1, 
     actor_started/2, actor_started/3, actor_exited/1,
     actor_ready/1, actor_stopped/1, actor_stopped/2, 
-    sent/2, send_at_interval/5, control_sent/2, control_sent/3, message_sent/1, message_sent/2, query_sent/2, query_sent/3, query_sent/4,
+    sent/2, send_at_interval/5, control_sent/2, control_sent/3, message_sent/1, message_sent/2, query_answered/2, query_answered/3, query_answered/4,
     empty_state/1, get_state/3, put_state/3, put_state/4,
     pick_some/2]).
 
@@ -133,16 +133,16 @@ message_sent(Name, Message) :-
 
 % Send self a query
 
-query_sent(Question, Answer) :-
+query_answered(Question, Answer) :-
 	thread_self(Name), 
-	query_sent(Name, Question, Answer).
+	query_answered(Name, Question, Answer).
 
 % Send a semantic query and wait for an answer
 
-query_sent(Name, Question, Answer) :-
-	query_sent(Name, Question, 5, Answer).
+query_answered(Name, Question, Answer) :-
+	query_answered(Name, Question, 5, Answer).
 
-query_sent(Name, Question, Timeout, Answer) :-
+query_answered(Name, Question, Timeout, Answer) :-
 	log(info, actor_model, '~@ is sending query ~p to ~w', [self, Question, Name]), 
 	catch(
 		(

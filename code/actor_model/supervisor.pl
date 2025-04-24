@@ -65,7 +65,7 @@ exit(Supervisor) :-
 
 children(Supervisor, Children) :-
 	log(debug, supervisor, 'Getting children of ~w', [Supervisor]),
-	query_sent(Supervisor, children, Children).
+	query_answered(Supervisor, children, Children).
 
 %%% Public
 

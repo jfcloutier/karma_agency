@@ -15,8 +15,8 @@ It integrates services and actors:
 set_log_level(info).
 agency:started('localhost:4000').
 threads.
-query_sent('som', children, SOMChildren).
-query_sent('effector:tacho_motor-outA', action_domain, Answer).
+query_answered('som', children, SOMChildren).
+query_answered('effector:tacho_motor-outA', action_domain, Answer).
 message_sent('effector:tacho_motor-outA', actuated(spin)).
 message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).
 
