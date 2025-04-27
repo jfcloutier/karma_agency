@@ -22,7 +22,7 @@ signal_processed(control(stopped)) :-
 	worker : stopped.
 
 terminated :-
-	writeln("[alice] Terminating").
+	log(info, alice, "Terminating").
 
 handled(control(exit), _, _) :-
 	throw(

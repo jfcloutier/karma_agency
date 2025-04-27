@@ -2,7 +2,7 @@
     self/1, 
     actor_started/2, actor_started/3, actor_exited/1,
     actor_ready/1, actor_stopped/1, actor_stopped/2, 
-    sent/2, send_at_interval/5, control_sent/2, control_sent/3, message_sent/1, message_sent/2, query_answered/2, query_answered/3, query_answered/4,
+    sent/2, call_at_interval/5, control_sent/2, control_sent/3, message_sent/1, message_sent/2, query_answered/2, query_answered/3, query_answered/4,
     empty_state/1, get_state/3, put_state/3, put_state/4,
     pick_some/2]).
 
@@ -112,7 +112,7 @@ sent(Name, Message) :-
 
 % Send undecorated message periodically
 
-send_at_interval(Target, Tag, Message, Delay, Timer) :-
+call_at_interval(Target, Tag, Message, Delay, Timer) :-
 	self(Name), 
 	atomic_list_concat([Name, Tag], "_", Timer), 
 	timer : started(Timer, 

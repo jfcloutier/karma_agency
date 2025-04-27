@@ -20,7 +20,7 @@ init(Options, State) :-
 	log(info, bob, "Initializing with mood ~w", [Mood]), 
 	empty_state(EmptyState), 
 	self(Name), 
-	send_at_interval(Name, clock, 
+	call_at_interval(Name, clock, 
 		event(tictoc, true, Name), 1, Timer), 
 	assert(
 		timer(Timer)), 

@@ -87,5 +87,5 @@ started(BodyHost) :-
 	effector_cas_started(Rest).
 	
 	% TODO
-	% Create the first CA capable of mitosis
+	% Create the first CA capable of mitosis. Give it an umwelt
 	level_one_ca_started.
