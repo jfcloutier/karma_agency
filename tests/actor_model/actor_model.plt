@@ -304,7 +304,7 @@ test(communicating_with_supervised_static_children) :-
 	assertion(
 		query_answered(alice, mood, peaceful)), % Eventing
 		
-	publish(party, [alice, bob]), % Give time for workers to respond to published messages
+	published(party, [alice, bob]), % Give time for workers to respond to published messages
 	
 	sleep(1), % Checking state changes from event
 	

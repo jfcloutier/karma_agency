@@ -90,7 +90,7 @@ init(Options, State) :-
 			assert(
 				timer(Timer)), 
 			put_state(EmptyState, [level - Level, meta_ca_below - MetaCABelow, wards - [], busy - false, complete - false], State))), 
-	publish(meta_ca_started, 
+	published(meta_ca_started, 
 		[level(Level)]).
 
 % Start meta_ca above Name which is at level Level, if not already started
@@ -116,7 +116,7 @@ terminate :-
 	timer(Timer), 
 	timer : stop(Timer), 
 	level(Level), 
-	publish(meta_ca_terminated, 
+	published(meta_ca_terminated, 
 		[level(Level)]), 
 	log(warn, meta_ca, 'Terminated ~@', [self]).
 

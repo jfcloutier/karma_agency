@@ -124,14 +124,14 @@ terminated :-
 	timer(TimerName),
 	timer : stopped(TimerName),
 	level(Level),
-	publish(ca_terminated,
+	published(ca_terminated,
 		[level(Level)]),
 	log(warn, ca, 'Terminated ~@', [self]).
 
 % Time to start a timeframe
 handled(message(tick, _), State, NewState) :-
 	(get_state(State, history, []) ->
-	publish(ca_started,
+	published(ca_started,
 			[level(Level)]),
 		State1 = State;
 	frame_ended(State, State1)),

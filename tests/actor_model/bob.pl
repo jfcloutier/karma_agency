@@ -42,7 +42,7 @@ handled(event(party, PartyGoers, _), State, NewState) :-
 	log(info, bob, "Ready to party with ~w", [PartyGoers]), 
 	put_state(State, mood, excited, NewState), 
 	contact_others(PartyGoers), 
-	publish(police, "Wassup?").
+	published(police, "Wassup?").
 
 handled(event(police, Payload, _), State, NewState) :-
 	log(info, bob, "Police! ~w", [Payload]), 

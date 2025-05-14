@@ -60,7 +60,7 @@ init(Options, State) :-
     subcribe_to_predictions(State1, Topics),
     empty_reading(State1, Reading),
     put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
-    publish(ca_started, [level(0)]).
+    published(ca_started, [level(0)]).
 
 signal_processed(control(stopped)) :-
     terminated,

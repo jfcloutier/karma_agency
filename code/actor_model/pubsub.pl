@@ -6,7 +6,7 @@ It receives subscriptions from actors to listen to topics, and dispatches topica
 TODO: Set an exclusive affinity to the PubSub thread to maxinimize its time being scheduled to a core
 */
 
-:- module(pubsub, [subscribed/1, subscribed/2, all_subscribed/1, all_subscribed/2, all_unsubscribed/0, all_unsubscribed/1, unsubscribed/1, unsubscribed/2, publish/2]).
+:- module(pubsub, [subscribed/1, subscribed/2, all_subscribed/1, all_subscribed/2, all_unsubscribed/0, all_unsubscribed/1, unsubscribed/1, unsubscribed/2, published/2]).
 
 :- use_module(library(aggregate)).
 :- use_module(code(logger)).
@@ -55,7 +55,7 @@ all_unsubscribed(Subscriber) :-
 	message_sent(Pubsub,
 		all_unsubscribed(Subscriber)).
 
-publish(Topic, Payload) :-
+published(Topic, Payload) :-
 	self(Source),
 	name(Pubsub),
 	message_sent(Pubsub,

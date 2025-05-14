@@ -65,7 +65,7 @@ tdebug(t1).
 ttrace(t1).
 % to stop tracing
 tnotrace(t1).
-% to dsiable debugging a trace
+% to disable debugging a trace
 tnodebug(t1).
 ```
 

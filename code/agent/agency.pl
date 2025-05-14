@@ -22,8 +22,8 @@ message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).
 
 body:execute_actions('localhost:4000').
 
-publish(prediction(distance), [value(130)]).
-publish(prediction(distance), [value(0)]).
+published(prediction(distance), [value(130)]).
+published(prediction(distance), [value(0)]).
 thread_get_message(Message).
 
 supervisor:stopped(agency, 60).
@@ -39,6 +39,8 @@ threads.
 :- use_module(som(sensor_ca)).
 :- use_module(som(effector_ca)).
 
+%! started(+BodyHost) is det
+% the agent is started on a body referenced by a url
 started(BodyHost) :-
 	log(info, agency, 'Starting agency'),
 	body : capabilities(BodyHost, Sensors, Effectors),
@@ -64,7 +66,8 @@ started(BodyHost) :-
 	supervisor : worker_child_started(som,
 		sensor_ca,
 		Name,
-		[init([sensor(Sensor)])]),
+		[
+			init([sensor(Sensor)])]),
 	sensor_cas_started(Others).
 	
 	% The body presents each possible action by an actual effector as a separate effector capability.

@@ -35,7 +35,7 @@ handled(event(party, PartyGoers, _), State, NewState) :-
 	log(info, alice, "Ready to party with ~w", [PartyGoers]), 
 	put_state(State, mood, pleased, NewState), 
 	contact_others(PartyGoers), 
-	publish(police, "Anything wrong, officer?").
+	published(police, "Anything wrong, officer?").
 
 handled(event(police, Payload, _), State, NewState) :-
 	log(info, alice, "Police! ~w", [Payload]), 

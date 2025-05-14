@@ -46,7 +46,7 @@ init(Options, State) :-
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain), 
 	put_state(State1, [action_domain - ActionDomain], State), 
-	publish(ca_started, [level(0)]).
+	published(ca_started, [level(0)]).
 
 signal_processed(control(stopped)) :-
 	worker : stopped.
