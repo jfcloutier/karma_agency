@@ -47,7 +47,6 @@ sequence(eca_observations, Sequence),
 MaxSignatureExtension = max_extension{max_object_types:0, max_objects:0, max_predicate_types:0},
 ApperceptionLimits = apperception_limits{max_signature_extension: MaxSignatureExtension, good_enough_coverage: 100, keep_n_theories: 3, funnel: 200-50, time_secs: 3000},
 apperceive(Sequence, ApperceptionLimits, Theories).
-
 */
 
 :- use_module(code(logger)).

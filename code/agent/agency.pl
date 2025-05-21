@@ -33,11 +33,10 @@ threads.
 :- module(agency, []). 
 
 :- use_module(code(logger)).
+:- use_module(som(som)).
 :- use_module(actor_model(supervisor)).
-:- use_module(actor_model(pubsub)).
 :- use_module(agent(body)).
-:- use_module(som(sensor_ca)).
-:- use_module(som(effector_ca)).
+
 
 %! started(+BodyHost) is det
 % the agent is started on a body referenced by a url
@@ -46,49 +45,4 @@ started(BodyHost) :-
 	body : capabilities(BodyHost, Sensors, Effectors),
 	log(info, agency, 'Sensors: ~p', [Sensors]),
 	log(info, agency, 'Effectors: ~p', [Effectors]),
-	AgencyChildren = [
-		pubsub,
-		% Start the SOM supervisor with no children yet
-		supervisor(som,
-			[restarted(permanent)])],
-	% Start agency - the top supervisor
-	supervisor : started(agency,
-		[children(AgencyChildren)]),
-	sensor_cas_started(Sensors),
-	effector_cas_started(Effectors),
-	level_one_ca_started.
-
-    % Starting sensor and effector CAs
-	sensor_cas_started([]).
-
-	sensor_cas_started([Sensor|Others]) :-
-	sensor_ca : name_from_sensor(Sensor, Name),
-	supervisor : worker_child_started(som,
-		sensor_ca,
-		Name,
-		[
-			init([sensor(Sensor)])]),
-	sensor_cas_started(Others).
-	
-	% The body presents each possible action by an actual effector as a separate effector capability.
-	% We combine them into a single effector CA
-	effector_cas_started([]).
-	
-	effector_cas_started([Effector|Others]) :-
-	findall(Twin,
-		(member(Twin, Others),
-			Twin.id == Effector.id),
-		Twins),
-	effector_ca : name_from_effector(Effector, Name),
-	supervisor : worker_child_started(som,
-		effector_ca,
-		Name,
-		[
-				init([
-					effectors([Effector|Twins])])]),
-	subtract(Others, Twins, Rest),
-	effector_cas_started(Rest).
-	
-	% TODO
-	% Create the first CA capable of mitosis. Give it an umwelt
-	level_one_ca_started.
+	som : started(Sensors, Effectors).

@@ -32,11 +32,16 @@ An effector CA
 name_from_effector(Effector, Name) :-
 	atomic_list_concat([effector, Effector.id], ':', Name).
 
+level_from_name(_, 0).
+
 % An effector CA has no latency
 latency(0).
 
 % The CA has the lowest level of abstration
 level(0).
+
+% Always fully volunteer for recruitment
+recruit(_, 1).
 
 init(Options, State) :-
 	log(info, effector_ca, 'Initiating with ~p', [Options]), 
@@ -45,7 +50,7 @@ init(Options, State) :-
 		effectors(Effectors), Options), 
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain), 
-	put_state(State1, [action_domain - ActionDomain], State), 
+	put_state(State1, [parents-[], action_domain - ActionDomain], State), 
 	published(ca_started, [level(0)]).
 
 signal_processed(control(stopped)) :-
@@ -53,6 +58,10 @@ signal_processed(control(stopped)) :-
 
 terminated :-
 	log(warn, effector_ca, 'Terminated').
+
+handled(message(adopted, Parent), State, NewState) :-
+	get_state(State, parents, Parents),
+    put_state(State, parents, [Parent | Parents], NewState).
 
 handled(message(actuated(Action), _), State, State) :-
 	actuated(State, Action).

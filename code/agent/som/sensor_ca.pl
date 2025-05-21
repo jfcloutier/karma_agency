@@ -45,11 +45,16 @@ A sensor CA:
 name_from_sensor(Sensor, Name) :-
     atomic_list_concat([sensor, Sensor.id, Sensor.capabilities.sense], ':', Name).
 
+level_from_name(_, 0).
+
 % The latency of a sensor CA is half a sceond
 latency(0.5).
 
 % The CA has the lowest level of abstraction
 level(0).
+
+% Always fully volunteer for recruitment
+recruit(_, 1).
 
 init(Options, State) :-
     log(info, sensor_ca, 'Initiating with ~p', [Options]),
@@ -59,7 +64,7 @@ init(Options, State) :-
     belief_domain(State1, BeliefDomain),
     subcribe_to_predictions(State1, Topics),
     empty_reading(State1, Reading),
-    put_state(State1, [subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
+    put_state(State1, [parents-[],subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
     published(ca_started, [level(0)]).
 
 signal_processed(control(stopped)) :-
@@ -68,6 +73,10 @@ signal_processed(control(stopped)) :-
 
 terminated :-
     log(warn, sensor_ca, 'Terminated').
+
+handled(message(adopted, Parent), State, NewState) :-
+    get_state(State, parents, Parents),
+    put_state(State, parents, [Parent | Parents], NewState).
 
 handled(message(Message, Source), State, State) :-
    log(debug, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
