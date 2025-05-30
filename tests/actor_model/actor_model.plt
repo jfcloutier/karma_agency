@@ -4,7 +4,7 @@
 [code(logger)].
 ['tests/actor_model/actor_model.plt'].
 set_log_level(debug).
-run_tests(actor_model:subscribing_unsubscribing).
+run_tests(actor_model).
 */
 
 :- begin_tests(actor_model).

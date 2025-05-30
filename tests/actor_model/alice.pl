@@ -5,7 +5,7 @@
 :- use_module(code(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(worker)).
-:- use_module(actor_model(pubsub), [publish/2]).
+:- use_module(actor_model(pubsub), [published/2]).
 
 name(alice).
 

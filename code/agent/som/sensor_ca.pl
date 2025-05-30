@@ -40,6 +40,7 @@ A sensor CA:
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
 :- use_module(agent(body)).
+:- use_module(som(ca_support)).
 
 % The name of the sensor CA given the sensor it wraps
 name_from_sensor(Sensor, Name) :-
@@ -53,7 +54,7 @@ latency(0.5).
 % The CA has the lowest level of abstraction
 level(0).
 
-% Always fully volunteer for recruitment
+% Always volunteer for recruitment with maximum enthusiasm
 recruit(_, 1).
 
 init(Options, State) :-
@@ -61,10 +62,10 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     put_state(EmptyState, sensor, Sensor, State1),
-    belief_domain(State1, BeliefDomain),
-    subcribe_to_predictions(State1, Topics),
+    belief_domains(State1, BeliefDomains),
+    subscribed_to_events(State1),
     empty_reading(State1, Reading),
-    put_state(State1, [parents-[],subscriptions-Topics, belief_domain-BeliefDomain, readings-[Reading]], State),
+    put_state(State1, [parents-[], belief_domain-BeliefDomain, readings-[Reading]], State),
     published(ca_started, [level(0)]).
 
 signal_processed(control(stopped)) :-
@@ -78,8 +79,8 @@ handled(message(adopted, Parent), State, NewState) :-
     get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(Message, Source), State, State) :-
-   log(debug, sensor_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+handled(message(Message, Source), State, NewState) :-
+   ca_support: handled(message(Message, Source), State, NewState).
 
 % Sense is the belief name
 handled(event(prediction(Sense), Payload, Source), State, NewState) :-
@@ -97,8 +98,8 @@ handled(event(prediction(Sense), Payload, Source), State, NewState) :-
         log(info, sensor_ca, '~w sent prediction error ~p to ~w', [Name, PredictionError, Source])
     ).
 
-handled(event(Topic, Payload, Source), State, State) :-
-    log(debug, sensor_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+handled(event(Topic, Payload, Source), State, NewState) :-
+    ca_support : handled(event(Topic, Payload, Source), State, NewState).
 
 handled(query(name), _, Name) :-
     self(Name).
@@ -111,25 +112,28 @@ handled(query(level), _, Level) :-
 handled(query(latency), _, Latency) :-
     latency(Latency).
 
-handled(query(belief_domain), State, BeliefDomain) :-
+handled(query(belief_domains), State, BeliefDomain) :-
     get_state(State, belief_domain, BeliefDomain).
 
 handled(query(action_domain), _, []).
 
-handled(query(Query), _, unknown) :-
-    log(debug, sensor_ca, '~@ is NOT handling query ~p', [self, Query]).
+handled(query(Query), State, Answer) :-
+    ca_support : handled(query(Query), State, Answer).
 
 %%%%
 
 % Example [distance-domain{from:0, to:250}]
-belief_domain(State, [Sense-Domain]) :-
+belief_domains(State, [Sense-Domain]) :-
     sense(State, Sense),
     sense_domain(State, Domain).
 
-subcribe_to_predictions(State, [Topic]) :-
-    sense(State, Sense),
-    Topic = prediction(Sense),
-    subscribed(Topic).
+subscribed_to_events(State) :-
+    prediction_topics(State, PredictionTopics),
+    forall(member(PredictionTopic, PredictionTopics), subscribed(PredictionTopic)),
+    subscribed(ca_terminated).
+
+prediction_topics(State, [prediction(Sense)]) :-
+    sense(State, Sense).
 
 empty_reading(State, Reading) :-
     sense(State, Sense),

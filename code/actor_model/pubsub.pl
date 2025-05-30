@@ -1,7 +1,13 @@
 /*
 The PubSub singleton worker actor. 
 
-It receives subscriptions from actors to listen to topics, and dispatches topical events received to topic listeners.
+It receives subscriptions from actors to listen to Subs from sources, and dispatches events received
+to topic listeners.
+
+A subscription is a topic - source  pair. The topic is an atom and Source is the name of a matching source (`any`, the default, for all sources to match)
+
+Actors publish an atom (the topic), a payload and the source (an actor's nanme)
+Actors receive events `event(Topic, Payload, Source).
 
 TODO: Set an exclusive affinity to the PubSub thread to maxinimize its time being scheduled to a core
 */
@@ -18,33 +24,33 @@ name(pubsub).
 
 %% Public
 
-all_subscribed(Topics) :-
+all_subscribed(Subs) :-
 	self(Subscriber),
-	all_subscribed(Subscriber, Topics).
+	all_subscribed(Subscriber, Subs).
 
 all_subscribed(_, []) :-
 	!.
-all_subscribed(Subscriber, [Topic|Others]) :-
-	subscribed(Subscriber, Topic),
+all_subscribed(Subscriber, [Sub|Others]) :-
+	subscribed(Subscriber, Sub),
 	all_subscribed(Subscriber, Others).
 
-subscribed(Topic) :-
+subscribed(Sub) :-
 	self(Subscriber),
-	subscribed(Subscriber, Topic).
+	subscribed(Subscriber, Sub).
 
-subscribed(Subscriber, Topic) :-
+subscribed(Subscriber, Sub) :-
 	name(Pubsub),
 	message_sent(Pubsub,
-		subscribed(Subscriber, Topic)).
+		subscribed(Subscriber, Sub)).
 
-unsubscribed(Topic) :-
+unsubscribed(Sub) :-
 	self(Subscriber),
-	unsubscribed(Subscriber, Topic).
+	unsubscribed(Subscriber, Sub).
 
-unsubscribed(Subscriber, Topic) :-
+unsubscribed(Subscriber, Sub) :-
 	name(Pubsub),
 	message_sent(Pubsub,
-		unsubscribed(Subscriber, Topic)).
+		unsubscribed(Subscriber, Sub)).
 
 all_unsubscribed :-
 	self(Subscriber),
@@ -59,7 +65,7 @@ published(Topic, Payload) :-
 	self(Source),
 	name(Pubsub),
 	message_sent(Pubsub,
-		event(Topic, Payload, Source)).
+		pub(Topic, Payload, Source)).
 
 %% Private
 
@@ -76,48 +82,75 @@ signal_processed(control(stopped)) :-
 	log(debug, pubsub, 'Stopping pubsub'),
 	worker : stopped.
 
-handled(message(subscribed(Subscriber, Topic), _), State, NewState) :-
-	log(debug, pubsub, "Subscribing ~w to topic ~w~n", [Subscriber, Topic]),
-	add_subscription(Subscriber, Topic, State, NewState).
+handled(message(subscribed(Subscriber, Sub), _), State, NewState) :-
+	log(debug, pubsub, "Subscribing ~w to ~w~n", [Subscriber, Sub]),
+	add_subscription(Subscriber, Sub, State, NewState).
 
-handled(message(unsubscribed(Subscriber, Topic), _), State, NewState) :-
-	log(debug, pubsub, "Unsubscribing ~w from topic ~w~n", [Subscriber, Topic]),
-	 remove_subscription(Subscriber, Topic, State, NewState).
+handled(message(unsubscribed(Subscriber, Sub), _), State, NewState) :-
+	log(debug, pubsub, "Unsubscribing ~w from ~w~n", [Subscriber, Sub]),
+	 remove_subscription(Subscriber, Sub, State, NewState).
 
 handled(message(all_unsubscribed(Subscriber), _), State, NewState) :-
 	 remove_all_subscriptions(Subscriber, State, NewState).
 
-handled(message(event(Topic, Payload, Source), _), State, State) :-
+handled(message(pub(Topic, Payload, Source), _), State, State) :-
 	broadcast(event(Topic, Payload, Source),
 		State).
 
 broadcast(event(Topic, Payload, Source), State) :-
+	Sub = Topic - Source,
 	get_state(State, subscriptions, Subscriptions),
-	foreach(member(subscription(Name, Topic),
-			Subscriptions),
+	foreach((member(subscription(Name, Subscription),Subscriptions), 
+			sub_match(Sub, Subscription)),
 		event_sent_to(event(Topic, Payload, Source),
 			Name)).
+
+sub_match(Topic - _, Topic - any).
+sub_match(Topic - any, Topic - _).
+sub_match(Topic - Source, Topic - Source).
 
 event_sent_to(Event, Name) :-
 	log(debug, pubsub, "Sending event ~p to ~w~n", [Event, Name]),
 	sent(Name, Event).
 
-add_subscription(Subscriber, Topic, State, NewState) :-
+add_subscription(Subscriber, Topic-Source, State, NewState) :-
+	Sub = Topic-Source, !,
 	get_state(State, subscriptions, Subscriptions),
-	(member(subscription(Subscriber, Topic),
+	(member(subscription(Subscriber, Sub),
 			Subscriptions) ->
 	true;
 	put_state(State,
 			subscriptions,
-			[subscription(Subscriber, Topic)|Subscriptions],
+			[subscription(Subscriber, Sub)|Subscriptions],
 			NewState)).
 
-remove_subscription(Subscriber, Topic, State, NewState) :-
+add_subscription(Subscriber, Topic, State, NewState) :-
+	add_subscription(Subscriber, Topic-any, State, NewState).
+
+remove_subscription(Subscriber, Topic-Source, State, NewState) :-
+	Sub = Topic-Source, !,
 	get_state(State, subscriptions, Subscriptions),
-	delete(Subscriptions,
-		subscription(Subscriber, Topic),
+	delete_matching_subs(Subscriptions,
+		subscription(Subscriber, Sub),
 		Subscriptions1),
 	put_state(State, subscriptions, Subscriptions1, NewState).
+
+remove_subscription(Subscriber, Topic, State, NewState) :-
+	remove_subscription(Subscriber, Topic-any, State, NewState).
+
+delete_matching_subs([], _, []).
+
+delete_matching_subs([subscription(Subscriber, Sub) | Rest],
+	subscription(Subscriber, DeleteSub),
+		RemainingSubscriptions) :-
+			sub_match(Sub, DeleteSub), !,
+			delete_matching_subs(Rest, subscription(Subscriber, DeleteSub), RemainingSubscriptions).
+	
+delete_matching_subs([Subscription | Rest],
+	subscription(Subscriber, DeleteSub),
+		[Subscription | RemainingSubscriptions]) :-
+			delete_matching_subs(Rest, subscription(Subscriber, DeleteSub),
+		RemainingSubscriptions).
 
 remove_all_subscriptions(Subscriber, State, NewState) :-
 	get_state(State, subscriptions, Subscriptions),

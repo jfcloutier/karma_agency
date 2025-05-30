@@ -6,11 +6,11 @@ Events:
 * In and out
   * topic: ca_started, payload: level(Level)
   * topic: ca_terminated, payload: level(Level)
-  * topic: prediction, payload: belief(PropertyName, Value) | belief(RelationName, ObjectName1, ObjectName2)
-  * topic: prediction_error, payload: prediction(Belief)
-  * topic: belief_domain, payload: [belief_spec(BeliefName, Domain), ...]
-  * topic: directive, payload: goal(BeliefName, Impact) | command(PolicyName)
-  * topic: directive_status, payload: directive_report(Directive, rejected | ready | executed(PolicyName))
+  * topic: prediction, payload: Belief = belief(PropertyName, Value) | belief(RelationName, ObjectName1, ObjectName2)
+  * topic: prediction_error, payload: [predicted - Belief, actual - Belief, confidence - Float]
+  * topic: directive, payload: goal(BeliefName, Impact) | command(PolicyName) = Directive
+  * topic: directive_status, payload: directive_report(Directive, rejected | ready | executed_as(PolicyName))
+  * topic: belief_domains_changed
 * Out
   * topic: causal_theory_wanted, payload: [pinned_predicates - PinnedPredicated, pinned_objects - PinnedObjects]
   * topic: wellbeing_changed, payload: [fullness - N1, integrity - N2, engagement - N3]
@@ -28,6 +28,7 @@ Messages:
 * Queries received:
   * level - Integer > 0
   * umwelt - CA names
+  * belief_domains - [BeliefDomain, ...]
   * wellbeing_counts - [fullness - N1, integrity - N2, engagement - N3]
     
 Thread locals:
@@ -61,6 +62,7 @@ State:
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
 :- use_module(library(uuid)).
+:- use_module(som(ca_support)).
 
 % Thread statis state
 :- thread_local level/1, timer/1, buffered_events/1.
@@ -88,9 +90,9 @@ level_from_name(Name, Level) :-
 umwelt(Name, Umwelt) :-
 	query_answered(Name, umwelt, Umwelt).
 
-% P is between 0 and 1 with 1 the maximum level of enthusiasm to be recruited in an umwelt
-recruit(Name, P) :-
-	query_answered(Name, recruit, P).
+% Eagerness is between 0 and 1 with 1 the maximum level of enthusiasm to be recruited in an umwelt
+recruit(Name, Eagerness) :-
+	query_answered(Name, recruit, Eagerness).
 
 % Worker
 
@@ -114,8 +116,9 @@ remember_level(Options, Level) :-
 	assert(level(Level)).
 
 announce_adoptions(Umwelt) :-
-	forall(Child,  member(Child, Umwelt), message_sent(Child, adopted)).
+	forall(member(Child, Umwelt), message_sent(Child, adopted)).
 
+% TODO - predction/1, prediction_error/1, belief_domain/1 etc.
 subscribed_to_events :-
 	forall(member(Topic, [ca_started, ca_terminated, prediction, prediction_error, belief_domain, directive, directive_status]),
 		subscribed(Topic)).
@@ -160,8 +163,8 @@ handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(Message, Source), State, State) :-
-	log(debug, ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+handled(message(Message, Source), State, NewState) :-
+	ca_support : handled(message(Message, Source), State, NewState).
 
 handled(query(level), _, Level) :-
 	level(Level).
@@ -184,8 +187,8 @@ handled(query(recruit), State, Eagerness) :-
 
 handled(query(recruit), _, 0).
 
-handled(query(Query), _, unknown) :-
-	log(debug, ca, '~@ is NOT handling query ~p', [self, Query]).
+handled(query(Query), Source, Answer) :-
+	ca_support : handled(query(Query), Source, Answer).
 
 handled(event(Topic, Payload, Source), State, NewState) :-
 	event_of_interest(Topic, Source, State),
@@ -199,7 +202,7 @@ handled(event(Topic, Payload, Source), State, NewState) :-
 		NewState).
 
 handled(event(Topic, Payload, Source), State, State) :-
-	log(debug, ca, '~@ is NOT handling event ~p with ~p from ~w', [self, Topic, Payload, Source]).
+	ca_support : handled(event(Topic, Payload, Source), State, State).
 
 event_of_interest(Topic, Source, State) :-
 	member(Topic,
@@ -221,10 +224,6 @@ event_handled_later(event(Topic, Payload, Source), State, NewSTate) :-
 from_umwelt(Source, State) :-
 	get_state(State, umwelt, Umwelt),
 	member(Source, Umwelt).
-
-from_parent(Source, State) :-
-	get_state(State, parents, Parents),
-	member(Source, Parents).
 
 % Ignored
 event_handled_now(event(ca_started, Options, Source), State, State).

@@ -17,17 +17,14 @@ An effector CA
 
 */
 
-
-
 :- module(effector_ca, []).
-
-
 
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
 :- use_module(code(logger)).
 :- use_module(agent(body)).
+:- use_module(som(ca_support)).
 
 name_from_effector(Effector, Name) :-
 	atomic_list_concat([effector, Effector.id], ':', Name).
@@ -50,8 +47,12 @@ init(Options, State) :-
 		effectors(Effectors), Options), 
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain), 
-	put_state(State1, [parents-[], action_domain - ActionDomain], State), 
+	put_state(State1, [parents-[], action_domain - ActionDomain], State),
+	subscribed_to_events(State1),
 	published(ca_started, [level(0)]).
+
+subscribed_to_events(State) :-
+	subscribed(ca_terminated).
 
 signal_processed(control(stopped)) :-
 	worker : stopped.
@@ -69,9 +70,9 @@ handled(message(actuated(Action), _), State, State) :-
 handled(message(Message, Source), State, State) :-
 	log(debug, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
 
-handled(event(Topic, Payload, Source), State, State) :-
-	log(debug, effector_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
-
+handled(message(Message, Source), State, NewState) :-
+	ca_support: handled(message(Message, Source), State, NewState).
+	 
 handled(query(name), _, Name) :-
 	self(Name).
 
@@ -88,9 +89,8 @@ handled(query(belief_domain), _, []).
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
 
-handled(query(Query), _, tbd) :-
-	log(debug, effector_ca, '~@ is NOT handling query ~p', [self, Query]).
-
+handled(query(Query), State, Answer) :-
+	ca_support : handled(query(Query), State, Answer).
 %%%%
 
 action_domain(State, ActionDomain) :-
