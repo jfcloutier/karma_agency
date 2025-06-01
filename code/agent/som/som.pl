@@ -5,7 +5,7 @@ organized in a hierarchy.
 
 :- module(som, []).
 
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(supervisor)).
 :- use_module(som(sensor_ca)).

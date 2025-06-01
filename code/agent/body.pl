@@ -6,7 +6,7 @@ The interface to the robot's effectors and sensors.
 
 
 
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_json)).
 

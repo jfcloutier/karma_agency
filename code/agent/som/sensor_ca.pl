@@ -35,7 +35,7 @@ A sensor CA:
 
 
 
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).

@@ -22,7 +22,7 @@ An effector CA
 :- use_module(actor_model(actor_utils)).
 :- use_module(actor_model(pubsub)).
 :- use_module(actor_model(worker)).
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(agent(body)).
 :- use_module(som(ca_support)).
 

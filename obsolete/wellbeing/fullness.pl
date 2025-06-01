@@ -6,7 +6,7 @@ The feeling of hunger.
 
 :- module(fullness, []).
 
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(actor_model(actor_utils)).
 
 name(fullness).

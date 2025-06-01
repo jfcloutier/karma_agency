@@ -11,7 +11,7 @@ It integrates services and actors:
 /*
 % Start karma_world server then karma_body server
 [load].
-[agent(agency), actor_model(supervisor), code(logger), actor_model(actor_utils), actor_model(pubsub)].
+[agent(agency), actor_model(supervisor), utils(logger), actor_model(actor_utils), actor_model(pubsub)].
 set_log_level(info).
 agency:started('localhost:4000').
 threads.
@@ -32,7 +32,7 @@ threads.
 
 :- module(agency, []). 
 
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 :- use_module(som(som)).
 :- use_module(actor_model(supervisor)).
 :- use_module(agent(body)).

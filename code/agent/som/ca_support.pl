@@ -5,7 +5,7 @@ Cognition Actor support library.
 :- module(ca_support, [from_parent/2]).
 
 :- use_module(actor_model(actor_utils)).
-:- use_module(code(logger)).
+:- use_module(utils(logger)).
 
 handled(message(Message, Source), State, State) :-
 	log(debug, ca_support, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
