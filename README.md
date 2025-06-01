@@ -1,6 +1,6 @@
 # Karma Agency
 
-**UNDER CONSTRUCTION**
+**THIS REPO IS UNDER CONSTRUCTION**
 
 TODO - send_control vs send_message vs send_query
 
