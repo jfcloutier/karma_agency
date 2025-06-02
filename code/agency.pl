@@ -37,7 +37,6 @@ threads.
 :- use_module(actors(supervisor)).
 :- use_module(code(body)).
 
-
 %! started(+BodyHost) is det
 % the agent is started on a body referenced by a url
 started(BodyHost) :-

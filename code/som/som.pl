@@ -1,6 +1,6 @@
 /*
-The Society of Mind (SOM) of an agent is a collective of Cognition Actors
-organized in a hierarchy.
+The Society of Mind (SOM) of an agent is an evolving collective of Cognition Actors
+forming a hierarchy.
 */
 
 :- module(som, []).
