@@ -36,10 +36,10 @@ A sensor CA:
 
 
 :- use_module(utils(logger)).
-:- use_module(actor_model(actor_utils)).
-:- use_module(actor_model(pubsub)).
-:- use_module(actor_model(worker)).
-:- use_module(agent(body)).
+:- use_module(actors(actor_utils)).
+:- use_module(actors(pubsub)).
+:- use_module(actors(worker)).
+:- use_module(code(body)).
 :- use_module(som(ca_support)).
 
 % The name of the sensor CA given the sensor it wraps

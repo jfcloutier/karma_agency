@@ -37,16 +37,16 @@ State:
 
 :-module(meta_ca, []).
 
-:- use_module(actor_model(actor_utils)).
+:- use_module(actors(actor_utils)).
 :- use_module(utils(logger)).
-:- use_module(actor_model(pubsub)).
-:- use_module(actor_model(supervisor)).
-:- use_module(actor_model(worker)).
-:- use_module(actor_model(timer)).
+:- use_module(actors(pubsub)).
+:- use_module(actors(supervisor)).
+:- use_module(actors(worker)).
+:- use_module(actors(timer)).
 :- use_module(som(sensor_ca)).
 :- use_module(som(effector_ca)).
 :- use_module(som(ca)).
-:- use_module(actor_model(task)).
+:- use_module(actors(task)).
 
 % Static thread state
 :- thread_local level/1, timer/1.

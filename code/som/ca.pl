@@ -58,9 +58,9 @@ State:
 :- module(ca, []).
 
 :- use_module(utils(logger)).
-:- use_module(actor_model(actor_utils)).
-:- use_module(actor_model(pubsub)).
-:- use_module(actor_model(worker)).
+:- use_module(actors(actor_utils)).
+:- use_module(actors(pubsub)).
+:- use_module(actors(worker)).
 :- use_module(library(uuid)).
 :- use_module(som(ca_support)).
 
