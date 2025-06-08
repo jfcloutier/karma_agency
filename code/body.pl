@@ -4,14 +4,12 @@ The interface to the robot's effectors and sensors.
 
 :- module(body, []).
 
-
-
 :- use_module(utils(logger)).
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_json)).
 
 capabilities(Host, Sensors, Effectors) :-
-	log(info, body, 'Getting sensors and efectors'), 
+	log(info, body, "Getting sensors and efectors"), 
 	sensors(Host, Sensors), 
 	effectors(Host, Effectors).
 
@@ -28,20 +26,20 @@ effectors(Host, Effectors) :-
 sense_value(Url, Value, Tolerance) :-
 	http_get(Url, Response, []), 
 	sense_value_from_response(Response, Value, Tolerance), 
-	log(info, body, 'Sensed ~w with tolerance ~w from ~w', [Value, Tolerance, Url]).
+	log(info, body, "Sensed ~w with tolerance ~w from ~w", [Value, Tolerance, Url]).
 
 actuated(Url) :-
 	http_get(Url, Response, []), 
-	log(debug, body, '~w got response ~p', [Url, Response]), 
+	log(debug, body, "~w got response ~p", [Url, Response]), 
 	actuation_value_from_response(Response, ok), 
-	log(info, body, 'Actuated via ~w ', [Url]).
+	log(info, body, "Actuated via ~w ", [Url]).
 
-execute_actions(Host) :-
-	api_url(Host, 'execute_actions', Url), 
+actions_executed(Host) :-
+	api_url(Host, execute_actions, Url), 
 	http_get(Url, Response, []), 
-	log(debug, body, '~w got response ~p', [Url, Response]), 
+	log(debug, body, "~w got response ~p", [Url, Response]), 
 	execution_value_from_response(Response, ok), 
-	log(info, body, 'Executed actions').
+	log(info, body, "Executed actions").
 
 api_url(Host, Query, Url) :-
 	format(

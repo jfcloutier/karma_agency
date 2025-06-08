@@ -23,7 +23,7 @@ An effector CA
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(utils(logger)).
-:- use_module(code(body)).
+:- use_module(agency(body)).
 :- use_module(som(ca_support)).
 
 name_from_effector(Effector, Name) :-
@@ -41,7 +41,7 @@ level(0).
 recruit(_, 1).
 
 init(Options, State) :-
-	log(info, effector_ca, 'Initiating with ~p', [Options]), 
+	log(info, effector_ca, "Initiating with ~p", [Options]), 
 	empty_state(EmptyState), 
 	option(
 		effectors(Effectors), Options), 
@@ -58,7 +58,7 @@ signal_processed(control(stopped)) :-
 	worker : stopped.
 
 terminated :-
-	log(warn, effector_ca, 'Terminated').
+	log(warn, effector_ca, "Terminated").
 
 handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
@@ -68,7 +68,7 @@ handled(message(actuated(Action), _), State, State) :-
 	actuated(State, Action).
 
 handled(message(Message, Source), State, State) :-
-	log(debug, effector_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(debug, effector_ca, "~@ is NOT handling message ~p from ~w", [self, Message, Source]).
 
 handled(message(Message, Source), State, NewState) :-
 	ca_support: handled(message(Message, Source), State, NewState).

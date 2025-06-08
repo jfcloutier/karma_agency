@@ -142,13 +142,13 @@ signal_processed(control(stopped)) :-
 	worker : stopped.
 
 terminated :-
-	log(warn, ca, '~@ terminating', [self]),
+	log(warn, ca, "~@ terminating", [self]),
 	timer(TimerName),
 	timer : stopped(TimerName),
 	level(Level),
 	published(ca_terminated,
 		[level(Level)]),
-	log(warn, ca, 'Terminated ~@', [self]).
+	log(warn, ca, "Terminated ~@", [self]).
 
 % Time to start a timeframe
 handled(message(tick, _), State, NewState) :-
@@ -230,7 +230,7 @@ event_handled_now(event(ca_started, Options, Source), State, State).
 % Ignore if the terminated CA is not in the umwelt, else update the umwelt
 event_handled_now(event(ca_terminated, Options, Source), State, NewState) :-
 	removed_from_umwelt(Source, State, NewState),
-	log(info, ca, 'CA ~w was removed from the umwelt of  ~@', [Source, self]).
+	log(info, ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
 % TODO
 event_handled_now(event(prediction, Belief, Source), State, State).
 % TODO
@@ -254,7 +254,7 @@ removed_from_umwelt(CA, State, NewState) :-
 % The previous frame becomes the new frame by updating the start_time,
 % processing buffered events and re-activating processing events upon receipt
 frame_started(State, NewState) :-
-	log(info, ca, 'CA ~@ is starting a new frame', [self]),
+	log(info, ca, "CA ~@ is starting a new frame", [self]),
 	past_frame_continuation(State, State1),
 	suspended_events_processed(State, State2),
 	put_state(State2, status, started, NewState).
@@ -279,7 +279,7 @@ events_handled_now([event(Topic, Payload, Source)|Rest], State, NewState) :-
 % then putting the frame in history.
 frame_ended(State, NewState) :-
 	put_state(State, status, ending, State1),
-	log(info, ca, 'CA ~@ is completing its current frame', [self]).
+	log(info, ca, "CA ~@ is completing its current frame", [self]).
 	% wellbeing_diffused(State1, State2),
 	% causal_theory_evaluated(State2, State3),
 	% beliefs_updated(State3, State4),

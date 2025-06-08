@@ -15,15 +15,16 @@ forming a hierarchy.
 %! started(+Sensors, +Effectors) is det
 % the SOM is initiated
 started(Sensors, Effectors) :-
-	log(info, som, 'Starting SOM'),
-	AgencyChildren = [
+	log(info, som, "Starting the SOM"),
+	Children = [
+		% Will start the actors' pubsub
 		pubsub,
-		% Start the SOM supervisor with no children yet
+		% Will start the SOM supervisor with no children yet
 		supervisor(som,
 			[restarted(permanent)])],
 	% Start agency - the top supervisor
 	supervisor : started(agency,
-		[children(AgencyChildren)]),
+		[children(Children)]),
 	sensor_cas_started(Sensors),
 	effector_cas_started(Effectors),
 	level_one_ca_started.
@@ -68,7 +69,8 @@ level_one_ca_started :-
 		CA,
 		[
 			init([level(1), umwelt(Umwelt)])]),
-	log(info, som, 'Added new CA ~w at level ~w with umwelt ~p', [CA, 1, Umwelt]).
+	forall(member(UmweltCA, Umwelt), message_sent(UmweltCA, adopted)),
+	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
 	
 % Recruit at the given level 2 or more CAs most eager CAs to participate in the umwelt of a CA one level up
 umwelt_recruited(Level, Umwelt) :-

@@ -27,7 +27,7 @@ Thread locals:
 	* timer - the curator timer
 
 State:
-    * wards - ward CAs, or 'unknown' if they need to be discovered from querying the SOM
+    * wards - ward CAs, or unknown if they need to be discovered from querying the SOM
 	* meta_ca_below - the meta_ca one level down, if level > 0
 	* sensor_count, effector_count - if level == 0
     * busy - true|false - busy while curating - we don't want to start curating while already curating
@@ -62,7 +62,7 @@ latency(Level, Latency) :-
 %% Worker
 
 init(Options, State) :-
-	log(info, meta_ca, 'Initiating ~@ with ~p', [self, Options]), 
+	log(info, meta_ca, "Initiating ~@ with ~p", [self, Options]), 
 	empty_state(EmptyState), 
 	option(
 		level(Level), Options), 
@@ -112,26 +112,26 @@ process_signal(control(stop)) :-
 
 % Called on thread exit
 terminate :-
-	log(warn, meta_ca, '~@ terminating', [self]), 
+	log(warn, meta_ca, "~@ terminating", [self]), 
 	timer(Timer), 
 	timer : stop(Timer), 
 	level(Level), 
 	published(meta_ca_terminated, 
 		[level(Level)]), 
-	log(warn, meta_ca, 'Terminated ~@', [self]).
+	log(warn, meta_ca, "Terminated ~@", [self]).
 
 handle(message(curate, _), State, State) :-
 	get_state(State, busy, false), !, 
 	curate(State).
 
 handle(message(curate, _), State, State) :-
-	log(debug, meta_ca, 'Skipping curating because busy').
+	log(debug, meta_ca, "Skipping curating because busy").
 
 handle(message(busy(Busy), _), State, NewState) :-
 	put_state(State, busy, Busy, NewState).
 
 handle(message(Message, Source), State, State) :-
-	log(debug, meta_ca, '~@ is NOT handling message ~p from ~w', [self, Message, Source]).
+	log(debug, meta_ca, "~@ is NOT handling message ~p from ~w", [self, Message, Source]).
 
 % In case the meta-ca below is restarted
 handle(event(meta_ca_started, Payload, MetaCA), State, NewState) :-
@@ -171,7 +171,7 @@ handle(event(ca_terminated, Payload, CA), State, NewState) :-
 	put_state(State, wards, RemainingWards, NewState).
 
 handle(event(Topic, Payload, Source), State, State) :-
-	log(debug, meta_ca, '~@ is NOT handling event ~w, with payload ~p from ~w)', [self, Topic, Payload, Source]).
+	log(debug, meta_ca, "~@ is NOT handling event ~w, with payload ~p from ~w)", [self, Topic, Payload, Source]).
 
 handle(query(name), _, Name) :-
 	self(Name).
@@ -200,7 +200,7 @@ handle(query(is_complete), State, true) :-
 handle(query(is_complete), _, false).
 
 handle(query(Query), _, unknown) :-
-	log(debug, meta_ca, '~@ is NOT handling query ~p', [self, Query]).
+	log(debug, meta_ca, "~@ is NOT handling query ~p", [self, Query]).
 
 %% Level 0
 
@@ -248,7 +248,7 @@ curate(State) :-
 
 do_curate(Name, State) :-
 	get_state(State, level, Level), 
-	log(debug, meta_ca, '~@ is curating level ~w', [self, Level]), 
+	log(debug, meta_ca, "~@ is curating level ~w", [self, Level]), 
 	cull(Name, State), 
 	grow(Name, State).
 
@@ -263,12 +263,12 @@ cull(_, _).
 grow(Name, State) :-
 	get_state(State, level, Level), 
 	get_state(State, meta_ca_below, MetaCABelow), 
-	log(debug, meta_ca, '~w is growing level ~w ', [Name, Level]), 
+	log(debug, meta_ca, "~w is growing level ~w ", [Name, Level]), 
 	level_below_is_complete(State, MetaCABelow), 
 	\+ level_is_complete(State), !, 
-	log(info, meta_ca, 'Adding new ca at level ~w', [Level]), 
+	log(info, meta_ca, "Adding new ca at level ~w", [Level]), 
 	add_ca(State, NewCA), 
-	log(debug, meta_ca, '~@ added CA ~p', [self, NewCA]).
+	log(debug, meta_ca, "~@ added CA ~p", [self, NewCA]).
 
 grow(Name, State) :-
 	level_is_complete(State),
@@ -284,9 +284,9 @@ level_is_complete(State) :-
 level_is_complete(State) :-
 	cas_below(State, CASBelow), 
 	get_state(State, level, Level), 
-	log(debug, meta_ca, 'Level ~w has umwelt-able CAs ~p', [Level, CASBelow]), 
+	log(debug, meta_ca, "Level ~w has umwelt-able CAs ~p", [Level, CASBelow]), 
 	get_state(State, wards, WardCAs), 
-	log(debug, meta_ca, 'Level ~w has wards CAs ~p', [Level, WardCAs]), 
+	log(debug, meta_ca, "Level ~w has wards CAs ~p", [Level, WardCAs]), 
 	all_covered_by(CASBelow, WardCAs).
 
 cas_below(State, CASBelow) :-
@@ -329,7 +329,7 @@ add_ca(State, CAName) :-
 		[init(
 			[level(Level), 
 			umwelt(Umwelt)])]), 
-	log(info, meta_ca, 'Added new CA ~w at level ~w with umwelt ~p', [CAName, Level, Umwelt]).
+	log(info, meta_ca, "Added new CA ~w at level ~w with umwelt ~p", [CAName, Level, Umwelt]).
 
 pick_umwelt(State, Umwelt) :-
 	get_state(State, level, Level), 

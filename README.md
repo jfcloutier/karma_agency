@@ -47,11 +47,11 @@ Clone the following repos in the same directory that contains the `karma_agency`
 
 ## Running the app
 
-% Start agency with the domain and port where th body is hosted
+% Start agent with the domain and port where th body is hosted
 
 ```prolog
 ?- [load].
-?- agency:start('localhost:4000').
+?- agent:start('localhost:4000').
 ```
 
 ## Running the tests
