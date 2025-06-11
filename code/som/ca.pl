@@ -62,7 +62,7 @@ State:
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(library(uuid)).
-:- use_module(som(ca_support)).
+:- use_module(agency(som/ca_support)).
 
 % Thread statis state
 :- thread_local level/1, timer/1, buffered_events/1.

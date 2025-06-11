@@ -7,6 +7,5 @@
    asserta(user:file_search_path(apperception, Apperception)),
    string_concat(Dir, '/code', Code),
    asserta(user:file_search_path(agency, Code)),
-   asserta(user:file_search_path(som, agency(som))),
    string_concat(Dir, '/tests', Tests),
    asserta(user:file_search_path(tests, Tests)).

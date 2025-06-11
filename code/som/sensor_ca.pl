@@ -1,8 +1,8 @@
 /*
 A sensor CA is an a priori cognition actor that communicates with a body sensor to read one sense with some confidence.
 Each sensor CA holds one neutral (neither pleasant nor unpleasant) belief about the sense value it measures.
-A sensor CA has no notion of action.
-It only listens to prediction events about its belief and may emit a prediction error event
+
+A sensor CA can not "act". It only listens to prediction events about its belief and may emit a prediction error event
 based on the latest reading, if not stale (latency), else based on a present reading, filtered on past readings.
 
 A sensor CA:
@@ -10,18 +10,18 @@ A sensor CA:
 * receives a message `adopted` when added to the umwelt of a CA
 
 * subscribes to events from its parents:
-    * topic: prediction, 
-    * payload: [predicted = belief(Name, Value)]
+    * topic: prediction, payload: [predicted = belief(Name, Value)]
 
-* published events
-    * topic: prediction error
-    * payload:[predicted = belief(Name, Value1), actual = belief(Name, Value2), confidence = 1.0])
+* publishes events
+    * topic: prediction error, payload:[predicted = belief(Name, Value1), actual = belief(Name, Value2), confidence = 1.0])
 
 * like all CAs, a sensor CA responds to queries about
     * name
     * level
     * latency
-    * belief_domain -> responds with belief_domain(Name, ValueDomain, e.g. belief_domain(distance, domain{from:0, to:250})
+    * belief_domains -> responds with [Name-ValueDomain | _], e.g. [distance - domain{from:0, to:250}]
+    * action_domain -> always responds with []
+
 
 * believes its sensor reading (observation) after noise reduction
     * it remembers past readings
@@ -33,7 +33,7 @@ Lifecycle
   * Created for a body sensor
   * Repeatedly
     * Adopted by a CA as part of its umwelt (new parent)
-    * Queried for its belief domain (what predictions it can receive) - belief name = sense name
+    * Queried for its belief domains (what predictions about its one belief it can receive) - belief name = sense name
     * Handles prediction events by making readings, maybe emitting prediction errors
     * Parent CA terminated
 */
@@ -45,7 +45,7 @@ Lifecycle
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(agency(body)).
-:- use_module(som(ca_support)).
+:- use_module(agency(som/ca_support)).
 
 %! name_from_sensor(+Sensor, -Name) is det
 % the name of the sensor CA given the sensor it wraps
@@ -64,8 +64,8 @@ latency(0.5).
 % the CA has the lowest level of abstraction, i.e. 0
 level(0).
 
-%! recruit(+Name, -Enthusiasm) :- is det
-% a sensor CA always volunteer for recruitment with maximum enthusiasm, i.e. 1.0
+%! recruit(+Name, -Eagerness) :- is det
+% a sensor CA always volunteer for recruitment with maximum eagerness, i.e. 1.0
 recruit(_, 1.0).
 
 %%% Actor logic
@@ -135,8 +135,8 @@ handled(query(level), _, Level) :-
 handled(query(latency), _, Latency) :-
     latency(Latency).
 
-handled(query(belief_domains), State, belief_domains([Sense-Domain])) :-
-    get_state(State, belief_domain, Sense-Domain),
+handled(query(belief_domains), State, [Sense-Domain]) :-
+    get_state(State, belief_domain, Sense-Domain).
 
 handled(query(action_domain), _, []).
 

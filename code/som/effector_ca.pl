@@ -1,20 +1,44 @@
 /*
-An effector is an a priori cognition actor that communicates with a body effector to execute actions.
+An effector CA is an a priori cognition actor that communicates with a body effector to execute actions.
+An effector CA receives intents to carry out an action, responds with readiness if the action is within
+its action domain, and then may be told to execute.
+An effector CA believes or not in having recently attempted a given action. 
+
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
 Same-device effectors are combined in one effector_ca.
 
-An effector CA
+An effector CA:
 
-* expects messages about
-    * actuated(Action)
+* receives the message `adopted` when added to the umwelt of a CA
+
+* subscribes to events from its parents:
+	* topic: intent, payload: [goal = belief(Action, true), priority = Float]
+	* topic: execute, payload: [policy = [command(Action)]]
+	* topic: prediction, payload: [predicted = belief(Action, Boolean)]
+
+* publishes events:
+	* topic: can_execute, payload: [goal = belief(Action, true), policy = [command(Action)]]
+    * topic: prediction_error, payload:[predicted = belief(Action, Boolean), actual = belief(Action, Boolean1), confidence = 1.0])
 
 * like all CAs, an effector CA responds to queries about
     * name
     * level
-    * latency
-    * belief_domain -> always responds with []
+    * latency - for how long having taken an action is believed to be true
+    * belief_domains -> always responds with [attempted - [Action | _]] % the object domain is the names of the avaialble actions
     * action_domain -> always responds with [Action, ...], e.g. [spin, reverse_spin]
 
+* makes observations:
+	* executed(Action)
+
+Lifecycle
+  * Created for a body sensor
+  * Repeatedly
+    * Adopted by a CA as part of its umwelt (new parent)
+    * Queried for its action domain (what intents it can receive)
+	* Queried for its belief domains (what action it can believe to have taken)
+    * Handles intent and execute events, sends can_execute events
+	* Handles predictions about actions taken - sends prediction_error events
+    * Parent CA terminated
 */
 
 :- module(effector_ca, []).
@@ -24,14 +48,15 @@ An effector CA
 :- use_module(actors(worker)).
 :- use_module(utils(logger)).
 :- use_module(agency(body)).
-:- use_module(som(ca_support)).
+:- use_module(agency(som/ca_support)).
 
 name_from_effector(Effector, Name) :-
 	atomic_list_concat([effector, Effector.id], ':', Name).
 
 level_from_name(_, 0).
 
-% An effector CA has no latency
+% An effector CA has no fixed latency - its timeframe terminates after an action was executed,
+% and the attempt observed and beliefs updated 
 latency(0).
 
 % The CA has the lowest level of abstration

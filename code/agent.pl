@@ -33,7 +33,7 @@ threads.
 :- module(agent, []). 
 
 :- use_module(utils(logger)).
-:- use_module(som(som)).
+:- use_module(agency(som)).
 :- use_module(actors(supervisor)).
 :- use_module(agency(body)).
 

@@ -43,9 +43,9 @@ State:
 :- use_module(actors(supervisor)).
 :- use_module(actors(worker)).
 :- use_module(actors(timer)).
-:- use_module(som(sensor_ca)).
-:- use_module(som(effector_ca)).
-:- use_module(som(ca)).
+:- use_module(agency(som/sensor_ca)).
+:- use_module(agency(som/effector_ca)).
+:- use_module(agency(som/ca)).
 :- use_module(actors(task)).
 
 % Static thread state

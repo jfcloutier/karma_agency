@@ -8,9 +8,9 @@ forming a hierarchy.
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
-:- use_module(som(sensor_ca)).
-:- use_module(som(effector_ca)).
-:- use_module(som(ca)).
+:- use_module(agency(som/sensor_ca)).
+:- use_module(agency(som/effector_ca)).
+:- use_module(agency(som/ca)).
 
 %! started(+Sensors, +Effectors) is det
 % the SOM is initiated
