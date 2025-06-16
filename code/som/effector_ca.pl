@@ -132,7 +132,7 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
 
 handled(event(intent, IntentPayload, Parent), State, State) :-
 	option(policy(ParentPolicy), IntentPayload),
-	setof(Action, (member(command(Action), ParentPolicy), can_do(Action, State)), Actions), 
+	setof(Action, (member(Directive, ParentPolicy), can_do(Directive, State)), Actions), 
     [_ | _] = Actions,
 	!,
 	foreach(member(Action, Actions), message_sent(Parent, can_actuate(Intent, Action))).
@@ -142,8 +142,9 @@ handled(event(intent, IntentPayload, Parent), State, State) :-
 
 handled(event(actuation, ActuationPayload, _), State, NewState) :-
 	option(policy(ParentPolicy), ActuationPayload),
-	bagof(Action, (member(command(Action), ParentPolicy), can_do(Action, State)), Actions),
-	foreach(member(Action, Actions), (actuated(State, Action), acc_state(State, actuations, Action, NewState))).
+	bagof(HowToActions, (member(Directive, ParentPolicy), how_to(Directive, State, HowToActions)), Actions),
+	flatten(Actions, AllActions),
+	foreach(member(Action, AllActions), (actuated(State, Action), acc_state(State, actuations, Action, NewState))).
 
 handled(event(executed, _, Parent), State, NewState) :-
 	observations_from_actuations(State, Observations),
@@ -151,12 +152,18 @@ handled(event(executed, _, Parent), State, NewState) :-
 	beliefs_from_observations(State1, Beliefs),
 	put_state(State1, beliefs, Beliefs, NewState).
 
-
-% TODO
-handled(event(prediction, Payload, Parent), State, NewState).
+handled(event(prediction, PredictionPayload, Parent), State, State) :-
+	option(belief(PredictedBelief), belief, PredictionPayload),
+	about_belief(PredictedBelief, State, Belief),
+	belief_value(PredictedBelief, PredictedValue),
+	belief_value(Belief, ActualValue),
+	(same_belief_value(PredictedValue, ActualValue) ->
+		true;
+		message_sent(Parent, prediction_error(PredictionPayload, ActualValue))
+	).	
 
 handled(event(Topic, Payload, Parent), State, NewState) :-
-	ca_support : handled(event(Topic, Payload, Parent), State, NewState)
+	ca_support : handled(event(Topic, Payload, Parent), State, NewState).
 
 %%%%
 
@@ -168,29 +175,35 @@ action_domain(State, ActionDomain) :-
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
-can_do(Action, State) :-
+can_do(command(Action), State) :-
 	get_state(State, action_domain, ActionDomain),
 	member(Action, ActionDomain).
+
+can_do(goal(count(Action, N)), State) :-
+	N > 0,
+	get_state(State, action_domain, ActionDomain),
+	member(Action, ActionDomain).
+
+how_to(command(Action), State, [Action]) :-
+	can_do(command(Action), State).
+
+how_to(goal(count(Action, N)), State, Actions) :-
+	get_state(State, action_domain, ActionDomain),
+	member(Action, ActionDomain),
+	length(Actions, N),
+	maplist(=(Action), Actions).
 
 observations_from_actuations(State, Observations) :-
 	get_state(State, actuations, Actuations),
 	bagof(executed(Action), member(Action, Actuations), Observations).
 
-beliefs_from_actuations(State, Beliefs) :-
+beliefs_from_observations(State, Beliefs) :-
 	get_state(State, observations, Observations),
 	bagof(Action, member(executed(Action), Observations), ExecutedActions),
 	sort(ExecutedActions, ActionTypes),
 	map_list_to_pairs(count_in(ExecutedActions), ActionTypes, Counts),
     % The name of an action is how an effector CA presents `executed(Action)` to its parents
 	bagof(count(ActionType, N), member(N - ActionTypes, Counts), Beliefs).
-
-count_in([], _, 0).
-count_in([Item | Rest], Item, Count) :-
-	count_in(Rest, Item, C),
-	Count is C + 1.
-count_in([E | Rest], Item, Count) :-
-	E \= Item,
-	count_in(Rest, Item, Count).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.

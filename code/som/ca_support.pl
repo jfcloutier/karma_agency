@@ -2,7 +2,7 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2]).
+:- module(ca_support, [from_parent/2, about_belief/3, belief_value/2, same_belief_value/2]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(utils(logger)).
@@ -26,4 +26,14 @@ handled(event(Topic, Payload, Source), State, State) :-
 from_parent(Source, State) :-
     get_state(State, parents, Parents),
     member(Source, Parents).
+
+about_belief(PredictedBelief, State, Belief) :-
+    PredictedBelief =.. [BeliefName, Object, _],
+    get_state(State, beliefs, Beliefs),
+    member(Belief, Beliefs),
+    Belief =.. [BeliefName, Object, _].
     
+belief_value(Belief, Value) :-
+   Belief =.. [_, _, Value].
+
+same_belief_value(Value, Value).
