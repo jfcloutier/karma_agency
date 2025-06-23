@@ -1,5 +1,5 @@
 /*
-An effector CA is an a priori cognition actor that communicates with a body effector to actuate actions.
+An effector CA is an a priori cognition actor that communicates with a body effector to actuate it.
 
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
 Same-device effectors are combined in one effector_ca.
@@ -7,9 +7,10 @@ Same-device effectors are combined in one effector_ca.
 An effector CA receives from its parents intents to carry out policies, responds with readiness for directives within
 its action domain, and then may be told to actuate by telling the body to prepare to execute actions as directed.
 
-An effector's actions are "terminal" policies (i.e. not involving other CAs); their names are actuations the body can execute.
+An effector's actions are "atomic" policies (i.e. not involving other CAs's policies); their names are actuations the body can execute.
 
-An effector CA believes or not in the body having last executed a certain number of the effector CA's actions/terminal policies. 
+An effector CA believes or not in the body having last executed a certain number of the effector CA's actions/atomic policies.
+Its beliefs are not normative (neither pleasant or unpleasant). 
 
 An effector CA:
 
@@ -17,16 +18,16 @@ An effector CA:
 
 * subscribes to events from its parents:
 	* topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
-	* topic: actuation, payload: [policy = Policy] - a parent communicates a policy it built that it is actuating (execution pending)
+	* topic: actuation, payload: [policy = Policy] - a parent communicates a policy it is about to execute
 	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
 
 * subscribes to events from any source:
 	* topic: executed, payload: [] - the actuated policy was executed
 
 * sends messages to a parent in response to events received:
-    * intent event -> can_actuate(IntentPayload, Directive) - telling the parent it can actuate a parent's directive
-    * intent event -> cannot_actuate(IntentPayload) - telling the parent this effector CA can't do any part of the intended policy
-    * prediction event -> prediction_error(PredictionPayload, ActualValue) - error in how many times a given action command was predicted to have been executed
+    * intent event -> maybe respond with message `can_actuate(IntentPayload, Directive)` - it can actuate a parent's directive
+    * intent event -> maybe respond with message `cannot_actuate(IntentPayload)` - this effector CA can't do any part of the parent's intended policy
+    * prediction event -> maybe respond with message `prediction_error(PredictionPayload, ActualValue)` - the parent is wrong about how many times an action was executed
 
 * like all CAs, an effector CA responds to queries about
     * name
@@ -46,13 +47,14 @@ Lifecycle
 	* Handles actuation events - tells the body to prepare to actuate, records the actuations
 	* Handles executed events (the body has aggregated and executed actuations) - updates count/2 beliefs
 	* Handles predictions about the last executed actions - sends prediction_error events
-    * Parent CA terminated - unsubscribes from umwelt events originating from the parent
+  * Parent CA terminated - unsubscribes from umwelt events originating from the parent
 
 An effector CA has no fixed latency; its unique timeframe is updated after notice of 
 execution by the body of its accumulated actuations, but only if some originated from the effector CA.
 
-It also does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations and its beliefs about the last
-execution of its actuations.
+It does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations and its beliefs about the latest
+execution. Upon receiving an intent event, an effector CA resets its list of activations. Upon receiving an execution event, an
+effector CA recomputes its observations and beliefs.
 */
 
 :- module(effector_ca, []).
@@ -81,7 +83,7 @@ init(Options, State) :-
 		effectors(Effectors), Options), 
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain),
-	put_state(State1, [parents - [], action_domain - ActionDomain, actuations - [], observations - [], beliefs - []], State),
+	put_state(State1, [parents - [], observations - [], beliefs - [], action_domain - ActionDomain, actuations - []], State),
 	subscribed_to_events(),
 	published(ca_started, [level(0)]).
 
@@ -127,15 +129,17 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     unsubscribed_from(Parent),
     dec_state(State, parents, Parent, NewState).
 
-handled(event(intent, IntentPayload, Parent), State, State) :-
+handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	option(policy(ParentPolicy), IntentPayload),
 	setof(Directive, (member(Directive, ParentPolicy), can_do(Directive, State)), Directives), 
     [_ | _] = Directives,
 	!,
-	foreach(member(Directive, Directives), message_sent(Parent, can_actuate(IntentPayload, Directive))).
+	foreach(member(Directive, Directives), message_sent(Parent, can_actuate(IntentPayload, Directive))),
+	actuations_reset(State, NewState).
 
-handled(event(intent, IntentPayload, Parent), State, State) :-
-	message_sent(Parent, cannot_actuate(IntentPayload)).
+handled(event(intent, IntentPayload, Parent), State, NewState) :-
+	message_sent(Parent, cannot_actuate(IntentPayload)),
+	actuations_reset(State, NewState).
 
 handled(event(actuation, ActuationPayload, _), State, NewState) :-
 	option(policy(ParentPolicy), ActuationPayload),
@@ -193,6 +197,9 @@ how_to(goal(count(Action, N)), State, Actions) :-
 	maplist(=(Action), Actions).
 
 how_to(_, _, []).
+
+actuations_reset(State, NewState) :-
+	put_state(State, actuations, [], NewState).
 
 observations_from_actuations(State, Observations) :-
 	get_state(State, actuations, Actuations),

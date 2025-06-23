@@ -72,7 +72,7 @@ level_one_ca_started :-
 	forall(member(UmweltCA, Umwelt), message_sent(UmweltCA, adopted)),
 	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
 	
-% Recruit at the given level 2 or more CAs most eager CAs to participate in the umwelt of a CA one level up
+% Recruit 2 or more CAs at the given level eager to participate in the umwelt of a CA one level up
 umwelt_recruited(Level, Umwelt) :-
 	recruits(Level, Recruits),
 	pick_some(Recruits, Umwelt).

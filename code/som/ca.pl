@@ -118,9 +118,9 @@ remember_level(Options, Level) :-
 announce_adoptions(Umwelt) :-
 	forall(member(Child, Umwelt), message_sent(Child, adopted)).
 
-% TODO - predction/1, prediction_error/1, belief_domain/1 etc.
+% TODO - prediction/1, prediction_error/1, belief_domain/1 etc.
 subscribed_to_events :-
-	forall(member(Topic, [ca_started, ca_terminated, prediction, prediction_error, belief_domain, directive, directive_status]),
+	forall(member(Topic, [ca_started, ca_terminated, prediction, prediction_error, belief_domain, policy_domain, directive, directive_status]),
 		subscribed(Topic)).
 
 clock_started(Name, Delay) :-

@@ -36,4 +36,10 @@ about_belief(PredictedBelief, State, Belief) :-
 belief_value(Belief, Value) :-
    Belief =.. [_, _, Value].
 
+same_belief_value(PredictedValue, ActualValue-Tolerance) :-
+    number(PredictedValue),
+    number(ActualValue),
+    !,
+    abs(PredictedValue - ActualValue)=< Tolerance.
+
 same_belief_value(Value, Value).
