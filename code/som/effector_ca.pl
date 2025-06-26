@@ -7,30 +7,45 @@ Same-device effectors are combined in one effector_ca.
 An effector CA receives from its parents intents to carry out policies, responds with readiness for directives within
 its action domain, and then may be told to actuate by telling the body to prepare to execute actions as directed.
 
+Each action taken affects the CA's wellbeing. It reduces the CA's fullness and integrity by 1 (they start at 100), and increases
+its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
+changes to its wellbeing and receives transfers from its parents.
+
 An effector's actions are "atomic" policies (i.e. not involving other CAs's policies); their names are actuations the body can execute.
 
 An effector CA believes or not in the body having last executed a certain number of the effector CA's actions/atomic policies.
 Its beliefs are not normative (neither pleasant or unpleasant). 
 
-An effector CA:
+Messages:
 
-* receives the message `adopted` when added to the umwelt of a CA
+* In
+	* `adopted(Parent)` when added to the umwelt of a CA
 
-* subscribes to events from its parents:
+* Out to a parent
+    * `can_actuate(IntentPayload, Directive)` - responding to intent event - it can actuate a parent's directive
+    * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
+    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+
+* In from a parent
+	*  wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+
+Events:
+
+* In
+	* topic: executed, payload: [] - the actuated policy was executed
+
+* In from parents
 	* topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
 	* topic: actuation, payload: [policy = Policy] - a parent communicates a policy it is about to execute
 	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+	
+* Out
+    * topic: ca_started, payload: [level = Level]
+	* topic: wellbeing_changed, payload: WellbeingPayload  - payload is [fullness = N1, integrity = N2, engagement = N3]
 
-* subscribes to events from any source:
-	* topic: executed, payload: [] - the actuated policy was executed
+Queries:
 
-* sends messages to a parent in response to events received:
-    * intent event -> maybe respond with message `can_actuate(IntentPayload, Directive)` - it can actuate a parent's directive
-    * intent event -> maybe respond with message `cannot_actuate(IntentPayload)` - this effector CA can't do any part of the parent's intended policy
-    * prediction event -> maybe respond with message `prediction_error(PredictionPayload, ActualValue)` - the parent is wrong about how many times an action was executed
-
-* like all CAs, an effector CA responds to queries about
-    * name
+* In
     * level - 0
     * latency - unknown - an effector CA has no set latency
     * belief_domain -> always responds with [predictable{name:count, objects:[Action, ...], values:positive_integer}] 
@@ -47,6 +62,8 @@ Lifecycle
 	* Handles actuation events - tells the body to prepare to actuate, records the actuations
 	* Handles executed events (the body has aggregated and executed actuations) - updates count/2 beliefs
 	* Handles predictions about the last executed actions - sends prediction_error events
+	* Updates its wellbeing from actions executed and publishes wellbeing_changed events
+	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
 
 An effector CA has no fixed latency; its unique timeframe is updated after notice of 
@@ -83,7 +100,8 @@ init(Options, State) :-
 		effectors(Effectors), Options), 
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain),
-	put_state(State1, [parents - [], observations - [], beliefs - [], action_domain - ActionDomain, actuations - []], State),
+	initial_wellbeing(InitialWellbeing),
+	put_state(State1, [parents - [], observations - [], beliefs - [], action_domain - ActionDomain, actuations - [], wellbeing - InitialWellbeing], State),
 	subscribed_to_events(),
 	published(ca_started, [level(0)]).
 
@@ -97,9 +115,6 @@ terminated :-
 	log(warn, effector_ca, "Terminated").
 
 %% Actor interactions
-
-handled(query(name), _, Name) :-
-	self(Name).
 
 handled(query(type), _, effector_ca).
 
@@ -120,6 +135,9 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent, actuation - Parent]),
     acc_state(State, parents, Parent, NewState).
 
+handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
+	wellbeing_itransfered(State, WellbeingTransfer, NewState).
+
 handled(message(Message, Source), State, NewState) :-
 	ca_support: handled(message(Message, Source), State, NewState).
 	 
@@ -130,6 +148,7 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     dec_state(State, parents, Parent, NewState).
 
 handled(event(intent, IntentPayload, Parent), State, NewState) :-
+	well_enough(State),
 	option(policy(ParentPolicy), IntentPayload),
 	setof(Directive, (member(Directive, ParentPolicy), can_do(Directive, State)), Directives), 
     [_ | _] = Directives,
@@ -152,7 +171,12 @@ handled(event(executed, _, _), State, NewState) :-
 	observations_from_actuations(State, Observations),
 	put_state(State, observations, Observations, State1),
 	beliefs_from_observations(State1, Beliefs),
-	put_state(State1, beliefs, Beliefs, NewState).
+	put_state(State1, beliefs, Beliefs, State2),
+	(wellbeing_updated(State2, Wellbeing, NewState) ->
+		published(wellbeing_changed, Wellbeing)
+		;
+		NewState = State2
+	).
 
 handled(event(prediction, PredictionPayload, Parent), State, State) :-
 	option(belief(PredictedBelief), PredictionPayload),
@@ -168,6 +192,8 @@ handled(event(Topic, Payload, Parent), State, NewState) :-
 	ca_support : handled(event(Topic, Payload, Parent), State, NewState).
 
 %%%%
+
+initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
 
 subscribed_to_events() :-
 	all_subscribed([ca_terminated, executed]).
@@ -197,6 +223,44 @@ how_to(goal(count(Action, N)), State, Actions) :-
 	maplist(=(Action), Actions).
 
 how_to(_, _, []).
+
+% Well enough to actuate if both fullness and integrity are > 0
+well_enough(State) :-
+	get_state(State, wellbeing, Wellbeing),
+	option(fullness(Fullness), Wellbeing),
+	Fullness > 0,
+	option(integrity(Integrity), Wellbeing),
+	Integrity > 0.
+
+% Each action executed decrements fullness by 1 (energy spent),
+% integrity by 1 (wear and tear), and increments engagement by 1.
+% Fails if not updated
+wellbeing_updated(State, UpdatedWellbeing, NewState) :-
+	get_state(State, wellbeing, Wellbeing),
+	option(fullness(Fullness), Wellbeing),
+	option(integrity(Integrity), Wellbeing),
+	option(engagement(Engagement), Wellbeing),
+	get_state(State, observations, Observations),
+	length(Observations, Count),
+	Count > 0,
+	Fullness1 is max(Fullness - Count, 0),
+	Integrity1 is max(Integrity - Count, 0),
+	Engagement1 is min(Engagement + Count, 100),
+	UpdatedWellbeing = [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1],
+	put_state(State, wellbeing, UpdatedWellbeing, NewState).
+
+wellbeing_itransfered(State, WellbeingTransfer, NewState) :-
+    get_state(State, wellbeing, Wellbeing),
+	option(fullness(Fullness), Wellbeing),
+	option(integrity(Integrity), Wellbeing),
+	option(engagement(Engagement), Wellbeing),
+	option(fullness(FullnessTransfer), WellbeingTransfer),
+	option(integrity(IntegrityTransfer), WellbeingTransfer),
+	option(engagement(EngagementTransfer), WellbeingTransfer),
+    Fullness1 is min(100, Fullness + FullnessTransfer),
+    Integrity1 is min(100, Integrity + IntegrityTransfer),
+    Engagement1 is min(100, Engagement + EngagementTransfer),
+	put_state(State, wellbeing, [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1], NewState).
 
 actuations_reset(State, NewState) :-
 	put_state(State, actuations, [], NewState).

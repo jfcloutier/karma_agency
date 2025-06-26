@@ -20,7 +20,6 @@ A sensor CA:
     * prediction event -> maybe respond with message `prediction_error(PredictionPayload, ActualValue)` - the parent is wrong about the sensed value
 
 * like all CAs, a sensor CA responds to queries about
-    * name
     * level - 0
     * latency - unknown - a sensor CA has no set latency
     * belief_domains -> responds with [predictable{name:sensed, objects:[], values:[]}],
@@ -78,9 +77,6 @@ signal_processed(control(stopped)) :-
 
 terminated :-
     log(warn, sensor_ca, "Terminated").
-
-handled(query(name), _, Name) :-
-    self(Name).
 
 handled(query(type), _, sensor_ca).
 

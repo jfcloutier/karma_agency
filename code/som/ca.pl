@@ -1,42 +1,49 @@
 /*
 Cognition actor (CA)
 
-Events:
-
-* In and out
-  * topic: ca_started, payload: level(Level)
-  * topic: ca_terminated, payload: level(Level)
-  * topic: prediction, payload: Belief = belief(PropertyName, Value) | belief(RelationName, ObjectName1, ObjectName2)
-  * topic: prediction_error, payload: [predicted - Belief, actual - Belief, confidence - Float]
-  * topic: directive, payload: goal(BeliefName, Impact) | command(PolicyName) = Directive
-  * topic: directive_status, payload: directive_report(Directive, rejected | ready | executed_as(PolicyName))
-  * topic: belief_domains_changed
-* Out
-  * topic: causal_theory_wanted, payload: [pinned_predicates - PinnedPredicated, pinned_objects - PinnedObjects]
-  * topic: wellbeing_changed, payload: [fullness - N1, integrity - N2, engagement - N3]
-
 Messages:
 
-* In and Out
-  * adopted
-  * wellbeing_exchange_request([fullness - N1, integrity - N2, engagement - N3])
-  * wellbeing_exchanged([fullness - N1, integrity - N2, engagement - N3])
+* In
+	* `adopted(Parent)` - when added to the umwelt of a CA one level up
+	* `causal_theory_found(Theory)` - when the Apperception Engine has found a causal theory for the CA
+
+* In and out
+	* `prediction_error(PredictionPayload, ActualValue)`
+	*  wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+
+Events:
+
+* In from parents, out
+  * topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
+  * topic: actuation, payload: [policy = Policy] - a parent communicates a policy it is about to execute
+  * topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+
+* In from umwelt, out
+  * topic: belief_domain_changed, payload: BeliefDomain
+  * topic: policy_domain_changed, payload PolicyDomain
+  * topic: wellbeing_changed, payload: WellbeingPayload
+
+* Out  
+  * topic: ca_started, payload: [level = Level]
+  * topic: ca_terminated, payload: [level = Level]
+  * topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
+  
+* In and out
+  * topic: executed, payload: [] - the actuated policy was executed
+
+* Queries:
 
 * In
-  * causal_theory_found(Theory)
-
-* Queries received:
-  * level - Integer > 0
-  * umwelt - CA names
-  * belief_domains - [BeliefDomain, ...]
-  * wellbeing_counts - [fullness - N1, integrity - N2, engagement - N3]
+  * level -> Integer > 0
+  * umwelt -> CA names
+  * belief_domains -> [BeliefDomain, ...]
+  * wellbeing -> WellbeingPayload
     
 Thread locals:
     * level - 1..? - the level of the CAs it is responsible for
     * timer - the frame timer
 
 State:
-    * causal_theory - the CA's causal theory (can be absent)
     * parents - parent CAs
     * umwelt - child CAs
 	* buffered_events - events received and suspended while ending
@@ -74,7 +81,7 @@ name_from_level(Level, Name) :-
 	atomic_list_concat([ca, level, Level, id, ID], ":", Name).
 
 %! latency(+Level, -Latency) is det
-% The time allocated to a cognition actor to complete a time frame given its level in the SOM
+% The time in seconds allocated to a cognition actor to complete a time frame given its level in the SOM
 latency(Level, Latency) :-
 	Latency is (2**Level).
 
