@@ -12,11 +12,13 @@ It integrates services and actors:
 % Start karma_world server then karma_body server
 [load].
 [agency(agent), actors(supervisor), utils(logger), actors(actor_utils), actors(pubsub)].
-set_log_level(info).
+set_log_level(debug).
 agent:started('localhost:4000').
 threads.
 query_answered(som, children, SOMChildren).
-query_answered('effector:tacho_motor-outA', action_domain, Answer).
+query_answered('effector:tacho_motor-outA', policy_domain, Answer).
+query_answered('sensor:ultrasonic-in4:distance', belief_domain, Answer).
+
 message_sent('effector:tacho_motor-outA', actuated(spin)).
 message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).
 

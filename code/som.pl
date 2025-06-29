@@ -26,8 +26,8 @@ started(Sensors, Effectors) :-
 	supervisor : started(agency,
 		[children(Children)]),
 	sensor_cas_started(Sensors),
-	effector_cas_started(Effectors),
-	level_one_ca_started.
+	effector_cas_started(Effectors).
+	% level_one_ca_started.
 
 % Starting sensor and effector CAs
 sensor_cas_started([]).
@@ -60,7 +60,7 @@ effector_cas_started([Effector|Others]) :-
 	subtract(Others, Twins, Rest),
 	effector_cas_started(Rest).
 
-% Create the first CA capable of mitosis. Give it an umwelt
+% Create the first CA capable of mitosis (it divides fullness). Give it an umwelt.
 level_one_ca_started :-
 	ca : name_from_level(1, CA),
 	umwelt_recruited(0, Umwelt),
