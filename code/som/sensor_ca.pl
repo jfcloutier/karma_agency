@@ -101,6 +101,9 @@ handled(query(belief_domain), State, [predictable{name:sensed, objects:[SenseNam
 
 handled(query(policy_domain), _, []).
 
+handled(query(reading), State, Reading) :-
+    sense_read(State, Reading).
+
 handled(query(Query), State, Answer) :-
     ca_support : handled(query(Query), State, Answer).
 
@@ -143,7 +146,7 @@ handled(message(Message, Source), State, NewState) :-
 initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
 
 subscribed_to_events() :-
-	all_subscribed([ca_terminated, executed]).
+	all_subscribed([ca_terminated, prediction]).
 
 sense_name(State, SenseName) :-
     get_state(State, sensor, Sensor),

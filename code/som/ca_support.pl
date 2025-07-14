@@ -5,6 +5,7 @@ Cognition Actor support library.
 :- module(ca_support, [from_parent/2, about_belief/3, belief_value/2, same_belief_value/2, get_wellbeing/4, put_wellbeing/3, wellbeing_transfered/3, well_enough/1]).
 
 :- use_module(actors(actor_utils)).
+:- use_module(actors(pubsub)).
 :- use_module(utils(logger)).
 
 handled(message(Message, Source), State, State) :-

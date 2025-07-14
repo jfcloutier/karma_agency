@@ -107,3 +107,17 @@ level_from_name(CA, Level) :-
 
 ca_module_from_name(CA, Module) :-
 	atomic_list_concat([Module|_], ":", CA).
+
+sensor_cas(SensorCAs) :-
+    query_answered(som, children, SOMChildren),
+    findall(CA,
+		(member(child(worker, CA),
+			SOMChildren), query_answered(CA, type, sensor_ca)),
+		SensorCAs).
+
+effector_cas(EffectorCAs) :-
+    query_answered(som, children, SOMChildren),
+    findall(CA,
+		(member(child(worker, CA),
+			SOMChildren), query_answered(CA, type, effector_ca)),
+		EffectorCAs).
