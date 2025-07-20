@@ -132,6 +132,7 @@ handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
 
 handled(message(adopted, Parent), State, NewState) :-
+	\+ from_parent(Parent, State),
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent, actuation - Parent]),
     acc_state(State, parents, Parent, NewState).
 
