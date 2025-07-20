@@ -41,6 +41,11 @@ test(sensor_reading) :-
 	Now >= Timestamp.
 
 test(inaccurate_prediction) :-
+	SensorCA = 'sensor:touch-in1:contact',
+	message_sent(SensorCA, adopted),
+	query_answered(SensorCA, parents, Parents),
+	thread_self(Self),
+	assertion(member(Self, Parents)),
 	published(prediction, [belief = sensed(contact, pressed)]),
 	thread_get_message(message(prediction_error(Prediction, ActualValue-_), From)),
 	format("@@@ Received prediction error from ~w to prediction ~p with actual value ~p~n", [From, Prediction, ActualValue]),
@@ -50,6 +55,11 @@ test(inaccurate_prediction) :-
 	assertion(ActualValue == released).
 
 test(belief_acquired) :-
+	SensorCA = 'sensor:light-in2:color',
+	message_sent(SensorCA, adopted),
+	query_answered(SensorCA, parents, Parents),
+	thread_self(Self),
+	assertion(member(Self, Parents)),
 	published(prediction, [belief = sensed(color, red)]),
 	thread_get_message(message(prediction_error(Prediction, ActualValue-_), From)),
 	format("@@@ Received prediction error from ~w to prediction ~p with actual value ~p~n", [From, Prediction, ActualValue]),
@@ -60,24 +70,42 @@ test(belief_acquired) :-
 	assertion(unifiable(Belief, sensed(color, _-_), _)).
 
 test(wellbeing_updated) :-
-	query_answered('sensor:light-in2:color', state, State),
+	% Pick a sensor CA and establish self as its parent
+	SensorCA = 'sensor:light-in2:color',
+	subscribed(wellbeing_changed),
+	message_sent(SensorCA, adopted),
+	query_answered(SensorCA, state, State),
 	format("@@@ State is ~p~n", [State]),
 	% wellbeing:[fullness=99,integrity=99,engagement=1]}
 	get_state(State, wellbeing, Wellbeing),
 	option(fullness(Fullness), Wellbeing),
 	option(integrity(Integrity), Wellbeing),
 	option(engagement(Engagement), Wellbeing),
-	published(prediction, [belief = sensed(color, green)]),
-	thread_get_message(message(prediction_error(_, Color-_), _)),
-	query_answered('sensor:light-in2:color', state, State1),
-	format("@@@ Updated state is ~p~n", [State]),
+	% Get the sensor CA to read its sensor and message back a prediction error
+	Prediction = [belief = sensed(color, green)],
+	published(prediction, Prediction),
+	!,
+	thread_get_message(message(prediction_error(Prediction, Color-_), Source)),
+	format("@@@ Got prediction error ~w from ~w~n", [Color, Source]),
+	% Check that the sensor CA published its update wellbeing to its parents
+	thread_get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
+	format("@@@ Updated wellbeing is ~p~n", [UpdatedWellbeing]),
+	% Verify that the wellbeing has changed
+	query_answered(SensorCA, state, State1),
+	format("@@@ Updated state is ~p~n", [State1]),
 	get_state(State1, wellbeing, Wellbeing1),
 	option(fullness(Fullness1), Wellbeing1),
 	option(integrity(Integrity1), Wellbeing1),
 	option(engagement(Engagement1), Wellbeing1),
 	(Color == green -> assertion(Fullness1 >= Fullness); assertion(Fullness1 < Fullness)),
 	assertion(Integrity1 < Integrity),
-	assertion(Engagement1 > Engagement).
+	assertion(Engagement1 > Engagement),
+	option(fullness(UpdatedFullness), UpdatedWellbeing),
+	option(integrity(UpdatedIntegrity), UpdatedWellbeing),
+	option(engagement(UpdatedEngagement), UpdatedWellbeing),
+	assertion(UpdatedFullness == Fullness1),
+	assertion(UpdatedIntegrity == Integrity1),
+	assertion(UpdatedEngagement == Engagement1).
 
 :- end_tests(sensor_ca).
 

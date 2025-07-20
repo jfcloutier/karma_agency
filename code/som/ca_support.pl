@@ -11,6 +11,9 @@ Cognition Actor support library.
 handled(message(Message, Source), State, State) :-
 	log(debug, ca_support, "~@ is NOT handling message ~p from ~w", [self, Message, Source]).
 
+handled(query(parents), State, Parents) :-
+    get_state(State, parents, Parents).
+
 % FOR DEBUGGING ONLY
 handled(query(state), State, State).
 
@@ -55,6 +58,7 @@ get_wellbeing(State, Fullness, Integrity, Engagement) :-
 	option(engagement(Engagement), Wellbeing).
 
 put_wellbeing(State, UpdatedWellbeing, NewState) :-
+    log(info, ca_support, "~@ put wellbeing ~p", [self, UpdatedWellbeing]),
     published(wellbeing_changed, UpdatedWellbeing),
 	put_state(State, wellbeing, UpdatedWellbeing, NewState).
 

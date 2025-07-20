@@ -107,9 +107,10 @@ handled(query(reading), State, Reading) :-
 handled(query(Query), State, Answer) :-
     ca_support : handled(query(Query), State, Answer).
 
-% The sensor CA is adopted
+% The sensor CA is adopted (fail if already adopted by this parent)
 handled(message(adopted, Parent), State, NewState) :-
-    all_subscribed([ca_terminated - Parent, prediction - Parent]),
+    \+ from_parent(Parent, State),
+    all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
 handled(message(Message, Source), State, NewState) :-
@@ -146,7 +147,7 @@ handled(message(Message, Source), State, NewState) :-
 initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
 
 subscribed_to_events() :-
-	all_subscribed([ca_terminated, prediction]).
+	all_subscribed([ca_terminated]).
 
 sense_name(State, SenseName) :-
     get_state(State, sensor, Sensor),
@@ -164,9 +165,10 @@ beliefs_updated(PredictedBelief, State, NewState) :-
     PredictedBelief =.. [sensed, SenseName, _],
     sense_name(State, SenseName),
     sense_read(State, reading(Value, Tolerance, _)),
-    updated_wellbeing(State, SenseName, Value, UpdatedWellbeing),
-    put_wellbeing(State, UpdatedWellbeing, State1),
-    put_state(State1, beliefs, [sensed(SenseName, Value-Tolerance)],  NewState).
+    !,
+    wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
+    put_state(State, beliefs, [sensed(SenseName, Value-Tolerance)],  State1),
+    put_wellbeing(State1, UpdatedWellbeing, NewState).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     sense_url(State, Url),
@@ -174,7 +176,7 @@ sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     get_time(Timestamp).
 
 % Update wellbeing from reading.
-updated_wellbeing(State, SenseName, Value, UpdatedWellbeing) :-
+wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     delta_fullness(SenseName, Value, DeltaFullness),
     delta_integrity(SenseName, Value, DeltaIntegrity),
     delta_engagement(SenseName, Value, DeltaEngagement),
