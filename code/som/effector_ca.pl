@@ -9,7 +9,7 @@ its action domain, and then may be told to actuate by telling the body to prepar
 
 Each action taken affects the CA's wellbeing. It reduces the CA's fullness and integrity by 1 (they start at 100), and increases
 its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
-changes to its wellbeing and receives transfers from its parents.
+changes to its wellbeing and effects transfers to and from its parents.
 
 An effector's actions are "atomic" policies (i.e. not involving other CAs's policies); their names are actuations the body can execute.
 
@@ -122,8 +122,9 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, [predictable{name:count, objects:ActionDomain, values:positive_integer}]) :-
-	get_state(State, action_domain, ActionDomain).
+handled(query(belief_domain), State, [Predictable]) :-
+	get_state(State, action_domain, ActionDomain),
+	Predictable = predictable{name:count, objects:ActionDomain, values:positive_integer}.
 
 handled(query(policy_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
@@ -132,6 +133,7 @@ handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
 
 handled(message(adopted, Parent), State, NewState) :-
+	% Ignore if adopter is already a parent
 	\+ from_parent(Parent, State),
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent, actuation - Parent]),
     acc_state(State, parents, Parent, NewState).

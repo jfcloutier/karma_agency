@@ -31,9 +31,9 @@ test(all_sensor_cas_are_at_level_0) :-
 	assertion(forall(member(SensorCA, SensorCAs), query_answered(SensorCA, level, 0))).
 
 test(sensor_reading) :-
+	SensorCA = 'sensor:light-in2:reflected',
 	query_answered(som, children, SOMChildren),
 	member(child(worker, SensorCA), SOMChildren),
-	SensorCA = 'sensor:light-in2:reflected',
 	query_answered(SensorCA, reading, reading(Value, Tolerance, Timestamp)),
 	assertion(number(Value)),
 	assertion(number(Tolerance)),
