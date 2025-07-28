@@ -81,4 +81,5 @@ well_enough(State) :-
 	option(fullness(Fullness), Wellbeing),
 	Fullness > 0,
 	option(integrity(Integrity), Wellbeing),
-	Integrity > 0.
+	Integrity > 0,
+    log(debug, ca_support, "~@ is well enough", [self]).

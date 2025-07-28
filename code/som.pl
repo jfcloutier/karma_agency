@@ -14,7 +14,7 @@ forming a hierarchy.
 
 %! started(+Sensors, +Effectors) is det
 % the SOM is initiated
-started(Sensors, Effectors) :-
+started(Sensors, Effectors, BodyHost) :-
 	log(info, som, "Starting the SOM"),
 	Children = [
 		% Will start the actors' pubsub
@@ -24,7 +24,7 @@ started(Sensors, Effectors) :-
 			[restarted(permanent)])],
 	% Start agency - the top supervisor
 	supervisor : started(agency,
-		[children(Children)]),
+		[children(Children), body_host(BodyHost)]),
 	sensor_cas_started(Sensors),
 	effector_cas_started(Effectors).
 	% level_one_ca_started.

@@ -22,11 +22,13 @@ Messages:
 	* `adopted(Parent)` when added to the umwelt of a CA
 
 * Out to a parent
-    * `can_actuate(IntentPayload, Directive)` - responding to intent event - it can actuate a parent's directive
+    * `can_actuate(IntentPayload, Directives)` - responding to intent event - it can actuate these directives
     * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
+	* `executable(ActuationPayload, Directives)` responding to actuation event - this effector CA is ready to execute these directives
     * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
 
 * In from a parent
+    *  execute, payload: [] - execute the current actuations
 	*  wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
 Events:
@@ -138,6 +140,19 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent, actuation - Parent]),
     acc_state(State, parents, Parent, NewState).
 
+handled(message(execute, Parent), State, NewState) :-
+	actions_executed(),
+	observations_from_actuations(State, Observations),
+	put_state(State, observations, Observations, State1),
+	beliefs_from_observations(State1, Beliefs),
+	put_state(State1, beliefs, Beliefs, State2),
+	(wellbeing_changed(State2, UpdatedWellbeing) ->
+		put_wellbeing(State2, UpdatedWellbeing, NewState)
+		;
+		NewState = State2
+	),
+	message_sent(Parent, executed).
+
 handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
 	wellbeing_transfered(State, WellbeingTransfer, NewState).
 
@@ -156,30 +171,22 @@ handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	setof(Directive, (member(Directive, ParentPolicy), can_do(Directive, State)), Directives), 
     [_ | _] = Directives,
 	!,
-	foreach(member(Directive, Directives), message_sent(Parent, can_actuate(IntentPayload, Directive))),
+	log(info, effector_ca, "~@ can actuate directives ~p from intent ~p", [self, Directives, IntentPayload]),
+	message_sent(Parent, can_actuate(IntentPayload, Directives)),
 	actuations_reset(State, NewState).
 
 handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	message_sent(Parent, cannot_actuate(IntentPayload)),
 	actuations_reset(State, NewState).
 
-handled(event(actuation, ActuationPayload, _), State, NewState) :-
+handled(event(actuation, ActuationPayload, Parent), State, NewState) :-
 	option(policy(ParentPolicy), ActuationPayload),
-	bagof(ActionsDirected, (member(Directive, ParentPolicy), how_to(Directive, State, ActionsDirected)), Actions),
-	flatten(Actions, AllActions),
-	foreach(member(Action, AllActions), actuated(State, Action)), 
+	directed_actions(ParentPolicy, State, AllActions),
+	log(info, effector_ca, "~@ is actuating actions ~p from policy ~p", [self, AllActions, ParentPolicy]),
+	foreach(member(Action, AllActions), body_actuated(State, Action)),
+	bagof(command(Action), (member(Action, AllActions)), Commands),
+	message_sent(Parent, executable(ActuationPayload, Commands)),
 	acc_state(State, actuations, AllActions, NewState).
-
-handled(event(executed, _, _), State, NewState) :-
-	observations_from_actuations(State, Observations),
-	put_state(State, observations, Observations, State1),
-	beliefs_from_observations(State1, Beliefs),
-	put_state(State1, beliefs, Beliefs, State2),
-	(wellbeing_changed(State2, UpdatedWellbeing) ->
-		put_wellbeing(State2, UpdatedWellbeing, NewState)
-		;
-		NewState = State2
-	).
 
 handled(event(prediction, PredictionPayload, Parent), State, State) :-
 	option(belief(PredictedBelief), PredictionPayload),
@@ -214,6 +221,13 @@ can_do(goal(count(Action, N)), State) :-
 	N > 0,
 	get_state(State, action_domain, ActionDomain),
 	member(Action, ActionDomain).
+
+directed_actions([], _, []).
+
+directed_actions([Directive | OtherDirectives], State, AllActions) :-
+	how_to(Directive, State, Actions),
+	directed_actions(OtherDirectives, State, OtherActions),
+	flatten([Actions | OtherActions], AllActions).
 
 how_to(command(Action), State, [Action]) :-
 	can_do(command(Action), State), !.
@@ -260,6 +274,11 @@ action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
 
 % Tell the body to prepare to carry out this actuation (together with possibly others)
-actuated(State, Action) :-
+body_actuated(State, Action) :-
 	action_url(State, Action, ActionUrl), 
-	body : actuated(ActionUrl).
+	body : actuated(ActionUrl),
+	log(debug, effector_ca, "~@ asked body to actuate ~w", [self, Action]).
+
+actions_executed :-
+	query_answered(agency, option(body_host), Host),
+	body : actions_executed(Host).

@@ -47,8 +47,7 @@ test(inaccurate_prediction) :-
 	thread_self(Self),
 	assertion(member(Self, Parents)),
 	published(prediction, [belief = sensed(contact, pressed)]),
-	thread_get_message(message(prediction_error(Prediction, ActualValue-_), From)),
-	format("@@@ Received prediction error from ~w to prediction ~p with actual value ~p~n", [From, Prediction, ActualValue]),
+	get_message(message(prediction_error(Prediction, ActualValue-_), From)),
 	atomic_list_concat(Atoms, :, From),
 	assertion(member(sensor, Atoms)),
 	assertion(member(contact, Atoms)),
@@ -61,11 +60,9 @@ test(belief_acquired) :-
 	thread_self(Self),
 	assertion(member(Self, Parents)),
 	published(prediction, [belief = sensed(color, red)]),
-	thread_get_message(message(prediction_error(Prediction, ActualValue-_), From)),
-	format("@@@ Received prediction error from ~w to prediction ~p with actual value ~p~n", [From, Prediction, ActualValue]),
+	get_message(message(prediction_error(Prediction, ActualValue-_), From)),
 	query_answered(From, state, State),
 	% put_state(State1, beliefs, [sensed(SenseName, Value-Tolerance)],  NewState).
-	format("@@@ State is ~p~n", [State]),
 	get_state(State, beliefs, [Belief]),
 	assertion(unifiable(Belief, sensed(color, _-_), _)).
 
@@ -75,7 +72,6 @@ test(wellbeing_updated) :-
 	subscribed(wellbeing_changed),
 	message_sent(SensorCA, adopted),
 	query_answered(SensorCA, state, State),
-	format("@@@ State is ~p~n", [State]),
 	% wellbeing:[fullness=99,integrity=99,engagement=1]}
 	get_state(State, wellbeing, Wellbeing),
 	option(fullness(Fullness), Wellbeing),
@@ -85,14 +81,11 @@ test(wellbeing_updated) :-
 	Prediction = [belief = sensed(color, green)],
 	published(prediction, Prediction),
 	!,
-	thread_get_message(message(prediction_error(Prediction, Color-_), Source)),
-	format("@@@ Got prediction error ~w from ~w~n", [Color, Source]),
+	get_message(message(prediction_error(Prediction, Color-_), Source)),
 	% Check that the sensor CA published its update wellbeing to its parents
-	thread_get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
-	format("@@@ Updated wellbeing is ~p~n", [UpdatedWellbeing]),
+	get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
 	% Verify that the wellbeing has changed
 	query_answered(SensorCA, state, State1),
-	format("@@@ Updated state is ~p~n", [State1]),
 	get_state(State1, wellbeing, Wellbeing1),
 	option(fullness(Fullness1), Wellbeing1),
 	option(integrity(Integrity1), Wellbeing1),
@@ -108,9 +101,3 @@ test(wellbeing_updated) :-
 	assertion(UpdatedEngagement == Engagement1).
 
 :- end_tests(sensor_ca).
-
-init_som :-
-	agent : started('localhost:4000').
-
-terminate_som :-
-	supervisor : stopped(agency, 60).
