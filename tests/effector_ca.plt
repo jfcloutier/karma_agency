@@ -7,6 +7,8 @@ run_tests(effector_ca).
 
 :- begin_tests(effector_ca, [setup(init_som), cleanup(terminate_som)]).
 
+:- use_module(test_helper).
+
 :- use_module(utils(logger)).
 :- use_module(actors(supervisor)).
 :- use_module(actors(actor_utils)).
@@ -68,19 +70,52 @@ test(intent_command_actuation_execution) :-
     get_message(message(executed, EffectorCA)),
     % wellbeing updated
     query_answered(EffectorCA, state, FinalState),
-    assertion(wellbeing_updated_from_acting(InitialState, FinalState)).
+    assert_wellbeing_changed(InitialState, FinalState, [fullness = <, integrity = <, engagement = >]).
 
-% Test effecting a goal
+test(intent_goal_actuation_execution) :-
+    EffectorCA = 'effector:tacho_motor-outA',
+    query_answered(EffectorCA, state, InitialState),
+    % adopt
+    message_sent(EffectorCA, adopted),
+	query_answered(EffectorCA, parents, Parents),
+	thread_self(Self),
+	assertion(member(Self, Parents)),
+    % intent - the CA informs of the subset of intended directives that can be actuated 
+    IntentPayload = [policy = [goal(count(spin, 2))]],
+    published(intent, IntentPayload),
+    get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
+    assertion(member(goal(count(spin, 2)), Directives)),
+    % actuate - prepare to carry out executable actions that (partially) realize intent
+    ActuationPayload = [policy = Directives],
+    published(actuation, ActuationPayload),
+    get_message(message(executable(ActuationPayload, Commands), EffectorCA)),
+    assertion([command(spin), command(spin)] == Commands),
+    % execute 
+    message_sent(EffectorCA, execute),
+    get_message(message(executed, EffectorCA)),
+    % wellbeing updated
+    query_answered(EffectorCA, state, FinalState),
+    assert_wellbeing_changed(InitialState, FinalState, [fullness = <, integrity = <, engagement = >]).
 
-wellbeing_updated_from_acting(State, State1) :-
-	get_state(State, wellbeing, Wellbeing),
-	option(fullness(Fullness), Wellbeing),
-	option(integrity(Integrity), Wellbeing),
-	option(engagement(Engagement), Wellbeing),
-    get_state(State1, wellbeing, Wellbeing1),
-	option(fullness(Fullness1), Wellbeing1),
-	option(integrity(Integrity1), Wellbeing1),
-	option(engagement(Engagement1), Wellbeing1),
-    assertion(Fullness > Fullness1),
-	assertion(Integrity > Integrity1),
-	assertion(Engagement < Engagement1).
+test(execution_prediction) :-
+    EffectorCA = 'effector:tacho_motor-outA',
+    message_sent(EffectorCA, adopted),
+    query_answered(EffectorCA, parents, Parents),
+	thread_self(Self),
+	assertion(member(Self, Parents)),
+    IntentPayload = [policy = [command(spin), command(reverse_spin), command(jump)]],
+    published(intent, IntentPayload),
+    get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
+    ActuationPayload = [policy = Directives],
+    published(actuation, ActuationPayload),
+    get_message(message(executable(ActuationPayload, _), EffectorCA)),
+    message_sent(EffectorCA, execute),
+    get_message(message(executed, EffectorCA)),
+    % incorrectly predict belief from execution
+    Prediction1 = [belief = count(spin, 2)],
+	published(prediction, Prediction1),
+	get_message(message(prediction_error(Prediction1, 1), EffectorCA)),
+    % correctly predict belief
+    Prediction2 = [belief = count(reverse_spin, 1)],
+	published(prediction, Prediction2),
+	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 2).

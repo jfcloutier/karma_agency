@@ -7,6 +7,8 @@ run_tests(sensor_ca).
 
 :- begin_tests(sensor_ca, [setup(init_som), cleanup(terminate_som)]).
 
+:- use_module(test_helper).
+
 :- use_module(utils(logger)).
 :- use_module(actors(supervisor)).
 :- use_module(actors(actor_utils)).
@@ -47,7 +49,7 @@ test(inaccurate_prediction) :-
 	thread_self(Self),
 	assertion(member(Self, Parents)),
 	published(prediction, [belief = sensed(contact, pressed)]),
-	get_message(message(prediction_error(Prediction, ActualValue-_), From)),
+	get_message(message(prediction_error(_, ActualValue-_), From)),
 	atomic_list_concat(Atoms, :, From),
 	assertion(member(sensor, Atoms)),
 	assertion(member(contact, Atoms)),
@@ -59,8 +61,10 @@ test(belief_acquired) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	published(prediction, [belief = sensed(color, red)]),
+	Prediction = [belief = sensed(color, red)],
+	published(prediction, Prediction),
 	get_message(message(prediction_error(Prediction, ActualValue-_), From)),
+	assertion(ActualValue \== red),
 	query_answered(From, state, State),
 	% put_state(State1, beliefs, [sensed(SenseName, Value-Tolerance)],  NewState).
 	get_state(State, beliefs, [Belief]),
@@ -72,27 +76,24 @@ test(wellbeing_updated) :-
 	subscribed(wellbeing_changed),
 	message_sent(SensorCA, adopted),
 	query_answered(SensorCA, state, State),
-	% wellbeing:[fullness=99,integrity=99,engagement=1]}
-	get_state(State, wellbeing, Wellbeing),
-	option(fullness(Fullness), Wellbeing),
-	option(integrity(Integrity), Wellbeing),
-	option(engagement(Engagement), Wellbeing),
 	% Get the sensor CA to read its sensor and message back a prediction error
 	Prediction = [belief = sensed(color, green)],
 	published(prediction, Prediction),
 	!,
-	get_message(message(prediction_error(Prediction, Color-_), Source)),
+	get_message(message(prediction_error(Prediction, Color-_), SensorCA)),
 	% Check that the sensor CA published its update wellbeing to its parents
 	get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
-	% Verify that the wellbeing has changed
+	% Verify that the wellbeing has changed as anticipated
 	query_answered(SensorCA, state, State1),
+	(Color == green -> 
+		assert_wellbeing_changed(State, State1, [fullness = <=, integrity = <, engagement = >])
+		;
+		assert_wellbeing_changed(State, State1, [fullness = <, integrity = <, engagement = >])),
+	% The communicated wellbeing update corresponds to the current state's wellbeing
 	get_state(State1, wellbeing, Wellbeing1),
 	option(fullness(Fullness1), Wellbeing1),
 	option(integrity(Integrity1), Wellbeing1),
 	option(engagement(Engagement1), Wellbeing1),
-	(Color == green -> assertion(Fullness1 >= Fullness); assertion(Fullness1 < Fullness)),
-	assertion(Integrity1 < Integrity),
-	assertion(Engagement1 > Engagement),
 	option(fullness(UpdatedFullness), UpdatedWellbeing),
 	option(integrity(UpdatedIntegrity), UpdatedWellbeing),
 	option(engagement(UpdatedEngagement), UpdatedWellbeing),
