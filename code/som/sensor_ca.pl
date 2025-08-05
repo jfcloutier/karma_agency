@@ -185,7 +185,10 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     UpdatedFullness is Fullness + DeltaFullness - 1,
     UpdatedIntegrity is Integrity + DeltaIntegrity - 1,
     UpdatedEngagement is Engagement + DeltaEngagement + 1,
-    UpdatedWellbeing = [fullness = UpdatedFullness, integrity = UpdatedIntegrity, engagement = UpdatedEngagement].
+    UpdatedWellbeing = [fullness = UpdatedFullness, integrity = UpdatedIntegrity, engagement = UpdatedEngagement],
+    published(wellbeing_changed, UpdatedWellbeing).
+
+
 
 delta_fullness(color, green, 10).
 delta_fullness(_, _, 0).

@@ -24,21 +24,20 @@ Messages:
 * Out to a parent
     * `can_actuate(IntentPayload, Directives)` - responding to intent event - it can actuate these directives
     * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
-	* `executable(ActuationPayload, Directives)` responding to actuation event - this effector CA is ready to execute these directives
+	* `executable(ActuationPayload, Directives)` responding to actuation message - the effector CA has primed the body for execution
     * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
 
 * In from a parent
-    *  execute, payload: [] - execute the current actuations
-	*  wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+    * actuation(DirectivesPayload) - a parent communicates the actuations it wants the effector CA to execute
+	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
 Events:
 
 * In
-	* topic: executed, payload: [] - the actuated policy was executed
+	* topic: execute, payload: [] - execution is triggered
 
 * In from parents
 	* topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
-	* topic: actuation, payload: [policy = Policy] - a parent communicates a policy it is about to execute
 	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
 	
 * Out
@@ -61,9 +60,9 @@ Lifecycle
     * Queried for its policy domain (what policies - actions -  it can actuate)
 	* Queried for its belief domains (only believes in counts of actions executed)
     * Handles intent events - sends can_actuate/2 or cannot_actuate/2 events in response
-	* Handles actuation events - tells the body to prepare to actuate, records the actuations
-	* Handles executed events (the body has aggregated and executed actuations) - updates count/2 beliefs
-	* Handles predictions about the last executed actions - sends prediction_error events
+	* Handles actuation messages - tells the body to prepare to actuate, records the actuations
+	* Handles executed event (the body has aggregated and executed actuations) - updates count/2 beliefs
+	* Handles predictions events from parents about the last executed actions - sends prediction_error events
 	* Updates its wellbeing from actions executed and publishes wellbeing_changed events
 	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
@@ -137,33 +136,29 @@ handled(query(Query), State, Answer) :-
 handled(message(adopted, Parent), State, NewState) :-
 	% Ignore if adopter is already a parent
 	\+ from_parent(Parent, State),
-    all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent, actuation - Parent]),
+    all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-handled(message(execute, Parent), State, NewState) :-
-	actions_executed(),
-	observations_from_actuations(State, Observations),
-	put_state(State, observations, Observations, State1),
-	beliefs_from_observations(State1, Beliefs),
-	put_state(State1, beliefs, Beliefs, State2),
-	(wellbeing_changed(State2, UpdatedWellbeing) ->
-		put_wellbeing(State2, UpdatedWellbeing, NewState)
-		;
-		NewState = State2
-	),
-	message_sent(Parent, executed).
+handled(message(actuation(ActuationPayload), Parent), State, NewState) :-
+	option(policy(ParentPolicy), ActuationPayload),
+	directed_actions(ParentPolicy, State, AllActions),
+	log(info, effector_ca, "~@ is actuating actions ~p from policy ~p", [self, AllActions, ParentPolicy]),
+	foreach(member(Action, AllActions), body_actuated(State, Action)),
+	bagof(command(Action), (member(Action, AllActions)), Commands),
+	message_sent(Parent, executable(ActuationPayload, Commands)),
+	acc_state(State, actuations, AllActions, NewState).
 
 handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
-	wellbeing_transfered(State, WellbeingTransfer, NewState).
+	wellbeing_transfered(State, WellbeingTransfer, NewState).	
 
 handled(message(Message, Source), State, NewState) :-
-	ca_support: handled(message(Message, Source), State, NewState).
+	ca_support: handled(message(Message, Source), State, NewState).	
 	 
 handled(event(ca_terminated, _, Parent), State, NewState) :-
     get_state(State, parents, Parents),
     member(Parent, Parents),
     unsubscribed_from(Parent),
-    dec_state(State, parents, Parent, NewState).
+    dec_state(State, parents, Parent, NewState).	
 
 handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	well_enough(State),
@@ -173,21 +168,24 @@ handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	!,
 	log(info, effector_ca, "~@ can actuate directives ~p from intent ~p", [self, Directives, IntentPayload]),
 	message_sent(Parent, can_actuate(IntentPayload, Directives)),
-	actuations_reset(State, NewState).
+	actuations_reset(State, NewState).	
 
 handled(event(intent, IntentPayload, Parent), State, NewState) :-
 	message_sent(Parent, cannot_actuate(IntentPayload)),
-	actuations_reset(State, NewState).
+	actuations_reset(State, NewState).	
 
-handled(event(actuation, ActuationPayload, Parent), State, NewState) :-
-	option(policy(ParentPolicy), ActuationPayload),
-	directed_actions(ParentPolicy, State, AllActions),
-	log(info, effector_ca, "~@ is actuating actions ~p from policy ~p", [self, AllActions, ParentPolicy]),
-	foreach(member(Action, AllActions), body_actuated(State, Action)),
-	bagof(command(Action), (member(Action, AllActions)), Commands),
-	message_sent(Parent, executable(ActuationPayload, Commands)),
-	acc_state(State, actuations, AllActions, NewState).
-
+handled(event(execute, _, _), State, NewState) :-
+	actions_executed(),
+	observations_from_actuations(State, Observations),
+	put_state(State, observations, Observations, State1),
+	beliefs_from_observations(State1, Beliefs),
+	put_state(State1, beliefs, Beliefs, State2),
+	(wellbeing_changed(State2, UpdatedWellbeing) ->
+		put_wellbeing(State2, UpdatedWellbeing, NewState)
+		;
+		NewState = State2
+		).	
+		
 handled(event(prediction, PredictionPayload, Parent), State, State) :-
 	option(belief(PredictedBelief), PredictionPayload),
 	about_belief(PredictedBelief, State, Belief),
@@ -206,7 +204,7 @@ handled(event(Topic, Payload, Parent), State, NewState) :-
 initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
 
 subscribed_to_events() :-
-	all_subscribed([ca_terminated, executed]).
+	all_subscribed([execute]).
 
 action_domain(State, ActionDomain) :-
 	findall(Action, 
@@ -253,7 +251,9 @@ wellbeing_changed(State, UpdatedWellbeing) :-
 	Fullness1 is max(Fullness - Count, 0),
 	Integrity1 is max(Integrity - Count, 0),
 	Engagement1 is min(Engagement + Count, 100),
-	UpdatedWellbeing = [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1].
+	UpdatedWellbeing = [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1],
+	published(wellbeing_changed, UpdatedWellbeing).
+
 
 actuations_reset(State, NewState) :-
 	put_state(State, actuations, [], NewState).

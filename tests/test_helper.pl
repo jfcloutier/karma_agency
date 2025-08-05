@@ -3,6 +3,7 @@
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
 :- use_module(agency(agent)).
+:- use_module(utils(logger)).
 
 init_som :-
 	agent : started('localhost:4000').
@@ -18,12 +19,12 @@ get_message(Term, Timeout) :-
     thread_get_message(Name, Term, [timeout(Timeout)]).
 
 % assert_wellbeing_changed(PreviousState, NewState, [fullness = <, integrity = <, engagement = >])
-assert_wellbeing_changed(PreviousState, NewState, Changes) :-
-   	get_state(PreviousState, wellbeing, PreviousWellbeing),
+% Compares new wellbeing metrics to previous ones
+assert_wellbeing_changed(PreviousWellbeing, NewWellbeing, Changes) :-
+    log(info, test_helper, "Comparing previous wellbeing ~p to new ~p with ~p", [PreviousWellbeing, NewWellbeing, Changes]),
     option(fullness(PreviousFullness), PreviousWellbeing),
     option(integrity(PreviousIntegrity), PreviousWellbeing),
     option(engagement(PreviousEngagement), PreviousWellbeing),
-    get_state(NewState, wellbeing, NewWellbeing),
     option(fullness(NewFullness), NewWellbeing),
     option(integrity(NewIntegrity), NewWellbeing),
     option(engagement(NewEngagement), NewWellbeing),

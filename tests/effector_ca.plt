@@ -46,8 +46,10 @@ test(effector_belief_and_policy_domains) :-
 
 test(intent_command_actuation_execution) :-
     EffectorCA = 'effector:tacho_motor-outA',
+    subscribed(wellbeing_changed),
     query_answered(EffectorCA, state, InitialState),
-    % adopt
+    get_state(InitialState, wellbeing, InitialWellbeing),
+   % adopt
     message_sent(EffectorCA, adopted),
 	query_answered(EffectorCA, parents, Parents),
 	thread_self(Self),
@@ -61,20 +63,21 @@ test(intent_command_actuation_execution) :-
     assertion(\+ member(command(jump), Directives)),
     % actuate - prepare to carry out executable actions that (partially) realize intent
     ActuationPayload = [policy = Directives],
-    published(actuation, ActuationPayload),
+    message_sent(EffectorCA, actuation(ActuationPayload)),
     get_message(message(executable(ActuationPayload, Commands), EffectorCA)),
     assertion(member(command(spin), Commands)),
     assertion(member(command(reverse_spin), Commands)),
     % execute 
-    message_sent(EffectorCA, execute),
-    get_message(message(executed, EffectorCA)),
+    published(execute),
     % wellbeing updated
-    query_answered(EffectorCA, state, FinalState),
-    assert_wellbeing_changed(InitialState, FinalState, [fullness = <, integrity = <, engagement = >]).
+    get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
+    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]).
 
 test(intent_goal_actuation_execution) :-
     EffectorCA = 'effector:tacho_motor-outA',
+    subscribed(wellbeing_changed),
     query_answered(EffectorCA, state, InitialState),
+    get_state(InitialState, wellbeing, InitialWellbeing),
     % adopt
     message_sent(EffectorCA, adopted),
 	query_answered(EffectorCA, parents, Parents),
@@ -87,35 +90,43 @@ test(intent_goal_actuation_execution) :-
     assertion(member(goal(count(spin, 2)), Directives)),
     % actuate - prepare to carry out executable actions that (partially) realize intent
     ActuationPayload = [policy = Directives],
-    published(actuation, ActuationPayload),
+    message_sent(EffectorCA, actuation(ActuationPayload)),
     get_message(message(executable(ActuationPayload, Commands), EffectorCA)),
     assertion([command(spin), command(spin)] == Commands),
     % execute 
-    message_sent(EffectorCA, execute),
-    get_message(message(executed, EffectorCA)),
+    published(execute),
     % wellbeing updated
-    query_answered(EffectorCA, state, FinalState),
-    assert_wellbeing_changed(InitialState, FinalState, [fullness = <, integrity = <, engagement = >]).
+    get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
+    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]).
 
 test(execution_prediction) :-
+    % Get the CA for a tacho motor effector adopted
     EffectorCA = 'effector:tacho_motor-outA',
+    subscribed(wellbeing_changed),
     message_sent(EffectorCA, adopted),
     query_answered(EffectorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
+    % Express intent to spin, reverse spin and jump
     IntentPayload = [policy = [command(spin), command(reverse_spin), command(jump)]],
     published(intent, IntentPayload),
+    % Verify that the effector CA for the tacho motor can only actuate spin and reverse_spin
     get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
+    assertion(member(command(spin), Directives)),
+    assertion(member(command(reverse_spin), Directives)),
+    assertion(\+ member(command(jump), Directives)),
+    % Tell the effector CA to prepare to actuate spin and reverse_spin, once each
     ActuationPayload = [policy = Directives],
-    published(actuation, ActuationPayload),
+    message_sent(EffectorCA, actuation(ActuationPayload)),
+    % Get confirmation that the effector CA is ready to execute the requested actuations
     get_message(message(executable(ActuationPayload, _), EffectorCA)),
-    message_sent(EffectorCA, execute),
-    get_message(message(executed, EffectorCA)),
-    % incorrectly predict belief from execution
+    % Make it so!
+    published(execute),
+    % Incorrectly predict belief that spin was executed twice
     Prediction1 = [belief = count(spin, 2)],
 	published(prediction, Prediction1),
 	get_message(message(prediction_error(Prediction1, 1), EffectorCA)),
-    % correctly predict belief
+    % Correctly predict belief that reverse_spin was executed once
     Prediction2 = [belief = count(reverse_spin, 1)],
 	published(prediction, Prediction2),
 	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 2).

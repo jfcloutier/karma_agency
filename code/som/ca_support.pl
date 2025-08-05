@@ -59,7 +59,6 @@ get_wellbeing(State, Fullness, Integrity, Engagement) :-
 
 put_wellbeing(State, UpdatedWellbeing, NewState) :-
     log(info, ca_support, "~@ put wellbeing ~p", [self, UpdatedWellbeing]),
-    published(wellbeing_changed, UpdatedWellbeing),
 	put_state(State, wellbeing, UpdatedWellbeing, NewState).
 
 wellbeing_transfered(State, WellbeingTransfer, NewState) :-
