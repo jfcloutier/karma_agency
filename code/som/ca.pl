@@ -7,15 +7,23 @@ Messages:
 	* `adopted(Parent)` - when added to the umwelt of a CA one level up
 	* `causal_theory_found(Theory)` - when the Apperception Engine has found a causal theory for the CA
 
-* In and out
-	* `prediction_error(PredictionPayload, ActualValue)`
-	*  wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+* Out to a parent
+    * `can_actuate(IntentPayload, Directives)` - responding to intent event - it can actuate these directives
+    * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
+	* `executable(ActuationPayload, Directives)` responding to actuation message - the effector CA has primed the body for execution
+    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+
+* In from a parent
+    * actuation(DirectivesPayload) - a parent communicates the actuations it wants the effector CA to execute
+	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
 Events:
 
+* In
+	* topic: execute, payload: [] - execution is triggered
+
 * In from parents, out
   * topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
-  * topic: actuation, payload: [policy = Policy] - a parent communicates a policy it is about to execute
   * topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
 
 * In from umwelt, out
@@ -25,18 +33,16 @@ Events:
 
 * Out  
   * topic: ca_started, payload: [level = Level]
-  * topic: ca_terminated, payload: [level = Level]
   * topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
-* In and out
-  * topic: executed, payload: [] - the actuated policy was executed
-
 * Queries:
 
 * In
   * level -> Integer > 0
+  * latency -> Integer (secs)
   * umwelt -> CA names
-  * belief_domains -> [BeliefDomain, ...]
+  * belief_domain -> [Predictable, ...]
+  * policy_domain -> [DirectiveSpec, ...]
   * wellbeing -> WellbeingPayload
     
 Thread locals:

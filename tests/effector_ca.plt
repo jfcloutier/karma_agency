@@ -42,7 +42,7 @@ test(effector_belief_and_policy_domains) :-
         ), 
         (query_answered(EffectorCA, belief_domain, BeliefDomain), 
          query_answered(EffectorCA, policy_domain, ActionDomain), 
-         assertion(member(predictable{name:count, objects:ActionDomain, values:positive_integer}, BeliefDomain)))).
+         forall(member(Action, ActionDomain), assertion(member(predictable{name:count, object:Action, value:positive_integer}, BeliefDomain))))).
 
 test(intent_command_actuation_execution) :-
     EffectorCA = 'effector:tacho_motor-outA',
@@ -99,8 +99,9 @@ test(intent_goal_actuation_execution) :-
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]).
 
+% Verify that engaging an effector CA into executing a policy updates its beliefs
 test(execution_prediction) :-
-    % Get the CA for a tacho motor effector adopted
+    % Get the CA for a tacho motor effector adopted by the test
     EffectorCA = 'effector:tacho_motor-outA',
     subscribed(wellbeing_changed),
     message_sent(EffectorCA, adopted),
@@ -122,11 +123,15 @@ test(execution_prediction) :-
     get_message(message(executable(ActuationPayload, _), EffectorCA)),
     % Make it so!
     published(execute),
-    % Incorrectly predict belief that spin was executed twice
+    % Consume the message
+    get_message(event(wellbeing_changed, _, EffectorCA)),
+    % Incorrectly predict the belief that spin was executed twice
     Prediction1 = [belief = count(spin, 2)],
 	published(prediction, Prediction1),
+    % Get a prediction error message
 	get_message(message(prediction_error(Prediction1, 1), EffectorCA)),
-    % Correctly predict belief that reverse_spin was executed once
+    % Correctly predict the belief that reverse_spin was executed once
     Prediction2 = [belief = count(reverse_spin, 1)],
 	published(prediction, Prediction2),
+    % Don't get an error prediction message
 	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 2).

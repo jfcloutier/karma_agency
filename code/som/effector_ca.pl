@@ -49,9 +49,18 @@ Queries:
 * In
     * level - 0
     * latency - unknown - an effector CA has no set latency
-    * belief_domain -> always responds with [predictable{name:count, objects:[Action, ...], values:positive_integer}] 
+    * belief_domain -> always responds with [predictable{name:count, object:Action, value:positive_integer}, ...] 
 		- Action is the external name for `executed(Action)`, the factual observation that the Action was executed by the body
     * policy_domain -> always responds with [Action, ...], e.g. [spin, reverse_spin]
+
+State:
+	* parents - parent CAs
+	* effectors - the body effectors (1 action per body effector) the CA is responsible for
+	* observations - actions last executed - [executed(Action), ...]
+	* beliefs - beliefs from last execution - [count(Action, N), ...]
+	* action_domain - actions the effector can execute - [Action, ...]
+	* actuations - actions ready for execution - [Action, ...]
+	* wellbeing - wellbeing values - initially [fullness = 100, integrity = 100, engagement = 0]
 
 Lifecycle
   * Created for a body effector
@@ -123,9 +132,9 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, [Predictable]) :-
+handled(query(belief_domain), State, BeliefDomain) :-
 	get_state(State, action_domain, ActionDomain),
-	Predictable = predictable{name:count, objects:ActionDomain, values:positive_integer}.
+	bagof(predictable{name:count, object:Action, value:positive_integer}, member(Action, ActionDomain), BeliefDomain).
 
 handled(query(policy_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).

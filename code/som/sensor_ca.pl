@@ -17,21 +17,39 @@ Certain readings incur additional costs/benefits to wellbeing, for example, a po
 reduces the CA's integrity, or a color reading of green (food) increases fullness but a color reading of red (poison)
 reduces integrity.
 
-A sensor CA:
+Messages:
 
-* receives a message `adopted` when added to the umwelt of a CA
+* In
+	* `adopted(Parent)` when added to the umwelt of a CA
 
-* subscribes to events from its parents:
-	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about a sensed value
+* Out to a parent
+    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
 
-* sends messages to a parent in response to events received:
-    * prediction event -> maybe respond with message `prediction_error(PredictionPayload, ActualValue)` - the parent is wrong about the sensed value
+* In from a parent
+ 	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
-* like all CAs, a sensor CA responds to queries about
+Events:
+
+* In from parents
+	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+	
+* Out
+    * topic: ca_started, payload: [level = Level]
+	* topic: wellbeing_changed, payload: WellbeingPayload  - payload is [fullness = N1, integrity = N2, engagement = N3]
+
+Queries:
+
+* In
     * level - 0
-    * latency - unknown - a sensor CA has no set latency
-    * belief_domains -> responds with [predictable{name:sensed, objects:[], values:[]}],
-                        e.g. [predictable(name:sensed, objects:[distance], values:domain{from:0, to:250})]
+    * latency - unknown - an effector CA has no set latency
+    * belief_domain -> [predictable{name:sensed, object:SenseName, value:SenseDomain}]
+    * policy_domain -> [] - a sensor CA does not act
+
+State:
+	* parents - parent CAs
+    * sensor - the body sensor the CA is responsible for
+	* beliefs - beliefs from last reading - [sensed(SenseName, Value-Tolerance)]
+	* wellbeing - wellbeing metrics - initially [fullness = 100, integrity = 100, engagement = 0]
 
 Lifecycle:
   * Created once for a body sensor
@@ -95,7 +113,7 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, [predictable{name:sensed, objects:[SenseName], values:SenseDomain}]) :-
+handled(query(belief_domain), State, [predictable{name:sensed, object:SenseName, value:SenseDomain}]) :-
     sense_name(State, SenseName),
     sense_domain(State, SenseDomain).
 
@@ -189,7 +207,7 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     published(wellbeing_changed, UpdatedWellbeing).
 
 
-
+% Changes in wellbeing specific to the sensor reading
 delta_fullness(color, green, 10).
 delta_fullness(_, _, 0).
 
