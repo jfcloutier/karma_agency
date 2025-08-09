@@ -34,17 +34,19 @@ test(all_effector_cas_are_at_level_0) :-
 	assertion(forall(member(EffectorCA, EffectorCAs),
 			query_answered(EffectorCA, level, 0))).
 
-test(effector_belief_and_policy_domains) :-
+test(effector_belief_domain) :-
 	query_answered(som, children, SOMChildren), 
     forall(
         (member(child(worker, EffectorCA), SOMChildren), 
          query_answered(EffectorCA, type, effector_ca)
         ), 
-        (query_answered(EffectorCA, belief_domain, BeliefDomain), 
-         query_answered(EffectorCA, policy_domain, ActionDomain), 
-         forall(member(Action, ActionDomain), assertion(member(predictable{name:count, object:Action, value:positive_integer}, BeliefDomain))))).
+        (query_answered(EffectorCA, belief_domain, BeliefDomain),
+         forall(member(Predictable, BeliefDomain),
+                assertion(unifiable(Predictable, predictable{name:count, object:_, value:positive_integer}, _)))
+        )
+    ).
 
-test(intent_command_actuation_execution) :-
+test(intent_executed) :-
     EffectorCA = 'effector:tacho_motor-outA',
     subscribed(wellbeing_changed),
     query_answered(EffectorCA, state, InitialState),
@@ -55,76 +57,25 @@ test(intent_command_actuation_execution) :-
 	thread_self(Self),
 	assertion(member(Self, Parents)),
     % intent - the CA informs of the subset of intended directives that can be actuated 
-    IntentPayload = [policy = [command(spin), command(reverse_spin), command(jump)]],
+    IntentPayload = [directive{goal:count(spin, 1), priority:1}, directive{goal:count(reverse_spin, 1), priority:1}, directive{goal:count(jump, 1), priority:1}],
     published(intent, IntentPayload),
-    get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
-    assertion(member(command(spin), Directives)),
-    assertion(member(command(reverse_spin), Directives)),
-    assertion(\+ member(command(jump), Directives)),
+    get_message(message(can_actuate(Goals), EffectorCA)),
+    assertion(member(count(spin, 1), Goals)),
+    assertion(member(count(reverse_spin, 1), Goals)),
+    assertion(\+ member(count(jump, 1), Goals)),
     % actuate - prepare to carry out executable actions that (partially) realize intent
-    ActuationPayload = [policy = Directives],
-    message_sent(EffectorCA, actuation(ActuationPayload)),
-    get_message(message(executable(ActuationPayload, Commands), EffectorCA)),
-    assertion(member(command(spin), Commands)),
-    assertion(member(command(reverse_spin), Commands)),
-    % execute 
-    published(execute),
+    message_sent(EffectorCA, ready_actuation(count(spin, 1))),
+    message_sent(EffectorCA, ready_actuation(count(reverse_spin, 1))),
+    get_message(message(actuation_ready(count(spin, 1)), EffectorCA)),
+    get_message(message(actuation_ready(count(reverse_spin, 1)), EffectorCA)),
+    % execute
+    query_answered(agency, option(body_host), Host),
+  	body : actions_executed(Host),
+    % executed 
+    published(executed),
     % wellbeing updated
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
-    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]).
-
-test(intent_goal_actuation_execution) :-
-    EffectorCA = 'effector:tacho_motor-outA',
-    subscribed(wellbeing_changed),
-    query_answered(EffectorCA, state, InitialState),
-    get_state(InitialState, wellbeing, InitialWellbeing),
-    % adopt
-    message_sent(EffectorCA, adopted),
-	query_answered(EffectorCA, parents, Parents),
-	thread_self(Self),
-	assertion(member(Self, Parents)),
-    % intent - the CA informs of the subset of intended directives that can be actuated 
-    IntentPayload = [policy = [goal(count(spin, 2))]],
-    published(intent, IntentPayload),
-    get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
-    assertion(member(goal(count(spin, 2)), Directives)),
-    % actuate - prepare to carry out executable actions that (partially) realize intent
-    ActuationPayload = [policy = Directives],
-    message_sent(EffectorCA, actuation(ActuationPayload)),
-    get_message(message(executable(ActuationPayload, Commands), EffectorCA)),
-    assertion([command(spin), command(spin)] == Commands),
-    % execute 
-    published(execute),
-    % wellbeing updated
-    get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
-    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]).
-
-% Verify that engaging an effector CA into executing a policy updates its beliefs
-test(execution_prediction) :-
-    % Get the CA for a tacho motor effector adopted by the test
-    EffectorCA = 'effector:tacho_motor-outA',
-    subscribed(wellbeing_changed),
-    message_sent(EffectorCA, adopted),
-    query_answered(EffectorCA, parents, Parents),
-	thread_self(Self),
-	assertion(member(Self, Parents)),
-    % Express intent to spin, reverse spin and jump
-    IntentPayload = [policy = [command(spin), command(reverse_spin), command(jump)]],
-    published(intent, IntentPayload),
-    % Verify that the effector CA for the tacho motor can only actuate spin and reverse_spin
-    get_message(message(can_actuate(IntentPayload, Directives), EffectorCA)),
-    assertion(member(command(spin), Directives)),
-    assertion(member(command(reverse_spin), Directives)),
-    assertion(\+ member(command(jump), Directives)),
-    % Tell the effector CA to prepare to actuate spin and reverse_spin, once each
-    ActuationPayload = [policy = Directives],
-    message_sent(EffectorCA, actuation(ActuationPayload)),
-    % Get confirmation that the effector CA is ready to execute the requested actuations
-    get_message(message(executable(ActuationPayload, _), EffectorCA)),
-    % Make it so!
-    published(execute),
-    % Consume the message
-    get_message(event(wellbeing_changed, _, EffectorCA)),
+    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the belief that spin was executed twice
     Prediction1 = [belief = count(spin, 2)],
 	published(prediction, Prediction1),

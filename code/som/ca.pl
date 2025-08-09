@@ -24,11 +24,10 @@ Events:
 
 * In from parents, out
   * topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
-  * topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+  * topic: prediction, payload: [belief = Belief] - a parent makes a prediction about what the CA believes
 
 * In from umwelt, out
-  * topic: belief_domain_changed, payload: BeliefDomain
-  * topic: policy_domain_changed, payload PolicyDomain
+  * topic: belief_domain_changed, payload: [Predictable, ...]
   * topic: wellbeing_changed, payload: WellbeingPayload
 
 * Out  
@@ -42,8 +41,7 @@ Events:
   * latency -> Integer (secs)
   * umwelt -> CA names
   * belief_domain -> [Predictable, ...]
-  * policy_domain -> [DirectiveSpec, ...]
-  * wellbeing -> WellbeingPayload
+  * wellbeing -> [fullness = N1, integrity = N2, engagement = N3]
     
 Thread locals:
     * level - 1..? - the level of the CAs it is responsible for
@@ -133,7 +131,7 @@ announce_adoptions(Umwelt) :-
 
 % TODO - prediction/1, prediction_error/1, belief_domain/1 etc.
 subscribed_to_events :-
-	forall(member(Topic, [ca_started, ca_terminated, prediction, prediction_error, belief_domain, policy_domain, directive, directive_status]),
+	forall(member(Topic, [ca_started, ca_terminated, prediction, belief_domain]),
 		subscribed(Topic)).
 
 clock_started(Name, Delay) :-
@@ -249,9 +247,7 @@ event_handled_now(event(prediction, Belief, Source), State, State).
 % TODO
 event_handled_now(event(prediction_error, Prediction, Source), State, State).
 % TODO
-event_handled_now(event(goal, Impact, Source), State, State).
-% TODO
-event_handled_now(event(command, Policy, Source), State, State).
+event_handled_now(event(goal, Goal, Source), State, State).
 % TODO
 event_handled_now(event(belief_domain, BeliefDomain, Source), State, State).
 

@@ -4,8 +4,22 @@ An effector CA is an a priori cognition actor that communicates with a body effe
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
 Same-device effectors are combined in one effector_ca.
 
-An effector CA receives from its parents intents to carry out policies, responds with readiness for directives within
-its action domain, and then may be told to actuate by telling the body to prepare to execute actions as directed.
+An effector CA receives from its parents intents to carry out directives (prioritized goals).
+It responds with the goals it is able to realize/actuate It then may be told, one at a time, to prime body effectors for some/all of these goals.
+It responds when done.
+Eventually, the body is told to actuate all primed affectors by the CA that initiated the cascade of directives.
+The effector CA learns that the body executed primed actuations. It updates its wellbeing based on its participation and sends an event
+about its change in wellbeing.
+
+parent CA --- intent(directives (prioritized goals)) -->* umwelt CAs
+parent CA <-- can_actuate(goals - can be empty) --- umwelt CA
+parent CA --- ready_actuation(goal) ---> umwelt CA
+...
+parent CA <-- actuation_ready(goal) --- umwelt CA
+...
+(initiating CA tells the body to execute all primed effector actuations)
+initiating CA ---- executed ---->* all CAs
+parent CA *<-- wellbeing_changed -- umwelt CA
 
 Each action taken affects the CA's wellbeing. It reduces the CA's fullness and integrity by 1 (they start at 100), and increases
 its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
@@ -21,23 +35,22 @@ Messages:
 * In
 	* `adopted(Parent)` when added to the umwelt of a CA
 
-* Out to a parent
-    * `can_actuate(IntentPayload, Directives)` - responding to intent event - it can actuate these directives
-    * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
-	* `executable(ActuationPayload, Directives)` responding to actuation message - the effector CA has primed the body for execution
-    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
-
 * In from a parent
-    * actuation(DirectivesPayload) - a parent communicates the actuations it wants the effector CA to execute
-	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* ready_actuation(Goal) - a parent communicates an actuation it wants the effector CA to execute
+	* wellbeing_transfer(WellbeingValues) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
+* Out to a parent	
+	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
+	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
+    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+	
 Events:
 
 * In
-	* topic: execute, payload: [] - execution is triggered
+	* topic: executed, payload: [] - body actuation was triggered
 
 * In from parents
-	* topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
+	* topic: intent, payload: [Directive, ...] - a parent CA communicates a policy it built that it intends to execute if possible
 	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
 	
 * Out
@@ -51,7 +64,6 @@ Queries:
     * latency - unknown - an effector CA has no set latency
     * belief_domain -> always responds with [predictable{name:count, object:Action, value:positive_integer}, ...] 
 		- Action is the external name for `executed(Action)`, the factual observation that the Action was executed by the body
-    * policy_domain -> always responds with [Action, ...], e.g. [spin, reverse_spin]
 
 State:
 	* parents - parent CAs
@@ -66,13 +78,11 @@ Lifecycle
   * Created for a body effector
   * Repeatedly
     * Adopted by a CA in its umwelt (new parent) - subscribes to umwelt events from parent
-    * Queried for its policy domain (what policies - actions -  it can actuate)
 	* Queried for its belief domains (only believes in counts of actions executed)
-    * Handles intent events - sends can_actuate/2 or cannot_actuate/2 events in response
-	* Handles actuation messages - tells the body to prepare to actuate, records the actuations
-	* Handles executed event (the body has aggregated and executed actuations) - updates count/2 beliefs
+    * Handles intent events - sends can_actuate/2 message in response
+	* Handles ready_actuation messages - tells the body to prepare to actuate, records the actuations
+	* Handles executed event (the body has aggregated and executed actuations) - updates count/2 beliefs and informs all of wellbeing changes
 	* Handles predictions events from parents about the last executed actions - sends prediction_error events
-	* Updates its wellbeing from actions executed and publishes wellbeing_changed events
 	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
 
@@ -112,7 +122,7 @@ init(Options, State) :-
 	action_domain(State1, ActionDomain),
 	initial_wellbeing(InitialWellbeing),
 	put_state(State1, [parents - [], observations - [], beliefs - [], action_domain - ActionDomain, actuations - [], wellbeing - InitialWellbeing], State),
-	subscribed_to_events(),
+	subscribed_to_global_events(),
 	published(ca_started, [level(0)]).
 
 %% Actor termination - only when agency terminates
@@ -136,8 +146,6 @@ handled(query(belief_domain), State, BeliefDomain) :-
 	get_state(State, action_domain, ActionDomain),
 	bagof(predictable{name:count, object:Action, value:positive_integer}, member(Action, ActionDomain), BeliefDomain).
 
-handled(query(policy_domain), State, ActionDomain) :-
-	get_state(State, action_domain, ActionDomain).
 
 handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
@@ -148,13 +156,11 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-handled(message(actuation(ActuationPayload), Parent), State, NewState) :-
-	option(policy(ParentPolicy), ActuationPayload),
-	directed_actions(ParentPolicy, State, AllActions),
-	log(info, effector_ca, "~@ is actuating actions ~p from policy ~p", [self, AllActions, ParentPolicy]),
+handled(message(ready_actuation(Goal), Parent), State, NewState) :-
+	goal_actions(Goal, State, AllActions),
+	log(info, effector_ca, "~@ is actuating actions ~p from goal ~p", [self, AllActions, Goal]),
 	foreach(member(Action, AllActions), body_actuated(State, Action)),
-	bagof(command(Action), (member(Action, AllActions)), Commands),
-	message_sent(Parent, executable(ActuationPayload, Commands)),
+	message_sent(Parent, actuation_ready(Goal)),
 	acc_state(State, actuations, AllActions, NewState).
 
 handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
@@ -169,31 +175,24 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     unsubscribed_from(Parent),
     dec_state(State, parents, Parent, NewState).	
 
-handled(event(intent, IntentPayload, Parent), State, NewState) :-
+handled(event(intent, Directives, Parent), State, NewState) :-
 	well_enough(State),
-	option(policy(ParentPolicy), IntentPayload),
-	setof(Directive, (member(Directive, ParentPolicy), can_do(Directive, State)), Directives), 
-    [_ | _] = Directives,
-	!,
-	log(info, effector_ca, "~@ can actuate directives ~p from intent ~p", [self, Directives, IntentPayload]),
-	message_sent(Parent, can_actuate(IntentPayload, Directives)),
-	actuations_reset(State, NewState).	
+	setof(Goal, (member(directive{goal:Goal, priority:_}, Directives), can_do_goal(Goal, State)), Goals), 
+	log(info, effector_ca, "~@ can actuate directive goals ~p from intent directives ~p", [self, Goals, Directives]),
+	message_sent(Parent, can_actuate(Goals)),
+	actuations_reset(State, NewState).		
 
-handled(event(intent, IntentPayload, Parent), State, NewState) :-
-	message_sent(Parent, cannot_actuate(IntentPayload)),
-	actuations_reset(State, NewState).	
-
-handled(event(execute, _, _), State, NewState) :-
-	actions_executed(),
+handled(event(executed, _, _), State, NewState) :-
 	observations_from_actuations(State, Observations),
 	put_state(State, observations, Observations, State1),
 	beliefs_from_observations(State1, Beliefs),
 	put_state(State1, beliefs, Beliefs, State2),
 	(wellbeing_changed(State2, UpdatedWellbeing) ->
-		put_wellbeing(State2, UpdatedWellbeing, NewState)
+		put_wellbeing(State2, UpdatedWellbeing, State3)
 		;
-		NewState = State2
-		).	
+		State3 = State2
+		),
+	actuations_reset(State3, NewState).	
 		
 handled(event(prediction, PredictionPayload, Parent), State, State) :-
 	option(belief(PredictedBelief), PredictionPayload),
@@ -212,41 +211,25 @@ handled(event(Topic, Payload, Parent), State, NewState) :-
 
 initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
 
-subscribed_to_events() :-
-	all_subscribed([execute]).
+subscribed_to_global_events() :-
+	all_subscribed([executed]).
 
 action_domain(State, ActionDomain) :-
 	findall(Action, 
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
-can_do(command(Action), State) :-
-	get_state(State, action_domain, ActionDomain),
-	member(Action, ActionDomain).
-
-can_do(goal(count(Action, N)), State) :-
+can_do_goal(count(Action, N), State) :-
 	N > 0,
 	get_state(State, action_domain, ActionDomain),
 	member(Action, ActionDomain).
 
-directed_actions([], _, []).
-
-directed_actions([Directive | OtherDirectives], State, AllActions) :-
-	how_to(Directive, State, Actions),
-	directed_actions(OtherDirectives, State, OtherActions),
-	flatten([Actions | OtherActions], AllActions).
-
-how_to(command(Action), State, [Action]) :-
-	can_do(command(Action), State), !.
-
-how_to(goal(count(Action, N)), State, Actions) :-
+goal_actions(count(Action, N), State, Actions) :-
 	get_state(State, action_domain, ActionDomain),
 	member(Action, ActionDomain),
 	!,
 	length(Actions, N),
 	maplist(=(Action), Actions).
-
-how_to(_, _, []).
 
 % Each action executed decrements fullness by 1 (energy spent),
 % integrity by 1 (wear and tear), 
@@ -269,7 +252,8 @@ actuations_reset(State, NewState) :-
 
 observations_from_actuations(State, Observations) :-
 	get_state(State, actuations, Actuations),
-	bagof(executed(Action), member(Action, Actuations), Observations).
+	bagof(executed(Action), member(Action, Actuations), Observations),
+	log(effector_ca, debug, "~@ observed ~p from actuations ~p", [self, Observations, Actuations]).
 
 beliefs_from_observations(State, Beliefs) :-
 	get_state(State, observations, Observations),
@@ -277,7 +261,8 @@ beliefs_from_observations(State, Beliefs) :-
 	sort(ExecutedActions, ActionTypes),
 	map_list_to_pairs(count_in(ExecutedActions), ActionTypes, Counts),
     % The name of an action is how an effector CA presents `executed(Action)` to its parents
-	bagof(count(ActionType, N), member(N - ActionType, Counts), Beliefs).
+	bagof(count(ActionType, N), member(N - ActionType, Counts), Beliefs),
+	log(effector_ca, debug, "~@ believes ~p from observations ~p", [self, Beliefs, Observations]).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
@@ -288,6 +273,6 @@ body_actuated(State, Action) :-
 	body : actuated(ActionUrl),
 	log(debug, effector_ca, "~@ asked body to actuate ~w", [self, Action]).
 
-actions_executed :-
-	query_answered(agency, option(body_host), Host),
-	body : actions_executed(Host).
+% actions_executed :-
+% 	query_answered(agency, option(body_host), Host),
+% 	body : actions_executed(Host).

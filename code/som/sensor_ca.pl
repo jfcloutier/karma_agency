@@ -43,7 +43,6 @@ Queries:
     * level - 0
     * latency - unknown - an effector CA has no set latency
     * belief_domain -> [predictable{name:sensed, object:SenseName, value:SenseDomain}]
-    * policy_domain -> [] - a sensor CA does not act
 
 State:
 	* parents - parent CAs
@@ -116,8 +115,6 @@ handled(query(latency), _, unknown).
 handled(query(belief_domain), State, [predictable{name:sensed, object:SenseName, value:SenseDomain}]) :-
     sense_name(State, SenseName),
     sense_domain(State, SenseDomain).
-
-handled(query(policy_domain), _, []).
 
 handled(query(reading), State, Reading) :-
     sense_read(State, Reading).
