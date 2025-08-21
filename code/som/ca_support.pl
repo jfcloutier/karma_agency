@@ -2,7 +2,7 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, about_belief/3, belief_value/2, same_belief_value/2, get_wellbeing/4, put_wellbeing/3, wellbeing_transfered/3, well_enough/1]).
+:- module(ca_support, [from_parent/2, prediction_handled/3, get_wellbeing/4, put_wellbeing/3, wellbeing_transfered/3, well_enough/1]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
@@ -34,6 +34,19 @@ from_parent(Source, State) :-
     get_state(State, parents, Parents),
     member(Source, Parents).
 
+% 'sensor:touch-in1:contact' is NOT handling event prediction with [belief=contact('touch-in1:contact',pressed)]
+prediction_handled(PredictionPayload, Parent, State) :-
+    log(info, ca_support, "Handling prediction ~p in state ~p", [PredictionPayload, State]),
+	option(belief(PredictedBelief), PredictionPayload),
+	about_belief(PredictedBelief, State, Belief),
+	belief_value(PredictedBelief, PredictedValue),
+	belief_value(Belief, ActualValue),
+	(same_belief_value(PredictedValue, ActualValue) ->
+		true;
+        value_without_tolerance(ActualValue, Value),
+		message_sent(Parent, prediction_error(PredictionPayload, Value))
+	).	
+
 about_belief(PredictedBelief, State, Belief) :-
     PredictedBelief =.. [BeliefName, Object, _],
     get_state(State, beliefs, Beliefs),
@@ -43,13 +56,21 @@ about_belief(PredictedBelief, State, Belief) :-
 belief_value(Belief, Value) :-
    Belief =.. [_, _, Value].
 
-same_belief_value(PredictedValue, ActualValue-Tolerance) :-
-    number(PredictedValue),
-    number(ActualValue),
+same_belief_value(Value1, Value2) :-
+    number_with_tolerance(Value1, Val1-Tolerance1),
+    number_with_tolerance(Value2, Val2-Tolerance2),
     !,
-    abs(PredictedValue - ActualValue)=< Tolerance.
+    Tolerance is Tolerance1 + Tolerance2,
+    abs(Val2 - Val1) =< Tolerance.
 
 same_belief_value(Value, Value).
+
+number_with_tolerance(Value-Tolerance, Value-Tolerance) :- number(Value).
+
+number_with_tolerance(Value, Value-0) :- number(Value).
+
+value_without_tolerance(Value-_, Value) :- !.
+value_without_tolerance(Value, Value).
 
 get_wellbeing(State, Fullness, Integrity, Engagement) :-
     get_state(State, wellbeing, Wellbeing),

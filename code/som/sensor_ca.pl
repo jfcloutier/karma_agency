@@ -1,6 +1,5 @@
 /*
-A sensor CA is an a priori cognition actor that communicates with a body sensor to obtain
-its sensed value.
+A sensor CA is an a priori cognition actor that communicates with a body sensor to obtain its sensed value.
 
 A sensor CA believes its sensor's latest reading which pairs a value with an error tolerance.
 
@@ -42,12 +41,12 @@ Queries:
 * In
     * level - 0
     * latency - unknown - an effector CA has no set latency
-    * belief_domain -> [predictable{name:sensed, object:SenseName, value:SenseDomain}]
+    * belief_domain -> [predictable{name:distance, object:SensorName, value:SenseDomain}]
 
 State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
-	* beliefs - beliefs from last reading - [sensed(SenseName, Value-Tolerance)]
+	* beliefs - beliefs from last reading - [distance(SensorName, Value)]
 	* wellbeing - wellbeing metrics - initially [fullness = 100, integrity = 100, engagement = 0]
 
 Lifecycle:
@@ -112,8 +111,9 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, [predictable{name:sensed, object:SenseName, value:SenseDomain}]) :-
+handled(query(belief_domain), State, [predictable{name:SenseName, object:SensorName, value:SenseDomain}]) :-
     sense_name(State, SenseName),
+    sensor_name(State, SensorName),
     sense_domain(State, SenseDomain).
 
 handled(query(reading), State, Reading) :-
@@ -138,15 +138,10 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     dec_state(State, parents, Parent, NewState).
 
 handled(event(prediction, PredictionPayload, Parent), State, NewState) :-
- 	option(belief(PredictedBelief), PredictionPayload),
+    log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, PredictionPayload, Parent, State]),
+    option(belief(PredictedBelief), PredictionPayload),
     beliefs_updated(PredictedBelief, State, NewState),
-	about_belief(PredictedBelief, NewState, Belief),
-	belief_value(PredictedBelief, PredictedValue),
-	belief_value(Belief, ActualValue),
-	(same_belief_value(PredictedValue, ActualValue) ->
-		true;
-		message_sent(Parent, prediction_error(PredictionPayload, ActualValue))
-	).	
+ 	ca_support : prediction_handled(PredictionPayload, Parent, NewState).
 
 handled(event(Topic, Payload, Source), State, NewState) :-
     ca_support : handled(event(Topic, Payload, Source), State, NewState).
@@ -165,30 +160,34 @@ subscribed_to_events() :-
 	all_subscribed([ca_terminated]).
 
 sense_name(State, SenseName) :-
-    get_state(State, sensor, Sensor),
-    SenseName = Sensor.capabilities.sense.
+    SenseName = State.sensor.capabilities.sense.
 
 sense_domain(State, SenseDomain) :-
-    get_state(State, sensor, Sensor),
-    SenseDomain = Sensor.capabilities.domain.
+    SenseDomain = State.sensor.capabilities.domain.
+
+sensor_name(State, SensorName) :-
+    SensorName = State.sensor.id.
 
 sense_url(State, SenseURL) :-
     SenseURL = State.sensor.url.
 
 % Read the sensor value, update wellbeing and publish wellbeing_changed, update belief in latest reading.
 beliefs_updated(PredictedBelief, State, NewState) :-
-    PredictedBelief =.. [sensed, SenseName, _],
+    PredictedBelief =.. [SenseName, SensorName, _],
     sense_name(State, SenseName),
+    sensor_name(State, SensorName),
     sense_read(State, reading(Value, Tolerance, _)),
     !,
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
-    put_state(State, beliefs, [sensed(SenseName, Value-Tolerance)],  State1),
+    Belief =.. [SenseName, SensorName, Value-Tolerance],
+    put_state(State, beliefs, [Belief],  State1),
     put_wellbeing(State1, UpdatedWellbeing, NewState).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     sense_url(State, Url),
     body:sense_value(Url, Value, Tolerance),
-    get_time(Timestamp).
+    get_time(Timestamp),
+    log(debug, sensor_ca, "Sensor ~w read ~w => ~p - ~p", [State.sensor.id, State.sensor.capabilities.sense, Value, Tolerance]).
 
 % Update wellbeing from reading.
 wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-

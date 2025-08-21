@@ -41,13 +41,19 @@ test(effector_belief_domain) :-
          query_answered(EffectorCA, type, effector_ca)
         ), 
         (query_answered(EffectorCA, belief_domain, BeliefDomain),
+         query_answered(EffectorCA, action_domain, ActionDomain),
          forall(member(Predictable, BeliefDomain),
-                assertion(unifiable(Predictable, predictable{name:count, object:_, value:positive_integer}, _)))
+                assertion(unifiable(Predictable, predictable{name:_, object:_, value:boolean}, _))
+            ),
+         forall(member(Predictable, BeliefDomain),
+            member(Predictable.name, ActionDomain)
+        )
         )
     ).
 
 test(intent_executed) :-
     EffectorCA = 'effector:tacho_motor-outA',
+    EffectorName = 'tacho_motor-outA',
     subscribed(wellbeing_changed),
     query_answered(EffectorCA, state, InitialState),
     get_state(InitialState, wellbeing, InitialWellbeing),
@@ -57,17 +63,17 @@ test(intent_executed) :-
 	thread_self(Self),
 	assertion(member(Self, Parents)),
     % intent - the CA informs of the subset of intended directives that can be actuated 
-    IntentPayload = [directive{goal:count(spin, 1), priority:1}, directive{goal:count(reverse_spin, 1), priority:1}, directive{goal:count(jump, 1), priority:1}],
+    IntentPayload = [directive{goal:spin(EffectorName, true), priority:1}, directive{goal:reverse_spin(EffectorName, true), priority:1}, directive{goal:jump(EffectorName, true), priority:1}],
     published(intent, IntentPayload),
     get_message(message(can_actuate(Goals), EffectorCA)),
-    assertion(member(count(spin, 1), Goals)),
-    assertion(member(count(reverse_spin, 1), Goals)),
-    assertion(\+ member(count(jump, 1), Goals)),
+    assertion(member(spin(EffectorName, true), Goals)),
+    assertion(member(reverse_spin(EffectorName, true), Goals)),
+    assertion(\+ member(jump(EffectorName, true), Goals)),
     % actuate - prepare to carry out executable actions that (partially) realize intent
-    message_sent(EffectorCA, ready_actuation(count(spin, 1))),
-    message_sent(EffectorCA, ready_actuation(count(reverse_spin, 1))),
-    get_message(message(actuation_ready(count(spin, 1)), EffectorCA)),
-    get_message(message(actuation_ready(count(reverse_spin, 1)), EffectorCA)),
+    message_sent(EffectorCA, ready_actuation(spin(EffectorName, true))),
+    message_sent(EffectorCA, ready_actuation(reverse_spin(EffectorName, true))),
+    get_message(message(actuation_ready(spin(EffectorName, true)), EffectorCA)),
+    get_message(message(actuation_ready(reverse_spin(EffectorName, true)), EffectorCA)),
     % execute
     query_answered(agency, option(body_host), Host),
   	body : actions_executed(Host),
@@ -76,13 +82,13 @@ test(intent_executed) :-
     % wellbeing updated
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
-    % Incorrectly predict the belief that spin was executed twice
-    Prediction1 = [belief = count(spin, 2)],
+    % Incorrectly predict the belief that spin was not executed
+    Prediction1 = [belief = spin(EffectorName, false)],
 	published(prediction, Prediction1),
     % Get a prediction error message
-	get_message(message(prediction_error(Prediction1, 1), EffectorCA)),
-    % Correctly predict the belief that reverse_spin was executed once
-    Prediction2 = [belief = count(reverse_spin, 1)],
+	get_message(message(prediction_error(Prediction1, true), EffectorCA)),
+    % Correctly predict the belief that reverse_spin was executed
+    Prediction2 = [belief = reverse_spin(EffectorName, true)],
 	published(prediction, Prediction2),
     % Don't get an error prediction message
-	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 2).
+	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA)).

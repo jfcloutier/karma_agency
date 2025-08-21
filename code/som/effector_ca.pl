@@ -11,15 +11,17 @@ Eventually, the body is told to actuate all primed affectors by the CA that init
 The effector CA learns that the body executed primed actuations. It updates its wellbeing based on its participation and sends an event
 about its change in wellbeing.
 
-parent CA --- intent(directives (prioritized goals)) -->* umwelt CAs
+parent CA --- intent(directives) -->> umwelt CAs
 parent CA <-- can_actuate(goals - can be empty) --- umwelt CA
 parent CA --- ready_actuation(goal) ---> umwelt CA
 ...
 parent CA <-- actuation_ready(goal) --- umwelt CA
 ...
-(initiating CA tells the body to execute all primed effector actuations)
-initiating CA ---- executed ---->* all CAs
-parent CA *<-- wellbeing_changed -- umwelt CA
+(initiating CA tells the body to execute all primed actuations)
+initiating CA ---- executed ---->> all CAs
+parent CA <<-- wellbeing_changed -- umwelt CA
+
+Note: -->> denote event broadcasts and --> denote message unicasts
 
 Each action taken affects the CA's wellbeing. It reduces the CA's fullness and integrity by 1 (they start at 100), and increases
 its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
@@ -62,14 +64,15 @@ Queries:
 * In
     * level - 0
     * latency - unknown - an effector CA has no set latency
-    * belief_domain -> always responds with [predictable{name:count, object:Action, value:positive_integer}, ...] 
-		- Action is the external name for `executed(Action)`, the factual observation that the Action was executed by the body
+    * belief_domain -> always responds with [predictable{name:Action, object:EffectorName, value:boolean}, ...] 
+		- Action is an action the effector can execute
+	* action_domain -> the actions the effector_ca can take
 
 State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
 	* observations - actions last executed - [executed(Action), ...]
-	* beliefs - beliefs from last execution - [count(Action, N), ...]
+	* beliefs - beliefs from last execution - [Action(EffectorName, Boolean), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
 	* wellbeing - wellbeing values - initially [fullness = 100, integrity = 100, engagement = 0]
@@ -81,7 +84,7 @@ Lifecycle
 	* Queried for its belief domains (only believes in counts of actions executed)
     * Handles intent events - sends can_actuate/2 message in response
 	* Handles ready_actuation messages - tells the body to prepare to actuate, records the actuations
-	* Handles executed event (the body has aggregated and executed actuations) - updates count/2 beliefs and informs all of wellbeing changes
+	* Handles executed event (the body has aggregated and executed actuations) - updates beliefs and informs all of wellbeing changes
 	* Handles predictions events from parents about the last executed actions - sends prediction_error events
 	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
@@ -144,8 +147,11 @@ handled(query(latency), _, unknown).
 
 handled(query(belief_domain), State, BeliefDomain) :-
 	get_state(State, action_domain, ActionDomain),
-	bagof(predictable{name:count, object:Action, value:positive_integer}, member(Action, ActionDomain), BeliefDomain).
+	effector_name(State, EffectorName),
+	bagof(predictable{name:Action, object:EffectorName, value:boolean}, member(Action, ActionDomain), BeliefDomain).
 
+handled(query(action_domain), State, ActionDomain) :-
+	get_state(State, action_domain, ActionDomain).
 
 handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
@@ -157,11 +163,12 @@ handled(message(adopted, Parent), State, NewState) :-
     acc_state(State, parents, Parent, NewState).
 
 handled(message(ready_actuation(Goal), Parent), State, NewState) :-
-	goal_actions(Goal, State, AllActions),
-	log(info, effector_ca, "~@ is actuating actions ~p from goal ~p", [self, AllActions, Goal]),
-	foreach(member(Action, AllActions), body_actuated(State, Action)),
+	goal_action(Goal, State, Action),
+	log(info, effector_ca, "~@ is readying action ~p from goal ~p", [self, Action, Goal]),
+	% The body is ready to execute the action
+	body_actuated(State, Action),
 	message_sent(Parent, actuation_ready(Goal)),
-	acc_state(State, actuations, AllActions, NewState).
+	acc_state(State, actuations, Action, NewState).
 
 handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
 	wellbeing_transfered(State, WellbeingTransfer, NewState).	
@@ -193,16 +200,9 @@ handled(event(executed, _, _), State, NewState) :-
 		State3 = State2
 		),
 	actuations_reset(State3, NewState).	
-		
+	
 handled(event(prediction, PredictionPayload, Parent), State, State) :-
-	option(belief(PredictedBelief), PredictionPayload),
-	about_belief(PredictedBelief, State, Belief),
-	belief_value(PredictedBelief, PredictedValue),
-	belief_value(Belief, ActualValue),
-	(same_belief_value(PredictedValue, ActualValue) ->
-		true;
-		message_sent(Parent, prediction_error(PredictionPayload, ActualValue))
-	).	
+	ca_support:prediction_handled(PredictionPayload, Parent, State).
 
 handled(event(Topic, Payload, Parent), State, NewState) :-
 	ca_support : handled(event(Topic, Payload, Parent), State, NewState).
@@ -219,17 +219,18 @@ action_domain(State, ActionDomain) :-
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
-can_do_goal(count(Action, N), State) :-
-	N > 0,
+effector_name(State, EffectorName) :-
+	get_state(State, effectors, [Effector | _]),
+	EffectorName = Effector.id.
+
+goal_action(Goal, State, Action) :-
+	Goal =.. [Action, EffectorName, true],
+	effector_name(State, EffectorName),
 	get_state(State, action_domain, ActionDomain),
 	member(Action, ActionDomain).
 
-goal_actions(count(Action, N), State, Actions) :-
-	get_state(State, action_domain, ActionDomain),
-	member(Action, ActionDomain),
-	!,
-	length(Actions, N),
-	maplist(=(Action), Actions).
+can_do_goal(Goal, State) :-
+	goal_action(Goal, State, _).
 
 % Each action executed decrements fullness by 1 (energy spent),
 % integrity by 1 (wear and tear), 
@@ -246,7 +247,6 @@ wellbeing_changed(State, UpdatedWellbeing) :-
 	UpdatedWellbeing = [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1],
 	published(wellbeing_changed, UpdatedWellbeing).
 
-
 actuations_reset(State, NewState) :-
 	put_state(State, actuations, [], NewState).
 
@@ -255,14 +255,18 @@ observations_from_actuations(State, Observations) :-
 	bagof(executed(Action), member(Action, Actuations), Observations),
 	log(effector_ca, debug, "~@ observed ~p from actuations ~p", [self, Observations, Actuations]).
 
+% TODO - THIS IS BROKEN
 beliefs_from_observations(State, Beliefs) :-
+	log(debug, effector_ca, "~@ is getting beliefs from observations in ~p", [self, State]),
 	get_state(State, observations, Observations),
-	bagof(Action, member(executed(Action), Observations), ExecutedActions),
-	sort(ExecutedActions, ActionTypes),
-	map_list_to_pairs(count_in(ExecutedActions), ActionTypes, Counts),
-    % The name of an action is how an effector CA presents `executed(Action)` to its parents
-	bagof(count(ActionType, N), member(N - ActionType, Counts), Beliefs),
-	log(effector_ca, debug, "~@ believes ~p from observations ~p", [self, Beliefs, Observations]).
+	effector_name(State, EffectorName),
+	beliefs_from_executions(Observations, EffectorName, Beliefs),
+	log(debug, effector_ca, "~@ believes ~p from observations ~p", [self, Beliefs, Observations]).
+
+beliefs_from_executions([], _, []).
+beliefs_from_executions([executed(Action) | Rest], EffectorName, [Belief | OtherBeliefs]) :-
+	Belief =.. [Action, EffectorName, true],
+	beliefs_from_executions(Rest, EffectorName, OtherBeliefs).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
@@ -272,7 +276,3 @@ body_actuated(State, Action) :-
 	action_url(State, Action, ActionUrl), 
 	body : actuated(ActionUrl),
 	log(debug, effector_ca, "~@ asked body to actuate ~w", [self, Action]).
-
-% actions_executed :-
-% 	query_answered(agency, option(body_host), Host),
-% 	body : actions_executed(Host).
