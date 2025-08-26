@@ -91,4 +91,4 @@ test(intent_executed) :-
     Prediction2 = [belief = reverse_spin(EffectorName, true)],
 	published(prediction, Prediction2),
     % Don't get an error prediction message
-	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA)).
+	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 1).

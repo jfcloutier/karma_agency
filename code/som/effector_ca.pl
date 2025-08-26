@@ -255,7 +255,6 @@ observations_from_actuations(State, Observations) :-
 	bagof(executed(Action), member(Action, Actuations), Observations),
 	log(effector_ca, debug, "~@ observed ~p from actuations ~p", [self, Observations, Actuations]).
 
-% TODO - THIS IS BROKEN
 beliefs_from_observations(State, Beliefs) :-
 	log(debug, effector_ca, "~@ is getting beliefs from observations in ~p", [self, State]),
 	get_state(State, observations, Observations),

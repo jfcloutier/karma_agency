@@ -2,8 +2,6 @@
 
 **THIS REPO IS UNDER CONSTRUCTION**
 
-TODO - send_control vs send_message vs send_query
-
 ## Getting started
 
 Use the development version of SWI-PROLOG (https://www.swi-prolog.org/build/PPA.html)
@@ -79,9 +77,11 @@ tnotrace(t1).
 tnodebug(t1).
 ```
 
-## Design and implementation
+## See also
 
-See
-
-* [Design notes](notes/symbolic_cognitive_robotics.md)
-* [Apperception Engine](https://zenodo.org/records/10325868)
+* [Karma design notes](https://github.com/jfcloutier/karma_system/tree/main/design_notes)
+* [Apperception Engine paper](https://zenodo.org/records/15512255)
+* [Karma's actor framework](https://github.com/jfcloutier/karma_actors)
+* [Karma's Apperception engine](https://github.com/jfcloutier/karma_apperception)
+* [Agent body](https://github.com/jfcloutier/karma_body)
+* [Virtual world](https://github.com/jfcloutier/karma_world)

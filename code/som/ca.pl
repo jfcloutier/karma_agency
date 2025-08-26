@@ -63,7 +63,6 @@ State:
 	  * goal - current goal
 	  * policy - policy to achieve the goal
     * history - [Frame, ...]
-	* 
 */
 
 :- module(ca, []).
