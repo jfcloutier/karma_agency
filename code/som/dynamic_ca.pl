@@ -1,7 +1,7 @@
 /*
 Dynamic cognition actor (CA)
 
-Dynamic as opposed to a priori.
+Dynamic (born and retired) as opposed to static (a priori).
 
 Messages:
 

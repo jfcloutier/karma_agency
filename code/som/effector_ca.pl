@@ -1,5 +1,5 @@
 /*
-An effector CA is an a priori cognition actor that communicates with a body effector to actuate it.
+An effector CA is a static (a priori) cognition actor that communicates with a body effector to actuate it.
 
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
 Same-device effectors are combined in one effector_ca.

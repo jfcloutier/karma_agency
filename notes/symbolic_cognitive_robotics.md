@@ -24,7 +24,7 @@ Last updated: April 10 2024
 * A SOM is a "connectome" of Cognition Agents (CAs)
 * Each CA has an umwelt consisting of other CAs or some sensed aspects of the agent's environment
 * A SOM starts with _a priori_ constituents
-  * The _a priori_ objects are `self`, `world` and `ground`
+  * The _a priori_ objects are `self`, `obstacle` and `ground`
   * The _a priori_ relations is `in`
     * objects `ground` and `self` are `in` world
   * The _a priori_ value domains are
@@ -53,7 +53,7 @@ Last updated: April 10 2024
 
 * The (immediate) umwelt of a CA is a (small) fixed set (fixed at instantiation) of other CAs
   * The CAs in an umwelt also have CAs in their own umwelts
-    * All the way down to _a priori_ CAs
+    * All the way down to _static_ (a priori) CAs
   * The transitive umwelt of a CA is the CAs in its immediate umwelt plus the CAs in their transitive umwelts
   * The level of abstraction of a CA is the maximal depth of its transitive umwelt
   * A CA builds its umwelt from CAs of lower and uniform levels of abstraction

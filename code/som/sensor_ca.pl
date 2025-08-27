@@ -1,5 +1,5 @@
 /*
-A sensor CA is an a priori cognition actor that communicates with a body sensor to obtain its sensed value.
+A sensor CA is a static (a priori) cognition actor that communicates with a body sensor to obtain its sensed value.
 
 A sensor CA believes its sensor's latest reading which pairs a value with an error tolerance.
 
