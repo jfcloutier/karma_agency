@@ -10,7 +10,7 @@ forming a hierarchy.
 :- use_module(actors(supervisor)).
 :- use_module(agency(som/sensor_ca)).
 :- use_module(agency(som/effector_ca)).
-:- use_module(agency(som/ca)).
+:- use_module(agency(som/dynamic_ca )).
 
 %! started(+Sensors, +Effectors) is det
 % the SOM is initiated
@@ -62,7 +62,7 @@ effector_cas_started([Effector|Others]) :-
 
 % Create the first CA capable of mitosis (it divides fullness). Give it an umwelt.
 level_one_ca_started :-
-	ca : name_from_level(1, CA),
+	dynamic_ca : name_from_level(1, CA),
 	umwelt_recruited(0, Umwelt),
 	supervisor : worker_child_started(som,
 		ca,

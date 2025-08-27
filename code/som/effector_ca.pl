@@ -63,6 +63,7 @@ Queries:
 
 * In
     * level - 0
+	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
     * belief_domain -> always responds with [predictable{name:Action, object:EffectorName, value:boolean}, ...] 
 		- Action is an action the effector can execute
@@ -81,7 +82,7 @@ Lifecycle
   * Created for a body effector
   * Repeatedly
     * Adopted by a CA in its umwelt (new parent) - subscribes to umwelt events from parent
-	* Queried for its belief domains (only believes in counts of actions executed)
+	* Queried for its belief domain (only believes in counts of actions executed)
     * Handles intent events - sends can_actuate/2 message in response
 	* Handles ready_actuation messages - tells the body to prepare to actuate, records the actuations
 	* Handles executed event (the body has aggregated and executed actuations) - updates beliefs and informs all of wellbeing changes

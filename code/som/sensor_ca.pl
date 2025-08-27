@@ -40,6 +40,7 @@ Queries:
 
 * In
     * level - 0
+    * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
     * belief_domain -> [predictable{name:distance, object:SensorName, value:SenseDomain}]
 
@@ -53,7 +54,7 @@ Lifecycle:
   * Created once for a body sensor
   * Repeatedly
     * Adopted by a CA as part of its umwelt (new parent) - subscribes to umwelt events from parent
-    * Queried for its belief domains (only believes its latest reading)
+    * Queried for its belief domain (only believes its latest reading)
     * Handles prediction events by making readings and then maybe emitting prediction errors
       if the readings differ from the predictions more than the error tolerance of the sensor
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent

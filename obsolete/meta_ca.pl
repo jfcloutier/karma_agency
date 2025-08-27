@@ -45,7 +45,7 @@ State:
 :- use_module(actors(timer)).
 :- use_module(agency(som/sensor_ca)).
 :- use_module(agency(som/effector_ca)).
-:- use_module(agency(som/ca)).
+:- use_module(agency(som/dynamic_ca )).
 :- use_module(actors(task)).
 
 % Static thread state
@@ -307,7 +307,7 @@ all_covered_by([UmweltCA|Others], WardCAs) :-
 
 covered_by_any(UmweltCA, WardCAs) :-
 	member(CA, WardCAs), 
-	ca : umwelt(CA, Umwelt), 
+	dynamic_ca : umwelt(CA, Umwelt), 
 	member(UmweltCA, Umwelt).
 
 % Level 0 is always mature
@@ -323,7 +323,7 @@ level_is_mature(_) :-
 
 add_ca(State, CAName) :-
 	get_state(State, level, Level), 
-	ca : name_from_level(Level, CAName), 
+	dynamic_ca : name_from_level(Level, CAName), 
 	pick_umwelt(State, Umwelt), 
 	supervisor : start_worker_child(som, ca, CAName, 
 		[init(

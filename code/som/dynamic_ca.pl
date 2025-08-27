@@ -1,43 +1,46 @@
 /*
-Cognition actor (CA)
+Dynamic cognition actor (CA)
+
+Dynamic as opposed to a priori.
 
 Messages:
 
 * In
 	* `adopted(Parent)` - when added to the umwelt of a CA one level up
-	* `causal_theory_found(Theory)` - when the Apperception Engine has found a causal theory for the CA
+	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the CA
 
-* Out to a parent
-    * `can_actuate(IntentPayload, Directives)` - responding to intent event - it can actuate these directives
-    * `cannot_actuate(IntentPayload)` - responding to intent event - this effector CA can't do any part of the parent's intended policy
-	* `executable(ActuationPayload, Directives)` responding to actuation message - the effector CA has primed the body for execution
-    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+* In from self
+    * tick - current time frame ends
 
 * In from a parent
-    * actuation(DirectivesPayload) - a parent communicates the actuations it wants the effector CA to execute
-	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* ready_actuation(Goal) - a parent communicates an actuation it wants the effector CA to execute
+	* wellbeing_transfer(WellbeingValues) - payload is [fullness = N1, integrity = N2, engagement = N3]
 
+* Out to a parent	
+	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
+	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
+    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+	
 Events:
 
 * In
-	* topic: execute, payload: [] - execution is triggered
+	* topic: executed, payload: [] - body actuation was triggered
 
-* In from parents, out
-  * topic: intent, payload: [policy = Policy] - a parent CA communicates a policy it built that it intends to execute if possible
-  * topic: prediction, payload: [belief = Belief] - a parent makes a prediction about what the CA believes
-
-* In from umwelt, out
-  * topic: belief_domain_changed, payload: [Predictable, ...]
-  * topic: wellbeing_changed, payload: WellbeingPayload
-
-* Out  
-  * topic: ca_started, payload: [level = Level]
-  * topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
+* In from parents
+	* topic: intent, payload: [Directive, ...] - a parent CA communicates a policy it built that it intends to execute if possible
+	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+	
+* Out
+    * topic: ca_started, payload: [level = Level]
+	* topic: wellbeing_changed, payload: WellbeingPayload  - [fullness = N1, integrity = N2, engagement = N3]
+	* topic: belief_domain_changed, payload: BeliefDomain - [predicatble(name: BeliefName, object: BeliefObject, value: ValueDomain), ...]
+	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
 * Queries:
 
 * In
   * level -> Integer > 0
+  * type -> dynamic_ca
   * latency -> Integer (secs)
   * umwelt -> CA names
   * belief_domain -> [Predictable, ...]
@@ -65,7 +68,7 @@ State:
     * history - [Frame, ...]
 */
 
-:- module(ca, []).
+:- module(dynamic_ca, []).
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
@@ -178,6 +181,8 @@ handled(message(Message, Source), State, NewState) :-
 
 handled(query(level), _, Level) :-
 	level(Level).
+
+handled(query(type), _, dynamic_ca).
 
 handled(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
