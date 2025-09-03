@@ -4,7 +4,7 @@ Author: Jean-François Cloutier
 
 Research project: Symbolic Cognitive Robotics, Active Inference Institute
 
-Last updated: April 10 2024
+Last updated: September 3, 2025
 
 **Design notes on the next iteration of a cognitive architecture for Lego robots.**
 
@@ -16,7 +16,7 @@ Last updated: April 10 2024
 * Mortal semiosis (sense-making and sign-acting are intrinsically grounded in the agent's drive to survive)
 * Society of Mind (an agent is animated by a collective of cognition actors interacting with each other and the world)
 * Constraint Closure (the cognition actors constrain how the Society of Mind as a whole can change, and vice-versa)
-* Kantian Whole (the parts -cognition actors- exist for and by means of the whole -the Society of Mind-)
+* Kantian Whole (the parts -cognition actors- exist for and by means of the whole -the agent's Society of Mind-)
 
 ## Society of Mind (SOM)
 
@@ -24,9 +24,7 @@ Last updated: April 10 2024
 * A SOM is a "connectome" of Cognition Agents (CAs)
 * Each CA has an umwelt consisting of other CAs or some sensed aspects of the agent's environment
 * A SOM starts with _a priori_ constituents
-  * The _a priori_ objects are `self`, `obstacle` and `ground`
-  * The _a priori_ relations is `in`
-    * objects `ground` and `self` are `in` world
+  * The _a priori_ objects are `obstacle` and `ground`
   * The _a priori_ value domains are
     * boolean - [true, false]
     * integer ranges, including percentage
@@ -36,7 +34,6 @@ Last updated: April 10 2024
       * beliefs (e.g. `color`, `distance`, `touched`)
         * with value domains (e.g. colors, 0..100, etc.)
       * actions (e.g. `spin`, `reverse spin`)
-  * Metacongnition actors have _a priori_ capabilities and each CA has _a priori_, shared introspective belief voacabulary (see below)
 
 ## Exteroception vs interoception vs introspection
 
@@ -45,8 +42,8 @@ Last updated: April 10 2024
 * Interoception => Cognition of (more or less abstracted) bodily sensations
   * e.g. a motor is stalled
 * Introspection => Cognition of sensations about computations by **Cognition Actors (CAs)**
-  * perceived by Metacognition actors
-  * e.g. a CA has low predictive capability
+  * fullness wellbeing is low but increasing
+  * a CA has low predictive capability
 * A CA can non-exclusively coopt other CAs into its umwelt as sources of interoceptive or exteroceptive sensations, and as effectors of actions
 
 ## The umwelt of a Cognition Actor (CA)
@@ -60,15 +57,13 @@ Last updated: April 10 2024
 * CA Interfaces
   * A CA's interface is what it exposes to other CAs, namely
     * The vocabulary of its beliefs (what others can make predictions about), composed of
-      * extant (observed), latent (imagined) and synthetic (derived) objects,
-      * extant, latent and synthetic relations/properties
-        * a latent or synthetic property is always boolean-valued
+      * extant (observed), latent (imagined) and abstract objects (observed synthetic beliefs),
+      * extant, latent and synthetic relations/properties (beliefs are synthetic relations/properties, namely, count, more, trend and coincide)
     * The actions it affords
-      * either _a priri_ actions (e.g. spin and reverse spin of motors) or synthetic actions
-  * All CAs have a common vocabulary of meta-cognition beliefs
-    * exposed to meta-cognition actors
+      * either _a priri_ actions (e.g. spin and reverse spin of motors) 
+      * or goals it can achieve (initiating, persisting or terminating a given belief)
 * CA events
-  * A CA emits events listened to by the CAs tp which unwelts it belongs, and by the meta-cognition actor overseeing it
+  * A CA emits events listened to by other CAs, mostly those in an umwelt relationship
     * when prompted by predictions about its beliefs, a CA emits
       * prediction errors given its currently held beliefs
         * with varying precision
@@ -104,20 +99,29 @@ Last updated: April 10 2024
 * Beliefs are available to other CA's as _synthetic or latent_ and thus _novel_ perceptions
 * Beliefs are abduced predicates
   * needed to formulate a causal theory (latent)
-  * or needed to label significant perceptual trends (synthetic)
+  * or needed to label significant perceptual patterns (synthetic)
 * Beliefs have associated normativity (pleasant vs unpleasant vs indifferent beliefs) from ambient feelings
 * "Thin now" vs. "thick now" beliefs
   * Thin now beliefs are
     * unobserved but imagined/abduced properties/relations/objects to (causally) make sense of observations
   * Thick now beliefs are
-    * synthetic beliefs, induced from, and thus supported by, perceptual trends
+    * synthetic beliefs, induced from, and thus supported by, perceptual patterns such as detected trends
 
-### Perceptual trends support synthetic beliefs
+### Perceptual pattterns support synthetic beliefs
 
-* Perceptual trends (from the analysis of past perceptions) support synthetic beliefs
-* A trend is about the relation or property of a given object
+* Perceptual patterns (from the analysis of past perceptions) support synthetic beliefs
+* A pattern is about the relation or property of a given object or pairs of object, now or over time
   * A relation associates two objects
   * A property associates an object and a value from a defined domain of values
+* Detected patterns are
+  * count - an object has a kind of relation with N other objects
+  * more - there has been more of something than of something else in the current timeframe
+  * coincide - two or more umwelt beliefs are consistently co-occuring
+  * trend - the ordinal values of a property of an object is trending up or down or not at all
+
+TODO - HERE
+
+
 * A trend is itself given a value
   * a trend is either stable, unstable, up, down
     * `trend(<predicate name>(<object name>), <trend value>, <since>)`
