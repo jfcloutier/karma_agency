@@ -10,25 +10,28 @@ Messages:
 	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the CA
 
 * In from self
-    * tick - current time frame ends
+    * tick - current time frame is ending
 
+* Out to a parent (when ending the current time frame)	
+	* `can_actuate(Goals)` - responding to intent events - the CA commits (until intent completed) to realizing each of these goals (can be empty) - a goal is a belief the CA is requested to initiate, persist or terminate
+	* `actuation_ready(Goal)` responding to ready_actuation message - the CA has successfully and transitively primed the body for execution of the goal
+	* `prediction_error(PredictionPayload, ActualValue)` - responding with the correct value to a prediction event where the prediction is incorrect
+		
 * In from a parent
-	* ready_actuation(Goal) - a parent communicates an actuation it wants the effector CA to execute
-	* wellbeing_transfer(WellbeingValues) - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* ready_actuation(Goal, Boolean) - a parent communicates that the CA was selected (or not) to realize a goal by actuating whatever policy the CA chose or built
+	* wellbeing_transfer(WellbeingValues) - payload is [fullness = Delta1, integrity = Delta2, engagement = Delta3] - a transfer in either direction of wellbeing
 
-* Out to a parent	
-	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
-	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
-    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
-	
 Events:
 
 * In
-	* topic: executed, payload: [] - body actuation was triggered
+	* topic: executed, payload: [] - body actuation was triggered - whatever actuations were readied by the CA, if any, were carried out by the body's effectors
 
-* In from parents
-	* topic: intent, payload: [Directive, ...] - a parent CA communicates a policy it built that it intends to execute if possible
-	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+* In from parents (accumulated until end of time frame)
+	* topic: intent, payload: [id = IntentID, directives = [Directive, ...]] - a parent CA communicates a list of directives (prioritized goals) it intends to execute if possible
+	* topic: intent_completed, payload: [id = IntentID, status =  SuccessOrFailure]
+													 - a parent CA has completed preparations to realize its intent, or has failed to
+	                                                 - the CA's timeframe can now terminate, propagating the readied actuations awaiting execution into the next timeframe if intent was successful
+	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about what the CA believes
 	
 * Out
     * topic: ca_started, payload: [level = Level]
