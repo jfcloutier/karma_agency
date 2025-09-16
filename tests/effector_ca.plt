@@ -62,8 +62,9 @@ test(intent_executed) :-
 	query_answered(EffectorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-    % intent - the CA informs of the subset of intended directives that can be actuated 
-    IntentPayload = [directive{goal:spin(EffectorName, true), priority:1}, directive{goal:reverse_spin(EffectorName, true), priority:1}, directive{goal:jump(EffectorName, true), priority:1}],
+    % intent - the CA informs of the subset of intended directives that can be actuated
+    Id = 'abc',
+    IntentPayload = [id = Id, goals = [spin(EffectorName, true), reverse_spin(EffectorName, true), jump(EffectorName, true)], priority = 1],
     published(intent, IntentPayload),
     get_message(message(can_actuate(Goals), EffectorCA)),
     assertion(member(spin(EffectorName, true), Goals)),
@@ -91,4 +92,5 @@ test(intent_executed) :-
     Prediction2 = [belief = reverse_spin(EffectorName, true)],
 	published(prediction, Prediction2),
     % Don't get an error prediction message
-	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 1).
+	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 1),
+    published(intent_completed, [id = Id, executed = true]).

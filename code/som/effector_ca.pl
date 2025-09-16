@@ -52,7 +52,8 @@ Events:
 	* topic: executed, payload: [] - body actuation was triggered
 
 * In from parents
-	* topic: intent, payload: [Directive, ...] - a parent CA communicates a policy it built that it intends to execute if possible
+	* topic: intent, payload: [id = Id, priority = Priority, goals = [Goal, ...] - a parent CA communicates a policy it built that it intends to execute if possible
+	* topic: intent_completed, payload: [id = Id, executed = Boolean] - ignored
 	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
 	
 * Out
@@ -183,11 +184,14 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     unsubscribed_from(Parent),
     dec_state(State, parents, Parent, NewState).	
 
-handled(event(intent, Directives, Parent), State, NewState) :-
+handled(event(intent, Intent, Parent), State, NewState) :-
 	well_enough(State),
-	setof(Goal, (member(directive{goal:Goal, priority:_}, Directives), can_do_goal(Goal, State)), Goals), 
-	log(info, effector_ca, "~@ can actuate directive goals ~p from intent directives ~p", [self, Goals, Directives]),
-	message_sent(Parent, can_actuate(Goals)),
+	log(info, effector_ca, "~@ handling intent ~p from ~w", [self, Intent, Parent]),
+	option(goals(Goals), Intent),
+	option(id(Id), Intent),
+	setof(Goal, (member(Goal, Goals), can_do_goal(Goal, State)), ActuatableGoals), 
+	log(info, effector_ca, "~@ can actuate goals ~p from intent ~p", [self, ActuatableGoals, Id]),
+	message_sent(Parent, can_actuate(ActuatableGoals)),
 	actuations_reset(State, NewState).		
 
 handled(event(executed, _, _), State, NewState) :-
