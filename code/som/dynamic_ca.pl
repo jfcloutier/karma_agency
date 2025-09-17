@@ -1,7 +1,43 @@
 /*
 Dynamic cognition actor (CA)
 
-Dynamic (born and retired) as opposed to static (a priori).
+A dynamic cognition actor (CA) is born and eventually retired, as opposed to a static cognition actor
+which exists a priori and perpetually to interface with the body's sensors and effectors, which do not change.
+
+A CA is born with an assigned umwelt of multiple cognition actors from the abstraction layer below.
+A CA's umwelt establishes a "parent-children" relationship. A CA can be in more than one umwelt.
+
+A CA is kept updated about the belief domain of its umwelt, that is, what meaningful predictions it can make.
+
+A CA maintains and updates a causal model/theory, which at first is a trivial one ("nothing changes").
+As the CA grows a history of observations of its umwelt, the causal theory becomes updated to one that can predict
+with (hopefully) growing accuracy changes in the observations.
+
+A CA operates one timeframe at a time, each timeframe representing a thick now.
+
+In the current timeframe, the CA goes through these steps:
+
+* It observes its umwelt by making predictions, based on past observations and its causal model, about the beliefs held in its umwelt and then maybe receiving prediction errors.
+  * The CA's observations are the set of uncontested predictions, plus the prediction errors.
+  * Prediction errors invalidate the causal model. Too many of them motivate the CA to update its causal model.
+* It analyses past and current observations to update its beliefs about its umwelt (e.g. by detecting trends in the observations across the CAs in its umwelt).
+* It updates its wellbeing measures from observations, its own (costly) processing, and from the diffusion of wellbeing to/from nearby CAs (parents and children).
+* It assigns pleasant/unpleasant feelings to beliefs based on correlated high/low, increasing/decreasing wellbeing neasures.
+* It selects a goal to achieve, namely a belief to impact (persist or terminate).
+  * The goal can be self-assigned or one intended by a parent.
+* It builds or reuses a policy that is likely to achieve the goal
+  * Based on past successes
+  * Or based on the causal model
+* It directs its umwelt to realize the policy
+  * The umwelt may be unable to do so, in which case, time allowing, another policy is attempted, or another goal is selected
+* It concludes the current timeframe
+  * It may decide to eliminate itself (and do none of the following))
+  * It may decide to birth another CA
+  * It may request a new causal model
+  * It adds the current timeframe to its history, possibly trimming it
+  * It initiates a new timeframe
+
+
 
 Messages:
 
