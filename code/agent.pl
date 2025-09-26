@@ -16,7 +16,7 @@ set_log_level(debug).
 agent:started('localhost:4000').
 threads.
 query_answered(som, children, SOMChildren).
-query_answered('sensor:ultrasonic-in4:distance', belief_domain, Answer).
+query_answered('sensor:ultrasonic-in4:distance', experience_domain, Answer).
 
 message_sent('effector:tacho_motor-outA', actuated(spin)).
 message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).
@@ -40,9 +40,9 @@ threads.
 
 %! started(+BodyHost) is det
 % the agent is started on a body referenced by a url
-started(BodyHost) :-
+started(BodyHost, Options) :-
 	log(info, agent, "Starting agent"),
 	body : capabilities(BodyHost, Sensors, Effectors),
 	log(info, agent, "The body has sensors ~p", [Sensors]),
 	log(info, agent, "The body has effectors ~p", [Effectors]),
-	som : started(Sensors, Effectors, BodyHost).
+	som : started(Sensors, Effectors, BodyHost, Options).

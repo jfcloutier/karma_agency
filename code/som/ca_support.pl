@@ -34,36 +34,36 @@ from_parent(Source, State) :-
     get_state(State, parents, Parents),
     member(Source, Parents).
 
-% 'sensor:touch-in1:contact' is NOT handling event prediction with [belief=contact('touch-in1:contact',pressed)]
+% 'sensor:touch-in1:contact' is NOT handling event prediction with [experience=contact('touch-in1:contact',pressed)]
 prediction_handled(PredictionPayload, Parent, State) :-
     log(info, ca_support, "Handling prediction ~p in state ~p", [PredictionPayload, State]),
-	option(belief(PredictedBelief), PredictionPayload),
-	about_belief(PredictedBelief, State, Belief),
-	belief_value(PredictedBelief, PredictedValue),
-	belief_value(Belief, ActualValue),
-	(same_belief_value(PredictedValue, ActualValue) ->
+	option(experience(PredictedExperience), PredictionPayload),
+	about_experience(PredictedExperience, State, Experience),
+	experience_value(PredictedExperience, PredictedValue),
+	experience_value(Experience, ActualValue),
+	(same_experience_value(PredictedValue, ActualValue) ->
 		true;
         value_without_tolerance(ActualValue, Value),
 		message_sent(Parent, prediction_error(PredictionPayload, Value))
 	).	
 
-about_belief(PredictedBelief, State, Belief) :-
-    PredictedBelief =.. [BeliefName, Object, _],
-    get_state(State, beliefs, Beliefs),
-    member(Belief, Beliefs),
-    Belief =.. [BeliefName, Object, _].
+about_experience(PredictedExperience, State, Experience) :-
+    PredictedExperience =.. [ExperienceName, Object, _],
+    get_state(State, experiences, Experiences),
+    member(Experience, Experiences),
+    Experience =.. [ExperienceName, Object, _].
     
-belief_value(Belief, Value) :-
-   Belief =.. [_, _, Value].
+experience_value(Experience, Value) :-
+   Experience =.. [_, _, Value].
 
-same_belief_value(Value1, Value2) :-
+same_experience_value(Value1, Value2) :-
     number_with_tolerance(Value1, Val1-Tolerance1),
     number_with_tolerance(Value2, Val2-Tolerance2),
     !,
     Tolerance is Tolerance1 + Tolerance2,
     abs(Val2 - Val1) =< Tolerance.
 
-same_belief_value(Value, Value).
+same_experience_value(Value, Value).
 
 number_with_tolerance(Value-Tolerance, Value-Tolerance) :- number(Value).
 

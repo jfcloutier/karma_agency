@@ -1,69 +1,91 @@
 /*
-Dynamic cognition actor (CA)
+Dynamic cognition actor
 
-A dynamic cognition actor (CA) is born and dies, as opposed to a static cognition actor
-who exists a priori and in perpetuity (as an interface to a body's sensor or effector).
+A dynamic cognition actor is a transient component of the agent's society of mind (SOM). It is a cognition actor (CA) that is born and dies during the lifetime of the SOM.
+This is in contrast to a static CA that exists a priori and in perpetuity (as an interface to a body's permanent sensor or effector).
+Unlike static CAs, dynamic CA has as its umwelt other CAs.
 
-A CA is born with an assigned umwelt of a small number of cognition actors from the abstraction layer below.
-A CA's umwelt establishes a "parent-children" relationship. A CA can be in more than one umwelt.
-A CA is kept updated about the belief domain of its umwelt so it can make meaningful predictions about its umwelt.
+A dynamic CA is born with a permanent, assigned umwelt of a small number of CAs from the abstraction layer below.
+A dynamic CA's umwelt establishes a "parent-children" relationship. A dynamic CA can be in more than one umwelt.
+A dynamic CA is kept updated about the kinds of experiences (experiential domain) its umwelt holds so it can make meaningful predictions about what its umwelt actually experiences.
 
-A CA operates one timeframe at a time, each timeframe representing a thick now.
-The more abstract the CA, the (qualitatively) longer each timeframe.
+A dynamic CA operates one timeframe at a time, each timeframe representing a "thick now". The more abstract the dynamic CA, the (qualitatively) longer each timeframe.
+The life of a dynamic CA is a sequence of timeframes.
 
-During the curent timeframe, a CA observes its umwelt, updates its own beliefs from observations, and then maybe acts to impact a salient belief.
+During the current timeframe, a dynamic CA observes its umwelt, updates its own experiences from observations, and then maybe acts to verify or impact (persist or terminate) a salient experience.
 
-A CA observes the beliefs held in its umwelt by predicting them, using its causal model and the latest observations. It may receive prediction errors.
-A CA's observations in a timeframe is the set of uncontested predictions made plus the prediction errors received.
+A dynamic CA predicts the experiences held in its umwelt by using its causal model and applying it to the latest observations it made of its umwelt. It may receive prediction errors.
+A dynamic CA's observations made in a timeframe is the resulting set of uncontested predictions made plus the prediction errors received in that timeframe.
 
-A CA maintains and updates a causal model/theory. It is at first a trivial one ("nothing changes").
-As the history of observations grows and as the prediction error rate rises, a new causal theory maybe requested,
+An experience composed of prediction errors is surprising. The larger the ratio of errors, the more surprising it is.
+A CA has low confidence in a surprising experience and may not act to impact it until it has sufficient confidence. Confidence grows in an experience that persists, however surprising.
+A CA may however act to validate a surprising experience to test if it will last.
+
+A dynamic CA maintains and updates a causal model/theory (a generated logical program) that makes sense of its umwelt. It is, at first, a trivial one model ("nothing changes").
+As the dynamic CA's history of observations grows and as the prediction error rate rises, the dynamic CA eventually requests a new causal theory from the Apperception Engine,
 one with hopefully better accuracy than the last.
 
-Near the end of the current timeframe, a CA updates its beliefs by detecting patterns in previous and current observations.
-It then attaches normativity (pleasantness/unpleasantness) to each belief based on updated wellbeing measures and gradients.
+Near the end of the current timeframe, a dynamic CA updates its experiences by detecting patterns in previous and current observations of the CAs in its umwelt.
+It then attaches normativity (good vs. bad) to each experience based on updated and correlated wellbeing measures and gradients.
 
-The CA then selects a belief to impact as a goal (it could be imposed on it from a parent) and formulates/reuses a policy.
-A policy is a set of umwelt goals likely to be effective, according to the causal theory, at impacting the selected belief held by the CA.
-It then attempts to have the policy realized by its umwelt.
+The wellbeing measures of a dynamic CA are fullness (think energy level), integrity (think health) and engagement (think relevance).
+They are modified by the efforts the dynamic CA makes (cognitive and physical), what it senses (collisions, feeding), and by the passing of time (aging, recovery).
+The wellbeing of a dynamic CA goes up and down from the dynamic CA's own activity and sensing but also from diffusion (equilibration) across CAs along parent-child relationships.
+The wellbeing of a dynamic CA (think stress) affects what the dynamic CA can do (low-fullness behavior vs high-fullness behavior, etc.) and what it decides to do.
 
-Before terminating the current timeframe, the CA decides whether to birth a new CA, terminate itself, or do neither.
-If it decides to keep on living, it puts the current timeframe in memory, trimming it as needed to preserve wellbeing, and, finally, it initiates a new timeframe.
+Before ending a timeframe, a dynamic CA may decide on a goal to realize. This goal is either a salient-enough experience to persist/terminate, or it is a goal imposed on it by a parent.
+The salience of an experience is a function of confidence and associated wellbeing.
 
+To realize the selected goal, the dynamic CA formulates a plan or reuses a time-tested affordance (a reusable plan).
+A plan is a set of prioritized goals (directives) sent to the umwelt. The plan is likely to be effective, according to the causal theory, at impacting the experience held by the dynamic CA,
+because the experience is derived from observed umwelt experiences the plan seeks to impact.
+The CA expresses its intent to act and expects (perhaps wrongly) to have the plan realized by its umwelt.
+
+Before terminating the current timeframe, the dynamic CA decides whether to birth a new CA (if it succeeds at enlisting enough CAs in the layer below to form a new umwelt),
+terminate itself (if its wellbeing is consistently too low), or do neither.
+If it decides to keep on living, it commits the current timeframe to memory, trimming it as constrained by its wellbeing,
+perhaps requests an update to its causal theory, and then, finally, it initiates a new timeframe.
+
+Over the next timeframes, the dynamic CA will assess the success or failures of plans executed in prior timeframes by
+evaluating how closely they correlate, if at all, to sought experience changes. If a plan appears to be effective, a dynamic CA will package the plan and its goal in an affordance.
+A dynamic CA will tend to use affordances that appear to have been successful at achieving a given goal.
+
+Communications from other CAs
+-----------------------------
 Messages:
 
 * In
-	* `adopted(Parent)` - when added to the umwelt of a CA one level up
-	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the CA
-
-* In from self
-    * tick - current time frame is ending
-
-* Out to a parent (when ending the current time frame)	
-	* `can_actuate(Goals)` - responding to intent events - the CA commits (until intent completed) to realizing each of these goals (can be empty) - a goal is a belief the CA is requested to initiate, persist or terminate
-	* `actuation_ready(Goal)` responding to ready_actuation message - the CA has successfully and transitively primed the body for execution of the goal
+	* `adopted(Parent)` - when added to the umwelt of a dynamic CA one level up
+	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the dynamic CA
+	* `die` - when the dynamic CA has reached end-of-life
+	
+* Out to a parent (when ending the current time frame)	- thus also in from a child
+	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
+	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
+	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
 	* `prediction_error(PredictionPayload, ActualValue)` - responding with the correct value to a prediction event where the prediction is incorrect
 		
 * In from a parent
-	* ready_actuation(Goal, Boolean) - a parent communicates that the CA was selected (or not) to realize a goal by actuating whatever policy the CA chose or built
+	* ready_actuation(Goal, Boolean) - a parent communicates that the dynamic CA was selected (or not) to realize a goal by actuating whatever plan the dynamic CA chose or built
 	* wellbeing_transfer(WellbeingValues) - payload is [fullness = Delta1, integrity = Delta2, engagement = Delta3] - a transfer in either direction of wellbeing
 
 Events:
 
 * In
-	* topic: executed, payload: [] - body actuation was triggered - whatever actuations were readied by the CA, if any, were carried out by the body's effectors
+	* topic: executed, payload: [] - body actuation was triggered - whatever actuations were readied by the dynamic CA, if any, were carried out by the body's effectors
+
 
 * In from parents (accumulated until end of time frame)
 	* topic: intent, payload: [id = IntentID, directives = [Directive, ...]] - a parent CA communicates a list of directives (prioritized goals) it intends to execute if possible
 	* topic: intent_completed, payload: [id = IntentID, status =  SuccessOrFailure]
 													 - a parent CA has completed preparations to realize its intent, or has failed to
-	                                                 - the CA's timeframe can now terminate, propagating the readied actuations awaiting execution into the next timeframe if intent was successful
-	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about what the CA believes
+	                                                 - the dynamic CA's timeframe can now terminate, propagating the readied actuations awaiting execution into the next timeframe if intent was successful
+	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about what the dynamic CA experiences
 	
 * Out
     * topic: ca_started, payload: [level = Level]
 	* topic: wellbeing_changed, payload: WellbeingPayload  - [fullness = N1, integrity = N2, engagement = N3]
-	* topic: belief_domain_changed, payload: BeliefDomain - [predicatble(name: BeliefName, object: BeliefObject, value: ValueDomain), ...]
+	* topic: experience_domain_changed, payload: ExperienceDomain - [predicatble(name: ExperienceName, object: ExperienceObject, value: ValueDomain), ...]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
 * Queries:
@@ -73,29 +95,57 @@ Events:
   * type -> dynamic_ca
   * latency -> Integer (secs)
   * umwelt -> CA names
-  * belief_domain -> [Predictable, ...]
+  * experience_domain -> [Predictable, ...]
   * wellbeing -> [fullness = N1, integrity = N2, engagement = N3]
-    
-Thread locals:
-    * level - 1..? - the level of the CAs it is responsible for
-    * timer - the frame timer
 
-State:
+Lifecycle
+---------
+
+The lifecycle of a dynamic CA (sensor and effector CAs are static) is cyclical and is driven by messages it sends itself to progress through lifecycle phases.
+
+The lifecycle of a dynamic CA ends when it decides to terminate itself.
+
+At any point in the lifecycle, the dynamic CA immediately processes all events and messages from other CAs and updates its state.
+
+Executing a lifecycle phase:
+
+1. Receive a lifecycle message (advance to next phase) from itself with an updated state
+2. Merge the current state with the updated state
+3. Start a timeboxed, async task for this phase with the new state
+4. The task may emit events and messages to other CAs
+5. On ending the task (b/c its done or time has expired),
+   send the next phase lifecycle message to self with the modified state
+
+Pattern: Lifecycle message to self -> Phase task -> Follow-up lifecycle message to self
+
+tick -> Initialize new time frame from the previous one -> observe
+observe -> Make predictions about umwelt experiences -> experience
+experience -> Compile observations, update own experiences from observations -> act
+act -> Select a goal (a held experience to impact) and attempt to realize it via a plan directing the umwelt to change its experiences -> assess
+assess -> Evaluate the accuracy of the causal theory and the effectiveness of past plans, perhaps request a new causal theory, update affordances -> age
+age -> Maybe modify the SOM (cytosis/apoptosis) and diffuse stress -> tick
+
+State
+-----
+
+Data:
     * parents - parent CAs
     * umwelt - child CAs
-	* buffered_events - events received and suspended while ending
-    * frame - the current frame
+	* causal_theory - current causal theory
+	* affordances - [goal-directives, ...]
+	* wellbeing - wellbeing metrics {fullness:Percent, integrity:Percent, engagement:Percent}
+	* goal - selected goal {experience:Experience, impact:Impact, priority:Priority}
+	* plan - plan to achieve the goal [directive, ...]
+    * time_frame - the current time frame
 	  * start_time
-	  * status - initiating, started, ending or ended
-	  * wellbeing - wellbeing tokens
+	  * phase - the current time frame phase
 	  * predictions_out - predictions made
 	  * predictions_in - predictions received
 	  * prediction_errors -prediction errors received
-	  * beliefs - current beliefs
-	  * causal_theory - current causal theory
-	  * goal - current goal
-	  * policy - policy to achieve the goal
-    * history - [Frame, ...]
+	  * observations - current observations
+	  * experiences - current experiences
+	  * directives - received directives
+    * history - [TimeFrame, ...]
 */
 
 :- module(dynamic_ca, []).
@@ -106,12 +156,13 @@ State:
 :- use_module(actors(worker)).
 :- use_module(library(uuid)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/phase)).
 
-% Thread statis state
-:- thread_local level/1, timer/1, buffered_events/1.
+% Thread statis state - TODO - revise
+:- thread_local level/1, timer/1.
 
 %! name_from_level(+Level, -Name) is det
-% Get a unique name for a CA given the level it occupies in the SOM
+% Get a unique name for a dynamic CA given the level it occupies in the SOM
 name_from_level(Level, Name) :-
 	uuid(ID),
 	atomic_list_concat([ca, level, Level, id, ID], ":", Name).
@@ -126,7 +177,6 @@ latency(Level, Latency) :-
 level_from_name(Name, Level) :-
 	atomic_list_concat([ca, level, LevelAtom, id, _], ":", Name),
 	atom_number(LevelAtom, Level).
-	% query_answered(Name, level, Level).
 
 %! umwelt(+Name, -Umwelt) is det
 % Get the umwelt (a list of CA names) of a named CA
@@ -140,71 +190,67 @@ recruit(Name, Eagerness) :-
 % Worker
 
 init(Options, State) :-
-	log(info, ca, "Initiating ca with ~p", [Options]),
+	log(info, dynamic_ca, "Initiating ca with ~p", [Options]),
 	empty_state(EmptyState),
-		remember_level(Options, Level),
-	option(umwelt(Umwelt),
-		Options),
-	self(Name),
+	remember_level(Options, Level),
+	option(umwelt(Umwelt), Options),
 	latency(Level, Latency),
-	empty_frame(Frame),
-	put_state(EmptyState, [parents - [], umwelt - Umwelt, frame - Frame, history - [], buffered_events - [], status -  initiating], State),
+	empty_time_frame(TimeFrame),
+	initial_wellbeing(Wellbeing),
+	put_state(EmptyState, [latency - Latency, parents - [], umwelt - Umwelt, wellbeing - Wellbeing, timeframe - TimeFrame, history - [], alive - true], InitialState),
 	subscribed_to_events(),
 	announce_adoptions(Umwelt),
-	clock_started(Name, Latency).
+	% Start life
+	published(ca_started, [level(Level)]),
+	phase_transition(InitialState, State).
 
 remember_level(Options, Level) :-
-	option(level(Level),
-		Options),
+	option(level(Level), Options),
 	assert(level(Level)).
 
 announce_adoptions(Umwelt) :-
 	forall(member(Child, Umwelt), message_sent(Child, adopted)).
 
-% TODO - prediction/1, prediction_error/1, belief_domain/1 etc.
+% TODO - prediction/1, prediction_error/1, experience_domain/1 etc.
 subscribed_to_events :-
-	forall(member(Topic, [ca_started, ca_terminated, prediction, belief_domain]),
+	forall(member(Topic, [ca_started, ca_terminated, prediction, experience_domain, directives]),
 		subscribed(Topic)).
 
-clock_started(Name, Delay) :-
-	call_at_interval(Name,
-		framer,
-		message_sent(Name, tick),
-		Delay,
-		TimerName),
-	assert(timer(TimerName)),
-	% Send first tick now
-	message_sent(tick).
-
 % Empty time frame 
-empty_frame(EmptyFrame) :-
+empty_time_frame(EmptyTimeframe) :-
 	get_time(Now),
-	put_state(frame{}, [start_time - Now, wellbeing - [], predictions_out - [], predictions_in  - [], prediction_errors - [], beliefs - []], EmptyFrame).
+	WellbeingDeltas = wellbeing_deltas{fullness:0, integrity:0, engagement:0},
+	EmptyTimeframe = timeframe{start_time:Now, phase:start, predictions_out:[], predictions_in:[], prediction_errors:[], observations:[], experiences:[], directives:[], affordances:[], wellbeing_deltas:WellbeingDeltas}.
 
 signal_processed(control(stopped)) :-
 	worker : stopped.
 
 terminated :-
-	log(warn, ca, "~@ terminating", [self]),
+	log(warn, dynamic_ca, "~@ terminating", [self]),
 	timer(TimerName),
 	timer : stopped(TimerName),
 	level(Level),
 	published(ca_terminated,
 		[level(Level)]),
-	log(warn, ca, "Terminated ~@", [self]).
-
-% Time to start a timeframe
-handled(message(tick, _), State, NewState) :-
-	(get_state(State, history, []) ->
-	published(ca_started,
-			[level(Level)]),
-		State1 = State;
-	frame_ended(State, State1)),
-	frame_started(State1, NewState).
+	log(warn, dynamic_ca, "Terminated ~@", [self]).
 
 handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
+
+handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
+	current_phase(State, Phase),
+	merge_wellbeing(PhaseState, State, State1),
+    (timeframe_continues(State1) ->
+	phase_transition(State1, NewState)
+	; 
+	new_timeframe(State1, NewState)).
+
+handled(message(causal_theory(CausalTheory)), State, NewState) :-
+	put_state(State, causal_theory, CausalTheory, NewState).
+
+handled(message(die), State, NewState) :-
+	put_state(State, alive, false, NewState).
 
 handled(message(Message, Source), State, NewState) :-
 	ca_support : handled(message(Message, Source), State, NewState).
@@ -218,7 +264,7 @@ handled(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
 
 /*
-A CA can be recruited only if it has a causal theory.
+A dynamic CA can be recruited only if it has a causal theory.
 The probability that it accepts goes up:
 * the less it participates in umwelts already
 * the higher its wellbeing
@@ -227,7 +273,7 @@ handled(query(recruit), State, Eagerness) :-
 	get_state(State, causal_theory, _),
 	get_state(State, parents, Parents),
 	length(Parents, NumParents),
-	wellbeing(State, Wellbeing),
+	overall_wellbeing(State, Wellbeing),
     Eagerness is Wellbeing / ((NumParents + 1) ** 2).
 
 handled(query(recruit), _, 0).
@@ -235,101 +281,67 @@ handled(query(recruit), _, 0).
 handled(query(Query), Source, Answer) :-
 	ca_support : handled(query(Query), Source, Answer).
 
-handled(event(Topic, Payload, Source), State, NewState) :-
-	event_of_interest(Topic, Source, State),
-	!,
-	get_state(State, status, started) ->
-	event_handled_now(event(Topic, Payload, Source),
-		State,
-		NewState);
-	event_handled_later(event(Topic, Payload, Source),
-		State,
-		NewState).
+% Ignored
+handled(event(ca_started, _, _), State, State).
+% Ignore if the terminated CA is not in the umwelt, else update the umwelt
+handled(event(ca_terminated, _, Source), State, NewState) :-
+	removed_from_umwelt(Source, State, NewState),
+	log(info, dynamic_ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
+% TODO
+handled(event(prediction, Experience, Source), State, State).
+% TODO
+handled(event(prediction_error, Prediction, Source), State, State).
+% TODO
+handled(event(goal, Goal, Source), State, State).
+% TODO
+handled(event(experience_domain, ExperienceDomain, Source), State, State).
 
 handled(event(Topic, Payload, Source), State, State) :-
 	ca_support : handled(event(Topic, Payload, Source), State, State).
 
-event_of_interest(Topic, Source, State) :-
-	member(Topic,
-		member(Topic, [ca_started, ca_terminated, prediction_error, belief_domain, directive_status])),
-	from_umwelt(Source, State).
-
-event_of_interest(Topic, Source, State) :-
-	member(Topic,
-		member(Topic, [prediction, directive])),
-	from_parent(Source, State).
-
-event_handled_later(event(Topic, Payload, Source), State, NewSTate) :-
-	get_state(State, buffered_events, BufferedEvents),
-	put_state(State,
-		buffered_events,
-		[event(Topic, Payload, Source)|BufferedEvents],
-		NewState).
-
-from_umwelt(Source, State) :-
-	get_state(State, umwelt, Umwelt),
-	member(Source, Umwelt).
-
-% Ignored
-event_handled_now(event(ca_started, Options, Source), State, State).
-% Ignore if the terminated CA is not in the umwelt, else update the umwelt
-event_handled_now(event(ca_terminated, Options, Source), State, NewState) :-
-	removed_from_umwelt(Source, State, NewState),
-	log(info, ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
-% TODO
-event_handled_now(event(prediction, Belief, Source), State, State).
-% TODO
-event_handled_now(event(prediction_error, Prediction, Source), State, State).
-% TODO
-event_handled_now(event(goal, Goal, Source), State, State).
-% TODO
-event_handled_now(event(belief_domain, BeliefDomain, Source), State, State).
-
-event_handled_now(event(Topic, Payload, Source), State, State) :-
-	log(info, ca, "CA ~@ is NOT handling event event(~w, ~p, ~w)", [self, Topic, Payload, Source]).
-
 removed_from_umwelt(CA, State, NewState) :-
 	get_state(State, umwelt, Umwelt),
 	member(CA, Umwelt),
-	subtract(Umwelt, Source, Umwelt1),
+	subtract(Umwelt, CA, Umwelt1),
 	put_state(State, umwelt, Umwelt1, NewState).
 
-% The previous frame becomes the new frame by updating the start_time,
-% processing buffered events and re-activating processing events upon receipt
-frame_started(State, NewState) :-
-	log(info, ca, "CA ~@ is starting a new frame", [self]),
-	past_frame_continuation(State, State1),
-	suspended_events_processed(State, State2),
-	put_state(State2, status, started, NewState).
 
-% TODO
-past_frame_continuation(State, State). 
+initial_wellbeing(Wellbeing) :-
+	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, enagegement:1.0}.
 
-suspended_events_processed(State, NewState) :-
-	get_state(State, buffered_events, BufferedEvents),
-	reverse(BufferedEvents, Events),
-	events_handled_now(Events, State, NewState).
+overall_wellbeing(_, 1).
 
-events_handled_now([], State, State).
-events_handled_now([event(Topic, Payload, Source)|Rest], State, NewState) :-
-	event_handled_now(event(Topic, Payload, Source),
-		State,
-		State1),
-	events_handled_now(Rest, State1, NewState).
+merge_wellbeing(PhaseState, State, NewState) :-
+	get_state(State, wellbeing, Wellbeing),
+	get_state(PhaseState, timeframe, Timeframe),
+	get_state(Timeframe, wellbeing_deltas, WellbeingDeltas),
+	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
+	put_state(State, wellbeing, Wellbeing1, NewState).
 
-% Ending a frame means suspending processing events, 
-% completing the frame (updating beliefs, maybe taking action, and assessing efficacy of prior actions),
-% then putting the frame in history.
-frame_ended(State, NewState) :-
-	put_state(State, status, ending, State1),
-	log(info, ca, "CA ~@ is completing its current frame", [self]).
-	% wellbeing_diffused(State1, State2),
-	% causal_theory_evaluated(State2, State3),
-	% beliefs_updated(State3, State4),
-	% predictions_made(State4, State5),
-	% goal_selected(State5, State6),
-	% policy_attempted(State6, State7),
-	% history_updated(State7, NewState).
+apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
+	Fullness is max(Wellbeing.fullness + WellbeingDeltas.fullness, 0),
+	Integrity is max(Wellbeing.integrity + WellbeingDeltas.integrity, 0),
+	Engagement is max(Wellbeing.engagement + WellbeingDeltas.engagement, 0),
+	NewWellbeing = wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}.
 
-% TODO
-wellbeing(_, 1).
+% Not at end of timeframe (there's a next phase)
+timeframe_continues(State) :-
+	current_phase(State, Phase),
+	next_phase(Phase, _).
+	
+new_timeframe(State, NewState) :-
+	get_state(State, alive, true) ->
+		timeframe_created(State, State1),
+		phase_transition(State1, NewState)
+	;
+		end_of_life(State).
+
+% Create a new timeframe at the begin phase with 0 wellbeing deltas from current one and put current one in history
+timeframe_created(State, NewState) :-
+	get_state(State, timeframe, Timeframe),
+	acc_state(State, history, Timeframe, State1),
+	NewTimeframe = Timeframe.put(wellbeing_deltas, wellbeing_deltas{fullness:0, integrity:0, engagement:0}),
+	put_state(State1, timeframe, NewTimeframe, NewState).
+
+% TODO - Die gracefully and let others know
+end_of_life(State).

@@ -1,7 +1,7 @@
 /*
 A sensor CA is a static (a priori) cognition actor that communicates with a body sensor to obtain its sensed value.
 
-A sensor CA believes its sensor's latest reading which pairs a value with an error tolerance.
+A sensor CA experiences its sensor's latest reading which pairs a value with an error tolerance.
 
 A sensor CA listens to prediction events about its latest reading.
 
@@ -30,7 +30,7 @@ Messages:
 Events:
 
 * In from parents
-	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about how many of a given action the effector CA experiences were executed
 	
 * Out
     * topic: ca_started, payload: [level = Level]
@@ -42,19 +42,19 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * belief_domain -> [predictable{name:distance, object:SensorName, value:SenseDomain}]
+    * experience_domain -> [predictable{name:distance, object:SensorName, value:SenseDomain}]
 
 State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
-	* beliefs - beliefs from last reading - [distance(SensorName, Value)]
+	* experiences - experiences from last reading - [distance(SensorName, Value)]
 	* wellbeing - wellbeing metrics - initially [fullness = 100, integrity = 100, engagement = 0]
 
 Lifecycle:
   * Created once for a body sensor
   * Repeatedly
     * Adopted by a CA as part of its umwelt (new parent) - subscribes to umwelt events from parent
-    * Queried for its belief domain (only believes its latest reading)
+    * Queried for its experience domain (only experiences its latest reading)
     * Handles prediction events by making readings and then maybe emitting prediction errors
       if the readings differ from the predictions more than the error tolerance of the sensor
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
@@ -93,7 +93,7 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     initial_wellbeing(InitialWellbeing),
-    put_state(EmptyState, [parents-[], sensor-Sensor, beliefs-[], wellbeing-InitialWellbeing], State),
+    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[], wellbeing-InitialWellbeing], State),
 	subscribed_to_events(),
     published(ca_started, [level(0)]).
 
@@ -112,7 +112,7 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, [predictable{name:SenseName, object:SensorName, value:SenseDomain}]) :-
+handled(query(experience_domain), State, [predictable{name:SenseName, object:SensorName, value:SenseDomain}]) :-
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_domain(State, SenseDomain).
@@ -140,8 +140,8 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
 
 handled(event(prediction, PredictionPayload, Parent), State, NewState) :-
     log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, PredictionPayload, Parent, State]),
-    option(belief(PredictedBelief), PredictionPayload),
-    beliefs_updated(PredictedBelief, State, NewState),
+    option(experience(PredictedExperience), PredictionPayload),
+    experiences_updated(PredictedExperience, State, NewState),
  	ca_support : prediction_handled(PredictionPayload, Parent, NewState).
 
 handled(event(Topic, Payload, Source), State, NewState) :-
@@ -172,16 +172,16 @@ sensor_name(State, SensorName) :-
 sense_url(State, SenseURL) :-
     SenseURL = State.sensor.url.
 
-% Read the sensor value, update wellbeing and publish wellbeing_changed, update belief in latest reading.
-beliefs_updated(PredictedBelief, State, NewState) :-
-    PredictedBelief =.. [SenseName, SensorName, _],
+% Read the sensor value, update wellbeing and publish wellbeing_changed, update experience in latest reading.
+experiences_updated(PredictedExperience, State, NewState) :-
+    PredictedExperience =.. [SenseName, SensorName, _],
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_read(State, reading(Value, Tolerance, _)),
     !,
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
-    Belief =.. [SenseName, SensorName, Value-Tolerance],
-    put_state(State, beliefs, [Belief],  State1),
+    Experience =.. [SenseName, SensorName, Value-Tolerance],
+    put_state(State, experiences, [Experience],  State1),
     put_wellbeing(State1, UpdatedWellbeing, NewState).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-

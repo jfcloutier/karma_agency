@@ -5,7 +5,7 @@
 run_tests(effector_ca).
 */
 
-:- begin_tests(effector_ca, [setup(init_som), cleanup(terminate_som)]).
+:- begin_tests(effector_ca, [setup(init_static_som), cleanup(terminate_som)]).
 
 :- use_module(test_helper).
 
@@ -34,18 +34,18 @@ test(all_effector_cas_are_at_level_0) :-
 	assertion(forall(member(EffectorCA, EffectorCAs),
 			query_answered(EffectorCA, level, 0))).
 
-test(effector_belief_domain) :-
+test(effector_experience_domain) :-
 	query_answered(som, children, SOMChildren), 
     forall(
         (member(child(worker, EffectorCA), SOMChildren), 
          query_answered(EffectorCA, type, effector_ca)
         ), 
-        (query_answered(EffectorCA, belief_domain, BeliefDomain),
+        (query_answered(EffectorCA, experience_domain, ExperienceDomain),
          query_answered(EffectorCA, action_domain, ActionDomain),
-         forall(member(Predictable, BeliefDomain),
+         forall(member(Predictable, ExperienceDomain),
                 assertion(unifiable(Predictable, predictable{name:_, object:_, value:boolean}, _))
             ),
-         forall(member(Predictable, BeliefDomain),
+         forall(member(Predictable, ExperienceDomain),
             member(Predictable.name, ActionDomain)
         )
         )
@@ -83,13 +83,13 @@ test(intent_executed) :-
     % wellbeing updated
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
-    % Incorrectly predict the belief that spin was not executed
-    Prediction1 = [belief = spin(EffectorName, false)],
+    % Incorrectly predict the experience that spin was not executed
+    Prediction1 = [experience = spin(EffectorName, false)],
 	published(prediction, Prediction1),
     % Get a prediction error message
 	get_message(message(prediction_error(Prediction1, true), EffectorCA)),
-    % Correctly predict the belief that reverse_spin was executed
-    Prediction2 = [belief = reverse_spin(EffectorName, true)],
+    % Correctly predict the experience that reverse_spin was executed
+    Prediction2 = [experience = reverse_spin(EffectorName, true)],
 	published(prediction, Prediction2),
     % Don't get an error prediction message
 	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 1),

@@ -14,8 +14,9 @@ forming a hierarchy.
 
 %! started(+Sensors, +Effectors) is det
 % the SOM is initiated
-started(Sensors, Effectors, BodyHost) :-
-	log(info, som, "Starting the SOM"),
+started(Sensors, Effectors, BodyHost, Options) :-
+	option(static_only(StaticOnly), Options),
+	log(info, som, "Starting the SOM with static only ~w", [StaticOnly]),
 	Children = [
 		% Will start the actors' pubsub
 		pubsub,
@@ -26,8 +27,13 @@ started(Sensors, Effectors, BodyHost) :-
 	supervisor : started(agency,
 		[children(Children), body_host(BodyHost)]),
 	sensor_cas_started(Sensors),
-	effector_cas_started(Effectors).
-	% level_one_ca_started.
+	effector_cas_started(Effectors),
+	(StaticOnly \== true ->
+	    level_one_ca_started
+	    ; 
+        log(info, som, "NOT starting dynamic CAs")
+	).
+	
 
 % Starting sensor and effector CAs
 sensor_cas_started([]).
@@ -65,7 +71,7 @@ level_one_ca_started :-
 	dynamic_ca : name_from_level(1, CA),
 	umwelt_recruited(0, Umwelt),
 	supervisor : worker_child_started(som,
-		ca,
+		dynamic_ca,
 		CA,
 		[
 			init([level(1), umwelt(Umwelt)])]),

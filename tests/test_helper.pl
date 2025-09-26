@@ -1,12 +1,15 @@
-:- module(test_helper, [init_som/0, terminate_som/0, get_message/1, get_message/2, assert_wellbeing_changed/3]).
+:- module(test_helper, [init_static_som/0, init_som/0, terminate_som/0, get_message/1, get_message/2, assert_wellbeing_changed/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
 :- use_module(agency(agent)).
 :- use_module(utils(logger)).
 
+init_static_som :-
+	agent : started('localhost:4000', [static_only=true]).
+
 init_som :-
-	agent : started('localhost:4000').
+	agent : started('localhost:4000', [static_only=false]).
 
 terminate_som :-
 	supervisor : stopped(agency, 60).

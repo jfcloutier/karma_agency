@@ -5,7 +5,7 @@
 run_tests(sensor_ca).
 */
 
-:- begin_tests(sensor_ca, [setup(init_som), cleanup(terminate_som)]).
+:- begin_tests(sensor_ca, [setup(init_static_som), cleanup(terminate_som)]).
 
 :- use_module(test_helper).
 
@@ -49,24 +49,24 @@ test(inaccurate_prediction) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	published(prediction, [belief = contact(SensorName, pressed)]),
+	published(prediction, [experience = contact(SensorName, pressed)]),
 	get_message(message(prediction_error(_, ActualValue), SensorCA)),
 	assertion(ActualValue == released).
 
-test(belief_acquired) :-
+test(experience_acquired) :-
 	SensorCA = 'sensor:light-in2:color',
 	SensorName = 'light-in2',
 	message_sent(SensorCA, adopted),
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = [belief = color(SensorName, red)],
+	Prediction = [experience = color(SensorName, red)],
 	published(prediction, Prediction),
 	get_message(message(prediction_error(Prediction, ActualValue), SensorCA)),
 	assertion(ActualValue \== red),
 	query_answered(SensorCA, state, State),
-	get_state(State, beliefs, [Belief]),
-	assertion(unifiable(Belief, color(SensorName, _-_), _)).
+	get_state(State, experiences, [Experience]),
+	assertion(unifiable(Experience, color(SensorName, _-_), _)).
 
 test(wellbeing_updated) :-
 	% Pick a sensor CA and establish self as its parent
@@ -77,7 +77,7 @@ test(wellbeing_updated) :-
 	query_answered(SensorCA, state, State),
 	get_state(State, wellbeing, InitialWellbeing),
 	% Get the sensor CA to read its sensor and message back a prediction error
-	Prediction = [belief = color(SensorName, green)],
+	Prediction = [experience = color(SensorName, green)],
 	published(prediction, Prediction),
 	!,
 	get_message(message(prediction_error(Prediction, Color), SensorCA)),

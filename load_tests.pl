@@ -3,8 +3,11 @@
     'tests/effector_ca.plt'
 ].
 
+init_static_som :-
+	agent : started('localhost:4000', false).
+
 init_som :-
-	agent : started('localhost:4000').
+    agent : started('localhost:4000', true).
 
 terminate_som :-
 	supervisor : stopped(agency, 60).

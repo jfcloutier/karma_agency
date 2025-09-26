@@ -27,10 +27,10 @@ Each action taken affects the CA's wellbeing. It reduces the CA's fullness and i
 its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
 changes to its wellbeing and effects transfers to and from its parents.
 
-An effector's actions are "atomic" policies (i.e. not involving other CAs's policies); their names are actuations the body can execute.
+An effector's actions are "atomic" affordances (i.e. not involving other CAs's affordances); their names are actuations the body can execute.
 
-An effector CA believes or not in the body having last executed a certain number of the effector CA's actions/atomic policies.
-Its beliefs are not normative (neither pleasant or unpleasant). 
+An effector CA experiences or not in the body having last executed a certain number of the effector CA's actions/atomic affordances.
+Its experiences are not normative (neither pleasant or unpleasant). 
 
 Messages:
 
@@ -52,9 +52,9 @@ Events:
 	* topic: executed, payload: [] - body actuation was triggered
 
 * In from parents
-	* topic: intent, payload: [id = Id, priority = Priority, goals = [Goal, ...] - a parent CA communicates a policy it built that it intends to execute if possible
+	* topic: intent, payload: [id = Id, priority = Priority, goals = [Goal, ...] - a parent CA communicates an affordance it built that it intends to execute if possible
 	* topic: intent_completed, payload: [id = Id, executed = Boolean] - ignored
-	* topic: prediction, payload: [belief = Belief] - a parent makes a prediction about how many of a given action the effector CA believes were executed
+	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about how many of a given action the effector CA experiences were executed
 	
 * Out
     * topic: ca_started, payload: [level = Level]
@@ -66,7 +66,7 @@ Queries:
     * level - 0
 	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
-    * belief_domain -> always responds with [predictable{name:Action, object:EffectorName, value:boolean}, ...] 
+    * experience_domain -> always responds with [predictable{name:Action, object:EffectorName, value:boolean}, ...] 
 		- Action is an action the effector can execute
 	* action_domain -> the actions the effector_ca can take
 
@@ -74,7 +74,7 @@ State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
 	* observations - actions last executed - [executed(Action), ...]
-	* beliefs - beliefs from last execution - [Action(EffectorName, Boolean), ...]
+	* experiences - experiences from last execution - [Action(EffectorName, Boolean), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
 	* wellbeing - wellbeing values - initially [fullness = 100, integrity = 100, engagement = 0]
@@ -83,10 +83,10 @@ Lifecycle
   * Created for a body effector
   * Repeatedly
     * Adopted by a CA in its umwelt (new parent) - subscribes to umwelt events from parent
-	* Queried for its belief domain (only believes in counts of actions executed)
+	* Queried for its experience domain (only experiences in counts of actions executed)
     * Handles intent events - sends can_actuate/2 message in response
 	* Handles ready_actuation messages - tells the body to prepare to actuate, records the actuations
-	* Handles executed event (the body has aggregated and executed actuations) - updates beliefs and informs all of wellbeing changes
+	* Handles executed event (the body has aggregated and executed actuations) - updates experiences and informs all of wellbeing changes
 	* Handles predictions events from parents about the last executed actions - sends prediction_error events
 	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
@@ -94,9 +94,9 @@ Lifecycle
 An effector CA has no fixed latency; its unique timeframe is updated after notice of 
 execution by the body of its accumulated actuations, but only if some originated from the effector CA.
 
-It does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations and its beliefs about the latest
+It does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations and its experiences about the latest
 execution. Upon receiving an intent event, an effector CA resets its list of activations. Upon receiving an execution event, an
-effector CA recomputes its observations and beliefs.
+effector CA recomputes its observations and experiences.
 */
 
 :- module(effector_ca, []).
@@ -126,7 +126,7 @@ init(Options, State) :-
 	put_state(EmptyState, effectors, Effectors, State1), 
 	action_domain(State1, ActionDomain),
 	initial_wellbeing(InitialWellbeing),
-	put_state(State1, [parents - [], observations - [], beliefs - [], action_domain - ActionDomain, actuations - [], wellbeing - InitialWellbeing], State),
+	put_state(State1, [parents - [], observations - [], experiences - [], action_domain - ActionDomain, actuations - [], wellbeing - InitialWellbeing], State),
 	subscribed_to_global_events(),
 	published(ca_started, [level(0)]).
 
@@ -147,10 +147,10 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(belief_domain), State, BeliefDomain) :-
+handled(query(experience_domain), State, ExperienceDomain) :-
 	get_state(State, action_domain, ActionDomain),
 	effector_name(State, EffectorName),
-	bagof(predictable{name:Action, object:EffectorName, value:boolean}, member(Action, ActionDomain), BeliefDomain).
+	bagof(predictable{name:Action, object:EffectorName, value:boolean}, member(Action, ActionDomain), ExperienceDomain).
 
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
@@ -197,8 +197,8 @@ handled(event(intent, Intent, Parent), State, NewState) :-
 handled(event(executed, _, _), State, NewState) :-
 	observations_from_actuations(State, Observations),
 	put_state(State, observations, Observations, State1),
-	beliefs_from_observations(State1, Beliefs),
-	put_state(State1, beliefs, Beliefs, State2),
+	experiences_from_observations(State1, Experiences),
+	put_state(State1, experiences, Experiences, State2),
 	(wellbeing_changed(State2, UpdatedWellbeing) ->
 		put_wellbeing(State2, UpdatedWellbeing, State3)
 		;
@@ -260,17 +260,17 @@ observations_from_actuations(State, Observations) :-
 	bagof(executed(Action), member(Action, Actuations), Observations),
 	log(effector_ca, debug, "~@ observed ~p from actuations ~p", [self, Observations, Actuations]).
 
-beliefs_from_observations(State, Beliefs) :-
-	log(debug, effector_ca, "~@ is getting beliefs from observations in ~p", [self, State]),
+experiences_from_observations(State, Experiences) :-
+	log(debug, effector_ca, "~@ is getting experiences from observations in ~p", [self, State]),
 	get_state(State, observations, Observations),
 	effector_name(State, EffectorName),
-	beliefs_from_executions(Observations, EffectorName, Beliefs),
-	log(debug, effector_ca, "~@ believes ~p from observations ~p", [self, Beliefs, Observations]).
+	experiences_from_executions(Observations, EffectorName, Experiences),
+	log(debug, effector_ca, "~@ experiences ~p from observations ~p", [self, Experiences, Observations]).
 
-beliefs_from_executions([], _, []).
-beliefs_from_executions([executed(Action) | Rest], EffectorName, [Belief | OtherBeliefs]) :-
-	Belief =.. [Action, EffectorName, true],
-	beliefs_from_executions(Rest, EffectorName, OtherBeliefs).
+experiences_from_executions([], _, []).
+experiences_from_executions([executed(Action) | Rest], EffectorName, [Experience | OtherExperiences]) :-
+	Experience =.. [Action, EffectorName, true],
+	experiences_from_executions(Rest, EffectorName, OtherExperiences).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
