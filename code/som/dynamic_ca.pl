@@ -85,6 +85,8 @@ Events:
 * Out
     * topic: ca_started, payload: [level = Level]
 	* topic: wellbeing_changed, payload: WellbeingPayload  - [fullness = N1, integrity = N2, engagement = N3]
+	* topic: end_of_timeframe, payload: [level=Level]
+	* topic: end_of_life, payload: [level=Level]
 	* topic: experience_domain_changed, payload: ExperienceDomain - [predicatble(name: ExperienceName, object: ExperienceObject, value: ValueDomain), ...]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
@@ -158,7 +160,7 @@ Data:
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/phase)).
 
-% Thread statis state - TODO - revise
+% Thread state
 :- thread_local level/1, timer/1.
 
 %! name_from_level(+Level, -Name) is det
@@ -240,11 +242,15 @@ handled(message(adopted, Parent), State, NewState) :-
     put_state(State, parents, [Parent | Parents], NewState).
 
 handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
+	log(info, dynamic_ca, "End of phase ~w for ~@ with state ~p", [Phase, self, PhaseState]),
 	current_phase(State, Phase),
 	merge_wellbeing(PhaseState, State, State1),
     (timeframe_continues(State1) ->
 	phase_transition(State1, NewState)
 	; 
+	log(info, dynamic_ca, "Timeframe ended"),
+	level(Level),
+	published(end_of_timeframe, [level(Level)]),
 	new_timeframe(State1, NewState)).
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
@@ -308,18 +314,19 @@ removed_from_umwelt(CA, State, NewState) :-
 
 
 initial_wellbeing(Wellbeing) :-
-	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, enagegement:1.0}.
+	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:1.0}.
 
 overall_wellbeing(_, 1).
 
 merge_wellbeing(PhaseState, State, NewState) :-
+	log(info, dynamic_ca, "Merge wellbeing from phase state ~p into state ~p", [PhaseState, State]),
 	get_state(State, wellbeing, Wellbeing),
 	get_state(PhaseState, timeframe, Timeframe),
-	get_state(Timeframe, wellbeing_deltas, WellbeingDeltas),
-	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
+	apply_wellbeing_deltas(Wellbeing, Timeframe.wellbeing_deltas, Wellbeing1),
 	put_state(State, wellbeing, Wellbeing1, NewState).
 
 apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
+	log(info, dynamic_ca, "Apply wellbeing deltas ~p to wellbeing ~p", [WellbeingDeltas, Wellbeing]),
 	Fullness is max(Wellbeing.fullness + WellbeingDeltas.fullness, 0),
 	Integrity is max(Wellbeing.integrity + WellbeingDeltas.integrity, 0),
 	Engagement is max(Wellbeing.engagement + WellbeingDeltas.engagement, 0),
@@ -333,6 +340,7 @@ timeframe_continues(State) :-
 new_timeframe(State, NewState) :-
 	get_state(State, alive, true) ->
 		timeframe_created(State, State1),
+		log(info, dynamic_ca, "New timeframe created for CA ~@", [self]),
 		phase_transition(State1, NewState)
 	;
 		end_of_life(State).
@@ -345,4 +353,6 @@ timeframe_created(State, NewState) :-
 	put_state(State1, timeframe, NewTimeframe, NewState).
 
 % TODO - Die gracefully and let others know
-end_of_life(State).
+end_of_life(State) :-
+	level(Level),
+	published(end_of_life, [level(Level)]).

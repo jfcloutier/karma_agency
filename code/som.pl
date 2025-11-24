@@ -7,16 +7,16 @@ forming a hierarchy.
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
+:- use_module(actors(pubsub)).
 :- use_module(actors(supervisor)).
 :- use_module(agency(som/sensor_ca)).
 :- use_module(agency(som/effector_ca)).
 :- use_module(agency(som/dynamic_ca )).
 
-%! started(+Sensors, +Effectors) is det
+%! initialized(+Sensors, +Effectors, +BodyHost, +Options) is det
 % the SOM is initiated
-started(Sensors, Effectors, BodyHost, Options) :-
-	option(static_only(StaticOnly), Options),
-	log(info, som, "Starting the SOM with static only ~w", [StaticOnly]),
+initialized(Sensors, Effectors, BodyHost, _) :-
+	log(info, som, "Initializing the SOM with static CAs"),
 	Children = [
 		% Will start the actors' pubsub
 		pubsub,
@@ -27,12 +27,7 @@ started(Sensors, Effectors, BodyHost, Options) :-
 	supervisor : started(agency,
 		[children(Children), body_host(BodyHost)]),
 	sensor_cas_started(Sensors),
-	effector_cas_started(Effectors),
-	(StaticOnly \== true ->
-	    level_one_ca_started
-	    ; 
-        log(info, som, "NOT starting dynamic CAs")
-	).
+	effector_cas_started(Effectors).
 	
 
 % Starting sensor and effector CAs

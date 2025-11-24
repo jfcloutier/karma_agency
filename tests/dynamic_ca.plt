@@ -5,7 +5,7 @@
 run_tests(dynamic_ca).
 */
 
-:- begin_tests(dynamic_ca, [setup(init_som), cleanup(terminate_som)]).
+:- begin_tests(dynamic_ca, [cleanup(terminate_som)]).
 
 :- use_module(test_helper).
 
@@ -18,7 +18,10 @@ run_tests(dynamic_ca).
 
 :- set_log_level(info).
 
-test(dynamic_ca_in_som) :-
+test(dynamic_ca_created_and_completes_timeframe) :-
+	agent : started('localhost:4000', []),
+	subscribed(end_of_timeframe),
+	som : level_one_ca_started,
 	query_answered(som, children, SOMChildren),
 	assertion(SOMChildren \== unknown),
 	findnsols(1,
@@ -26,5 +29,8 @@ test(dynamic_ca_in_som) :-
 		(member(child(worker, CA),
 			SOMChildren), query_answered(CA, type, dynamic_ca)),
 		L),
-	assertion(L \== []).
+	assertion(L \== []),
+	get_message(event(end_of_timeframe, _, _)).
+
+:- end_tests(dynamic_ca).
 

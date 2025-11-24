@@ -45,4 +45,4 @@ started(BodyHost, Options) :-
 	body : capabilities(BodyHost, Sensors, Effectors),
 	log(info, agent, "The body has sensors ~p", [Sensors]),
 	log(info, agent, "The body has effectors ~p", [Effectors]),
-	som : started(Sensors, Effectors, BodyHost, Options).
+	som : initialized(Sensors, Effectors, BodyHost, Options).

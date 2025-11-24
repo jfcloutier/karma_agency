@@ -38,8 +38,9 @@ The sequence of phases is
 
 
 % phase_threads(Phase, PhaseThreadId, Timer) - Timer can be `none` if no timer
+:- thread_local phase_threads/3.
 % phase_status(Phase, Status) - Status is either running or stopped
-:- thread_local phase_threads/3, phase_status/2.
+:- thread_local phase_status/2.
 
 % Phase transitions
 % First timeframe started
@@ -67,10 +68,11 @@ phase_transition(State, NewState) :-
 	next_phase(EndedPhase, Phase),
     log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
     update_timeframe(State, [phase - Phase], NewState),
+    % Start the phase thread. It then waits for go.
 	thread_create(phase:started(Phase, CA, NewState), PhaseThreadId, [detached(true)]),
     get_state(NewState, latency, Latency),
     timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer),
-    remember_one(phase_threads(Phase, PhaseThreadId, Timer)).
+    thread_send_message(PhaseThreadId, go(Timer)).
 
 % Timebox a phase but only if it is meant to be
 timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer) :-
@@ -103,10 +105,15 @@ update_timeframe(State, Pairs, NewState) :-
 % Run in the phase's thread until done or status is stopped.
 % The last action is to send Name a message with the updated state
 started(Phase, CA, State) :-
-    log(info, phase, "Starting phase ~w for CA ~p", [Phase, CA]),
     remember_one(phase_status(Phase, running)),
     Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
+    log(info, phase, "Starting phase ~w for CA ~w with goal ~p", [Phase, CA, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
+    % Wait for go from CA thread
+    thread_get_message(go(Timer)),
+    thread_self(PhaseThreadId),
+    remember_one(phase_threads(Phase, PhaseThreadId, Timer)),
+    log(info, phase, "Go phase ~w", [Phase]),
     executing_phase(Phase, WorkEngine, CA, State).
 
 executing_phase(Phase, WorkEngine, CA, PhaseState) :-
@@ -114,12 +121,18 @@ executing_phase(Phase, WorkEngine, CA, PhaseState) :-
     !,
     log(info, phase, "Phase ~w for CA ~p was stopped", [Phase, CA]),
     engine_destroy(WorkEngine),
+    (phase_threads(SomePhase, _, Timer) ->
+        log(info, phase, "Stopping timer ~w for phase ~w", [Timer, SomePhase]),
+        timer:stopped(Timer)
+        ;
+        log(info, phase, "@@@ Failed to stop timer for phase ~w", [Phase]),
+        fail),
     message_sent(CA, end_of_phase(Phase, PhaseState)).
 
 executing_phase(Phase, WorkEngine, CA, _) :-
     log(info, phase, "Doing unit of work in phase ~w for CA ~p", [Phase, CA]),
     work_engine_cranked(WorkEngine, WorkStatus),
-    log(info, phase, "Unit of work in phase ~w for CA ~p done with ~w", [Phase, CA, WorkStatus]),
+    log(info, phase, "Unit of work in phase ~w for CA ~w done with ~p", [Phase, CA, WorkStatus]),
     work_status_handled(Phase, CA, WorkEngine, WorkStatus).
 
 work_status_handled(Phase, CA, WorkEngine, done(EndState)) :-
@@ -128,6 +141,10 @@ work_status_handled(Phase, CA, WorkEngine, done(EndState)) :-
 
 work_status_handled(Phase, CA, WorkEngine, more(IntermediateState)) :-
     executing_phase(Phase, WorkEngine, CA, IntermediateState).
+
+work_status_handled(Phase, CA, _, WorkStatus) :-
+    log(info, phase, "@@@ Not handling work status for phase ~w of CA ~w: ~p", [Phase, CA, WorkStatus]),
+    fail.
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
     engine_next_reified(WorkEngine, Next),
@@ -147,3 +164,12 @@ signal_processed(stop_phase(Phase, PhaseThreadId)) :-
     remember_one(phase_status(Phase, stopped))
     ;
     true).
+
+remember_one(Term) :-
+    Term =.. [Head | Args],
+    length(Args, Arity),
+    length(Any, Arity),
+    Retracted =.. [Head | Any],
+    % Because using abolish/1 erases the thread_local property
+    retractall(Retracted),
+    assertz(Term).
