@@ -61,15 +61,16 @@ phase_timebox(plan, 0.7).
 % A thread is started with the execution of the phase as goal
 % So that the dCA's main thread can continue to receive messages etc. while the phase is being executed
 phase_transition(State, NewState) :- 
-    log(info, phase, "Phase tranistion from ~p", [State]),
 	self(CA),
+    log(info, phase, "Phase transition of CA ~w in state ~p", [CA, State]),
     current_phase(State, EndedPhase),
 	next_phase(EndedPhase, Phase),
-	thread_create(phase:started(Phase, CA, State), PhaseThreadId, [detached(true)]),
-    get_state(State, latency, Latency),
+    log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
+    update_timeframe(State, [phase - Phase], NewState),
+	thread_create(phase:started(Phase, CA, NewState), PhaseThreadId, [detached(true)]),
+    get_state(NewState, latency, Latency),
     timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer),
-    remember_one(phase_threads(Phase, PhaseThreadId, Timer)),
-    update_timeframe(State, [phase - Phase], NewState).
+    remember_one(phase_threads(Phase, PhaseThreadId, Timer)).
 
 % Timebox a phase but only if it is meant to be
 timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer) :-
@@ -89,7 +90,7 @@ phase_timeout(Phase, Latency, Delay) :-
 
 current_phase(State, Phase) :-
     get_state(State, timeframe, Timeframe),
-    get_state(Timeframe, phase, Phase).
+    Phase = Timeframe.phase.
 
 % Update the timeframe of a CA state
 update_timeframe(State, Pairs, NewState) :-
@@ -104,7 +105,8 @@ update_timeframe(State, Pairs, NewState) :-
 started(Phase, CA, State) :-
     log(info, phase, "Starting phase ~w for CA ~p", [Phase, CA]),
     remember_one(phase_status(Phase, running)),
-    engine_create(WorkStatus, Phase:unit_of_work(CA, State, WorkStatus), WorkEngine),
+    Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
+    engine_create(WorkStatus, Goal, WorkEngine),
     executing_phase(Phase, WorkEngine, CA, State).
 
 executing_phase(Phase, WorkEngine, CA, PhaseState) :-
@@ -115,9 +117,9 @@ executing_phase(Phase, WorkEngine, CA, PhaseState) :-
     message_sent(CA, end_of_phase(Phase, PhaseState)).
 
 executing_phase(Phase, WorkEngine, CA, _) :-
-    log(info, phase, "Doing unit of work in phase phase ~w for CA ~p", [Phase, CA]),
+    log(info, phase, "Doing unit of work in phase ~w for CA ~p", [Phase, CA]),
     work_engine_cranked(WorkEngine, WorkStatus),
-    log(info, phase, "Unit of work in phase phase ~w for CA ~p done with ~w", [Phase, CA, WorkStatus]),
+    log(info, phase, "Unit of work in phase ~w for CA ~p done with ~w", [Phase, CA, WorkStatus]),
     work_status_handled(Phase, CA, WorkEngine, WorkStatus).
 
 work_status_handled(Phase, CA, WorkEngine, done(EndState)) :-
@@ -127,9 +129,17 @@ work_status_handled(Phase, CA, WorkEngine, done(EndState)) :-
 work_status_handled(Phase, CA, WorkEngine, more(IntermediateState)) :-
     executing_phase(Phase, WorkEngine, CA, IntermediateState).
 
-% TODO - No answer or exception causes failure
 work_engine_cranked(WorkEngine, WorkStatus) :-
-    engine_next_reified(WorkEngine, the(WorkStatus)).
+    engine_next_reified(WorkEngine, Next),
+    interpret_unit_of_work(Next, WorkStatus).
+
+interpret_unit_of_work(the(WorkStatus), WorkStatus).
+interpret_unit_of_work(no, _) :-
+    log(warn, phase, "No work status from engine"),
+    throw("No engine answer").
+interpret_unit_of_work(exception(Error), _) :-
+    log(warn, phase, "Exception from engine. Got ~p", [Error]),
+    throw(Error).
     
 % Signal to end_phase goal from timer
 signal_processed(stop_phase(Phase, PhaseThreadId)) :-

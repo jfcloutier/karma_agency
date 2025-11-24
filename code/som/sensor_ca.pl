@@ -89,7 +89,7 @@ recruit(_, 1.0).
 %%% Actor logic
 
 init(Options, State) :-
-    log(info, sensor_ca, "Initiating with ~p", [Options]),
+    log(info, sensor, "Initiating with ~p", [Options]),
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     initial_wellbeing(InitialWellbeing),

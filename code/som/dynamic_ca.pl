@@ -190,7 +190,8 @@ recruit(Name, Eagerness) :-
 % Worker
 
 init(Options, State) :-
-	log(info, dynamic_ca, "Initiating ca with ~p", [Options]),
+	self(Name),
+	log(info, dynamic_ca, "Initiating dynamic ca ~w with ~p", [Name, Options]),
 	empty_state(EmptyState),
 	remember_level(Options, Level),
 	option(umwelt(Umwelt), Options),
@@ -220,7 +221,7 @@ subscribed_to_events :-
 empty_time_frame(EmptyTimeframe) :-
 	get_time(Now),
 	WellbeingDeltas = wellbeing_deltas{fullness:0, integrity:0, engagement:0},
-	EmptyTimeframe = timeframe{start_time:Now, phase:start, predictions_out:[], predictions_in:[], prediction_errors:[], observations:[], experiences:[], directives:[], affordances:[], wellbeing_deltas:WellbeingDeltas}.
+	EmptyTimeframe = timeframe{start_time:Now, phase:initiating, predictions_out:[], predictions_in:[], prediction_errors:[], observations:[], experiences:[], directives:[], affordances:[], wellbeing_deltas:WellbeingDeltas}.
 
 signal_processed(control(stopped)) :-
 	worker : stopped.

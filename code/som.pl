@@ -69,7 +69,9 @@ effector_cas_started([Effector|Others]) :-
 % Create the first CA capable of mitosis (it divides fullness). Give it an umwelt.
 level_one_ca_started :-
 	dynamic_ca : name_from_level(1, CA),
+	log(info, som, "Level one CA ~p", [CA]),
 	umwelt_recruited(0, Umwelt),
+	log(info, som, "Recruited umwelt ~p", [Umwelt]),
 	supervisor : worker_child_started(som,
 		dynamic_ca,
 		CA,
@@ -104,7 +106,7 @@ recruit(CA, P) :-
 
 at_level(Level, CA) :-
 	supervisor : children(som, CAs),
-	member(CA, CAs),
+	member(child(worker, CA), CAs),
 	level_from_name(CA, Level).
 
 level_from_name(CA, Level) :-
@@ -112,7 +114,12 @@ level_from_name(CA, Level) :-
 	Module : level_from_name(CA, Level).
 
 ca_module_from_name(CA, Module) :-
-	atomic_list_concat([Module|_], ":", CA).
+	atomic_list_concat([Type|_], ":", CA),
+	type_module(Type, Module).
+
+type_module(sensor, sensor_ca).
+type_module(effector, effector_ca).
+type_module(ca, dynamic_ca).
 
 sensor_cas(SensorCAs) :-
     query_answered(som, children, SOMChildren),
