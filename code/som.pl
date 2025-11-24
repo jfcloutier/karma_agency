@@ -62,7 +62,7 @@ effector_cas_started([Effector|Others]) :-
 	effector_cas_started(Rest).
 
 % Create the first CA capable of mitosis (it divides fullness). Give it an umwelt.
-level_one_ca_started :-
+growing :-
 	dynamic_ca : name_from_level(1, CA),
 	log(info, som, "Level one CA ~p", [CA]),
 	umwelt_recruited(0, Umwelt),
