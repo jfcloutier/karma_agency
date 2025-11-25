@@ -37,10 +37,10 @@ The sequence of phases is
 :- use_module(agency(som/phases/conclude)).
 
 
-% phase_threads(Phase, PhaseThreadId, Timer) - Timer can be `none` if no timer
-:- thread_local phase_threads/3.
-% phase_status(Phase, Status) - Status is either running or stopped
+% phase_status(Phase, Status) - Status is running or stopped
 :- thread_local phase_status/2.
+% phase_time_limit(Phase, Time) - Time limit before a phase is stopped
+:- thread_local phase_time_limit/2.
 
 % Phase transitions
 % First timeframe started
@@ -54,8 +54,10 @@ next_phase(plan, act).
 next_phase(act, assess).
 next_phase(assess, conclude).
 
-phase_timebox(predict, 0.3).
-phase_timebox(plan, 0.7).
+phase_timebox(observe, 0.2).
+phase_timebox(experience, 0.2).
+phase_timebox(plan, 0.5).
+phase_timebox(_, 0.1).
 
 %%%% IN dCA THREAD
 
@@ -69,26 +71,7 @@ phase_transition(State, NewState) :-
     log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
     update_timeframe(State, [phase - Phase], NewState),
     % Start the phase thread. It then waits for go.
-	thread_create(phase:started(Phase, CA, NewState), PhaseThreadId, [detached(true)]),
-    get_state(NewState, latency, Latency),
-    timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer),
-    thread_send_message(PhaseThreadId, go(Timer)).
-
-% Timebox a phase but only if it is meant to be
-timebox_phase_thread(Phase, PhaseThreadId, Latency, Timer) :-
-    (phase_timeout(Phase, Latency, Delay) ->
-        call_later(PhaseThreadId, 
-            phase_ender, 
-            signal(PhaseThreadId, phase, stop_phase(Phase, PhaseThreadId)),
-            Delay,
-            Timer
-        ) 
-        ; 
-        Timer = none).
-
-phase_timeout(Phase, Latency, Delay) :-
-    phase_timebox(Phase, Fraction),
-    Delay is Latency * Fraction.
+	thread_create(phase:started(Phase, CA, NewState), _, [detached(true)]).
 
 current_phase(State, Phase) :-
     get_state(State, timeframe, Timeframe),
@@ -105,28 +88,27 @@ update_timeframe(State, Pairs, NewState) :-
 % Run in the phase's thread until done or status is stopped.
 % The last action is to send Name a message with the updated state
 started(Phase, CA, State) :-
-    remember_one(phase_status(Phase, running)),
+    get_state(State, latency, Latency),
+    timebox_phase_thread(Phase, Latency),
     Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
-    log(info, phase, "Starting phase ~w for CA ~w with goal ~p", [Phase, CA, Goal]),
+    log(info, phase, "Starting phase ~w (~@) for CA ~w with goal ~p", [Phase, self, CA, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
-    % Wait for go from CA thread
-    thread_get_message(go(Timer)),
-    thread_self(PhaseThreadId),
-    remember_one(phase_threads(Phase, PhaseThreadId, Timer)),
-    log(info, phase, "Go phase ~w", [Phase]),
+    remember_one(phase_status(Phase, running)),
     executing_phase(Phase, WorkEngine, CA, State).
 
+% Timebox a phase but only if it is meant to be
+timebox_phase_thread(Phase, Latency) :-
+    phase_timeout(Phase, Latency, Delay),
+    get_time(Now),
+    Deadline is Now + Delay,
+    log(info, phase, "Setting end of phase ~w of ~@ to ~w seconds from now", [Phase, self, Delay]),
+    remember_one(phase_time_limit(Phase, Deadline)).
+
 executing_phase(Phase, WorkEngine, CA, PhaseState) :-
-    phase_status(Phase, stopped),
+    phase_ended(Phase),
     !,
     log(info, phase, "Phase ~w for CA ~p was stopped", [Phase, CA]),
     engine_destroy(WorkEngine),
-    (phase_threads(SomePhase, _, Timer) ->
-        log(info, phase, "Stopping timer ~w for phase ~w", [Timer, SomePhase]),
-        timer:stopped(Timer)
-        ;
-        log(info, phase, "@@@ Failed to stop timer for phase ~w", [Phase]),
-        fail),
     message_sent(CA, end_of_phase(Phase, PhaseState)).
 
 executing_phase(Phase, WorkEngine, CA, _) :-
@@ -158,12 +140,13 @@ interpret_unit_of_work(exception(Error), _) :-
     log(warn, phase, "Exception from engine. Got ~p", [Error]),
     throw(Error).
     
-% Signal to end_phase goal from timer
-signal_processed(stop_phase(Phase, PhaseThreadId)) :-
-    (phase_threads(Phase, PhaseThreadId, _) ->
-    remember_one(phase_status(Phase, stopped))
-    ;
-    true).
+phase_ended(Phase) :-
+    phase_status(Phase, stopped), !.
+
+phase_ended(Phase) :-
+    get_time(Now),
+    phase_time_limit(Phase, TimeLimit),
+    Now > TimeLimit.
 
 remember_one(Term) :-
     Term =.. [Head | Args],
@@ -173,3 +156,7 @@ remember_one(Term) :-
     % Because using abolish/1 erases the thread_local property
     retractall(Retracted),
     assertz(Term).
+
+phase_timeout(Phase, Latency, Delay) :-
+    phase_timebox(Phase, Fraction),
+    Delay is Latency * Fraction.
