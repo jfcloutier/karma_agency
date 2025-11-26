@@ -1,5 +1,5 @@
 /*
-%% Start world and body servers
+%% Start the world and body servers
 [load].
 [load_tests].
 run_tests(dynamic_ca).
@@ -19,8 +19,8 @@ run_tests(dynamic_ca).
 :- set_log_level(info).
 
 % The SOM is initialized and starts growing.
-% Succeed once a dynamic CA was created and completed a timeframe.
-test(dynamic_ca_created_and_completes_timeframe) :-
+% Succeed once a dynamic CA was created and has completed two timeframes.
+test(timeframes) :-
 	subscribed(end_of_timeframe),
 	som : growing,
 	query_answered(som, children, SOMChildren),
@@ -31,6 +31,7 @@ test(dynamic_ca_created_and_completes_timeframe) :-
 			SOMChildren), query_answered(CA, type, dynamic_ca)),
 		L),
 	assertion(L \== []),
+	get_message(event(end_of_timeframe, _, _)),
 	get_message(event(end_of_timeframe, _, _)).
 
 :- end_tests(dynamic_ca).

@@ -345,11 +345,12 @@ new_timeframe(State, NewState) :-
 	;
 		end_of_life(State).
 
-% Create a new timeframe at the begin phase with 0 wellbeing deltas from current one and put current one in history
+% Create a new timeframe at the initiating phase with 0 wellbeing deltas from current one and put current one in history
 timeframe_created(State, NewState) :-
 	get_state(State, timeframe, Timeframe),
 	acc_state(State, history, Timeframe, State1),
-	NewTimeframe = Timeframe.put(wellbeing_deltas, wellbeing_deltas{fullness:0, integrity:0, engagement:0}),
+	Timeframe1 = Timeframe.put(wellbeing_deltas, wellbeing_deltas{fullness:0, integrity:0, engagement:0}),
+	NewTimeframe = Timeframe1.put(phase, initiating),
 	put_state(State1, timeframe, NewTimeframe, NewState).
 
 % TODO - Die gracefully and let others know
