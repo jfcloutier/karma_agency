@@ -13,10 +13,10 @@ At the end of the sequence of phases, the dCA is told of it, ends the current ti
 The sequence of phases is
 
 * begin         - the timeframe begins - update wellbeing from diffusion
-* predict       - (30% - to allow time for prediction errors to come in) make predictions from current observations 
+* predict       - make predictions from current observations 
 * observe       - merge predictions and prediction errors into new observations, elevate umwelt observations, remove obsolete observations
 * experience    - integrate updated history of observations into new experiences, remove obsolete experiences, (re)assign value
-* plan          - (70% - to allow for the action protocol to play out) formulate and prioritize goals (formulated and received), select a goal, construct a plan and emit it
+* plan          - formulate and prioritize goals (formulated and received), select a goal, construct a plan and emit it
 * act           - confirm plan feasibility, execute it, remember the goal and plan for later assessment
 * assess        - evaluate causal theory and request new one if unsatisfactory, grant past plans affordance status if their goals were achieved
 * conclude      - the timeframe concludes - update wellbeing measures and emit wellbeing changes
@@ -43,9 +43,9 @@ The sequence of phases is
 :- thread_local phase_time_limit/2.
 
 % Phase transitions
-% First timeframe started
+% Timeframe started (goes right to begin)
 next_phase(initiating, begin).
-% Phase transitions within a timeframe
+% Phase transitions within a timeframe where each phase does units of work until done or time is up
 next_phase(begin, predict).
 next_phase(predict, observe).
 next_phase(observe, experience).
@@ -54,6 +54,7 @@ next_phase(plan, act).
 next_phase(act, assess).
 next_phase(assess, conclude).
 
+% Timeboxing of phases as fraction of the latency of a timeframe
 phase_timebox(observe, 0.2).
 phase_timebox(experience, 0.2).
 phase_timebox(plan, 0.5).

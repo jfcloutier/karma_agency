@@ -61,43 +61,41 @@ effector_cas_started([Effector|Others]) :-
 	subtract(Others, Twins, Rest),
 	effector_cas_started(Rest).
 
-% Create the first CA capable of mitosis (it divides fullness). Give it an umwelt.
+% Create the first CA capable of mitosis (it divides fullness). Give it all static CAs as its umwelt.
 growing :-
 	dynamic_ca : name_from_level(1, CA),
-	log(info, som, "Level one CA ~p", [CA]),
-	umwelt_recruited(0, Umwelt),
-	log(info, som, "Recruited umwelt ~p", [Umwelt]),
+	log(info, som, "First level one CA ~p", [CA]),
+    static_cas(Umwelt),
 	supervisor : worker_child_started(som,
 		dynamic_ca,
 		CA,
-		[
-			init([level(1), umwelt(Umwelt)])]),
+		[init([level(1), umwelt(Umwelt)])]),
 	forall(member(UmweltCA, Umwelt), message_sent(UmweltCA, adopted)),
 	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
 	
-% Recruit 2 or more CAs at the given level eager to participate in the umwelt of a CA one level up
-umwelt_recruited(Level, Umwelt) :-
-	recruits(Level, Recruits),
-	pick_some(Recruits, Umwelt).
+% % Recruit 2 or more CAs at the given level eager to participate in the umwelt of a CA one level up
+% umwelt_recruited(Level, Umwelt) :-
+% 	recruits(Level, Recruits),
+% 	pick_some(Recruits, Umwelt).
 
-recruits(Level, Recruits) :-
-	findall(CA,
-		at_level(Level, CA),
-		Candidates),
-	length(Candidates, N),
-	N > 1,
-	random_permutation(Candidates, PermutatedCandidates),
-	findall(Eagerness - Recruit,
-		(member(Recruit, PermutatedCandidates),
-			recruit(Recruit, Eagerness),
-			Eagerness > 0),
-		Pairs),
-	keysort(Pairs, SortedPairs),
-	pairs_values(SortedPairs, Recruits).
+% recruits(Level, Recruits) :-
+% 	findall(CA,
+% 		at_level(Level, CA),
+% 		Candidates),
+% 	length(Candidates, N),
+% 	N > 1,
+% 	random_permutation(Candidates, PermutatedCandidates),
+% 	findall(Eagerness - Recruit,
+% 		(member(Recruit, PermutatedCandidates),
+% 			recruit(Recruit, Eagerness),
+% 			Eagerness > 0),
+% 		Pairs),
+% 	keysort(Pairs, SortedPairs),
+% 	pairs_values(SortedPairs, Recruits).
 
-recruit(CA, P) :-
-	ca_module_from_name(CA, Module),
-	Module : recruit(CA, P).
+% recruit(CA, P) :-
+% 	ca_module_from_name(CA, Module),
+% 	Module : recruit(CA, P).
 
 at_level(Level, CA) :-
 	supervisor : children(som, CAs),
@@ -115,6 +113,11 @@ ca_module_from_name(CA, Module) :-
 type_module(sensor, sensor_ca).
 type_module(effector, effector_ca).
 type_module(ca, dynamic_ca).
+
+static_cas(StaticCAs) :-
+	sensor_cas(SensorCAs),
+	effector_cas(EffectorCAs),
+	append(SensorCAs, EffectorCAs, StaticCAs).
 
 sensor_cas(SensorCAs) :-
     query_answered(som, children, SOMChildren),

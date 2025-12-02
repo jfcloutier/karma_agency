@@ -147,6 +147,9 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
+handled(query(wellbeing), State, Wellbeing) :-
+    get_state(State, wellbeing, Wellbeing).
+
 handled(query(experience_domain), State, ExperienceDomain) :-
 	get_state(State, action_domain, ActionDomain),
 	effector_name(State, EffectorName),
@@ -214,7 +217,7 @@ handled(event(Topic, Payload, Parent), State, NewState) :-
 
 %%%%
 
-initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
+initial_wellbeing([fullness = 1.0, integrity = 1.0, engagement = 0.0]).
 
 subscribed_to_global_events() :-
 	all_subscribed([executed]).

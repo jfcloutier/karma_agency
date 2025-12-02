@@ -120,6 +120,9 @@ handled(query(experience_domain), State, [predictable{name:SenseName, object:Sen
 handled(query(reading), State, Reading) :-
     sense_read(State, Reading).
 
+handled(query(wellbeing), State, Wellbeing) :-
+    get_state(State, wellbeing, Wellbeing).
+
 handled(query(Query), State, Answer) :-
     ca_support : handled(query(Query), State, Answer).
 
@@ -155,7 +158,7 @@ handled(message(Message, Source), State, NewState) :-
 
 %%%%
 
-initial_wellbeing([fullness = 100, integrity = 100, engagement = 0]).
+initial_wellbeing([fullness = 1.0, integrity = 1.0, engagement = 0.0]).
 
 subscribed_to_events() :-
 	all_subscribed([ca_terminated]).

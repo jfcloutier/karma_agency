@@ -67,6 +67,8 @@ Messages:
 		
 * In from a parent
 	* ready_actuation(Goal, Boolean) - a parent communicates that the dynamic CA was selected (or not) to realize a goal by actuating whatever plan the dynamic CA chose or built
+
+* In 
 	* wellbeing_transfer(WellbeingValues) - payload is [fullness = Delta1, integrity = Delta2, engagement = Delta3] - a transfer in either direction of wellbeing
 
 Events:
@@ -314,7 +316,7 @@ removed_from_umwelt(CA, State, NewState) :-
 
 
 initial_wellbeing(Wellbeing) :-
-	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:1.0}.
+	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}.
 
 overall_wellbeing(_, 1).
 
@@ -349,8 +351,7 @@ new_timeframe(State, NewState) :-
 timeframe_created(State, NewState) :-
 	get_state(State, timeframe, Timeframe),
 	acc_state(State, history, Timeframe, State1),
-	Timeframe1 = Timeframe.put(wellbeing_deltas, wellbeing_deltas{fullness:0, integrity:0, engagement:0}),
-	NewTimeframe = Timeframe1.put(phase, initiating),
+	NewTimeframe = Timeframe.put(#{phase:initiating, wellbeing_deltas:wellbeing_deltas{fullness:0, integrity:0, engagement:0}}),
 	put_state(State1, timeframe, NewTimeframe, NewState).
 
 % TODO - Die gracefully and let others know

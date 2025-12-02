@@ -21,8 +21,9 @@ run_tests(dynamic_ca).
 % The SOM is initialized and starts growing.
 % Succeed once a dynamic CA was created and has completed two timeframes.
 test(timeframes) :-
-	subscribed(end_of_timeframe),
+	all_subscribed([end_of_timeframe, ca_started]),
 	som : growing,
+	get_message(event(ca_started, [level(1)], _)),
 	query_answered(som, children, SOMChildren),
 	assertion(SOMChildren \== unknown),
 	findnsols(1,

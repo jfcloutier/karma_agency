@@ -1,7 +1,8 @@
 :- [
     'tests/sensor_ca.plt',
     'tests/effector_ca.plt',
-    'tests/dynamic_ca.plt'
+    'tests/dynamic_ca.plt',
+    'tests/wellbeing.plt'
 ].
 
 init_static_som :-

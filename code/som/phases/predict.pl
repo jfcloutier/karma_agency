@@ -14,4 +14,4 @@ unit_of_work(CA, State, more(State)) :-
     sleep(0.02),
     log(info, predict, "Phase predict more (~w) for CA ~w", [N, CA]).
 
-unit_of_work(CA, State, done(State)).
+unit_of_work(_, State, done(State)).
