@@ -1,4 +1,4 @@
-/**
+/*
 The timeframe begins - diffuse wellbeing.
 
 The CA calculates how much wellbeing it can diffuse:
@@ -8,7 +8,7 @@ The CA calculates how much wellbeing it can diffuse:
 It then messages each relative to find their wellbeing(measure, Relative)
 
 The CA sends to a relative D(measure) - wellbeing(measure, Relative) if > 0
-**/
+*/
 
 :- module(begin, []).
 

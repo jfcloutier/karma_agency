@@ -63,6 +63,7 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
+	* `prediction(Predicted)`
 	* `prediction_error(PredictionPayload, ActualValue)` - responding with the correct value to a prediction event where the prediction is incorrect
 		
 * In from a parent
@@ -82,8 +83,7 @@ Events:
 	* topic: intent_completed, payload: [id = IntentID, status =  SuccessOrFailure]
 													 - a parent CA has completed preparations to realize its intent, or has failed to
 	                                                 - the dynamic CA's timeframe can now terminate, propagating the readied actuations awaiting execution into the next timeframe if intent was successful
-	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about what the dynamic CA experiences
-	
+
 * Out
     * topic: ca_started, payload: [level = Level]
 	* topic: wellbeing_changed, payload: WellbeingPayload  - [fullness = N1, integrity = N2, engagement = N3]
@@ -135,7 +135,7 @@ State
 Data:
     * parents - parent CAs
     * umwelt - child CAs
-	* causal_theory - current causal theory
+	* causal_theory - current causal theory or `none`
 	* affordances - [goal-directives, ...]
 	* wellbeing - wellbeing metrics {fullness:Percent, integrity:Percent, engagement:Percent}
 	* goal - selected goal {experience:Experience, impact:Impact, priority:Priority}
@@ -202,7 +202,7 @@ init(Options, State) :-
 	latency(Level, Latency),
 	empty_time_frame(TimeFrame),
 	initial_wellbeing(Wellbeing),
-	put_state(EmptyState, [latency - Latency, parents - [], umwelt - Umwelt, wellbeing - Wellbeing, timeframe - TimeFrame, history - [], alive - true], InitialState),
+	put_state(EmptyState, [latency - Latency, parents - [], umwelt - Umwelt, causal_theory - none, wellbeing - Wellbeing, timeframe - TimeFrame, history - [], alive - true], InitialState),
 	subscribed_to_events(),
 	announce_adoptions(Umwelt),
 	% Start life
@@ -255,6 +255,11 @@ handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
 	published(end_of_timeframe, [level(Level)]),
 	new_timeframe(State1, NewState)).
 
+handled(message(prediction(Predicted), CA), State, NewState) :-
+	phase:timeframe_property_value(State, predictions_in, PredictionsIn),
+	PredictionIn = prediction_in{predicted:Predicted, by: CA},
+	timeframe_updated(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
+
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
 	put_state(State, causal_theory, CausalTheory, NewState).
 
@@ -271,6 +276,10 @@ handled(query(type), _, dynamic_ca).
 
 handled(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
+
+handled(query(experience_domain), State, ExperienceDomain) :-
+	get_state(State, experiences, Experiences),
+	domain_from_experiences(Experiences, ExperienceDomain).
 
 /*
 A dynamic CA can be recruited only if it has a causal theory.
@@ -296,10 +305,6 @@ handled(event(ca_started, _, _), State, State).
 handled(event(ca_terminated, _, Source), State, NewState) :-
 	removed_from_umwelt(Source, State, NewState),
 	log(info, dynamic_ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
-% TODO
-handled(event(prediction, Experience, Source), State, State).
-% TODO
-handled(event(prediction_error, Prediction, Source), State, State).
 % TODO
 handled(event(goal, Goal, Source), State, State).
 % TODO
@@ -358,3 +363,6 @@ timeframe_created(State, NewState) :-
 end_of_life(State) :-
 	level(Level),
 	published(end_of_life, [level(Level)]).
+
+% TODO
+domain_from_experiences(Experiences, []).

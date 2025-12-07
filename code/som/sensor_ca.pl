@@ -206,7 +206,6 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     UpdatedWellbeing = [fullness = UpdatedFullness, integrity = UpdatedIntegrity, engagement = UpdatedEngagement],
     published(wellbeing_changed, UpdatedWellbeing).
 
-
 % Changes in wellbeing specific to the sensor reading
 delta_fullness(color, green, 10).
 delta_fullness(_, _, 0).

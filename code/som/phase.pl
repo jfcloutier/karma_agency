@@ -22,7 +22,7 @@ The sequence of phases is
 * conclude      - the timeframe concludes - update wellbeing measures and emit wellbeing changes
 */
 
-:- module(phase, [current_phase/2, next_phase/2, phase_transition/2]).
+:- module(phase, [current_phase/2, next_phase/2, phase_transition/2, timeframe_updated/3]).
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
@@ -70,7 +70,7 @@ phase_transition(State, NewState) :-
     current_phase(State, EndedPhase),
 	next_phase(EndedPhase, Phase),
     log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
-    update_timeframe(State, [phase - Phase], NewState),
+    timeframe_updated(State, [phase - Phase], NewState),
     % Start the phase thread. It then waits for go.
 	thread_create(phase:started(Phase, CA, NewState), _, [detached(true)]).
 
@@ -79,10 +79,14 @@ current_phase(State, Phase) :-
     Phase = Timeframe.phase.
 
 % Update the timeframe of a CA state
-update_timeframe(State, Pairs, NewState) :-
+timeframe_updated(State, Pairs, NewState) :-
     get_state(State, timeframe, Timeframe),
     put_state(Timeframe, Pairs, NewTimeframe),
     put_state(State, timeframe, NewTimeframe, NewState).
+
+timeframe_property_value(State, Property, Value) :-
+    get_state(State, timeframe, Timeframe),
+    get_dict(Property, Timeframe, Value).
 
 %%%% IN PHASE THREAD
 
