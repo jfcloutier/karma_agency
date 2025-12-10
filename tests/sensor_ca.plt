@@ -1,4 +1,6 @@
 /*
+Tests of Sensor CAS
+
 %% Start world and body servers
 [load].
 [load_tests].
@@ -49,8 +51,9 @@ test(inaccurate_prediction) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	published(prediction, [experience = contact(SensorName, pressed)]),
-	get_message(message(prediction_error(_, ActualValue), SensorCA)),
+	Prediction = prediction{name:SensorName, object:contact, value:pressed},
+	message_sent(SensorCA, prediction(Prediction)),
+	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue == released).
 
 test(experience_acquired) :-
@@ -60,13 +63,13 @@ test(experience_acquired) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = [experience = color(SensorName, red)],
-	published(prediction, Prediction),
-	get_message(message(prediction_error(Prediction, ActualValue), SensorCA)),
+	Prediction = prediction{name:SensorName, object:color, value:red},
+	message_sent(SensorCA, prediction(Prediction)),
+	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue \== red),
 	query_answered(SensorCA, state, State),
 	get_state(State, experiences, [Experience]),
-	assertion(unifiable(Experience, color(SensorName, _-_), _)).
+	assertion(experience{name:SensorName, object:color} :< Experience).
 
 test(wellbeing_updated) :-
 	% Pick a sensor CA and establish self as its parent
@@ -77,13 +80,13 @@ test(wellbeing_updated) :-
 	query_answered(SensorCA, state, State),
 	get_state(State, wellbeing, InitialWellbeing),
 	% Get the sensor CA to read its sensor and message back a prediction error
-	Prediction = [experience = color(SensorName, green)],
-	published(prediction, Prediction),
+	Prediction = prediction{name:SensorName, object:color, value:green},
+	message_sent(SensorCA, prediction(Prediction)),
 	!,
-	get_message(message(prediction_error(Prediction, Color), SensorCA)),
+	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	% Check that the sensor CA published its update wellbeing to its parents
 	get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
-	(Color == green -> 
+	(ActualValue == green -> 
 		assert_wellbeing_changed(InitialWellbeing, UpdatedWellbeing, [fullness = >, integrity = <, engagement = >])
 		;
 		assert_wellbeing_changed(InitialWellbeing, UpdatedWellbeing, [fullness = <, integrity = <, engagement = >])).

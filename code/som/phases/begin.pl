@@ -42,7 +42,7 @@ diffused_to_relative(_, DiffusableWellbeing, Relative, DiffusedWellbeing) :-
     % What's diffused is the difference being what's available for diffusion and what's held (a positive value or forced to 0)
     % Not all of the wellbeing available for diffusion to another necessarily diffuses to it. Some or all may be untouched.
     DiffusedWellbeing = DiffusableWellbeing.sub(Wellbeing),
-    message_sent(Relative, wellbeing_transfer([fullness=DiffusedWellbeing.fullness, integrity=DiffusedWellbeing.integrity, engagment=DiffusedWellbeing.engagement])),
+    message_sent(Relative, wellbeing_transfer(wellbeing{fullness:DiffusedWellbeing.fullness, integrity:DiffusedWellbeing.integrity, engagment:DiffusedWellbeing.engagement})),
     !.
 
 diffused_to_relative(CA, DiffusableWellbeing, Relative, DiffusableWellbeing) :-

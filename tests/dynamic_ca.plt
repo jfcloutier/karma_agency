@@ -1,4 +1,6 @@
 /*
+Tests of dynamic CAs
+
 %% Start the world and body servers
 [load].
 [load_tests].

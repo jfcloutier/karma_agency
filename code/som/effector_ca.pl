@@ -38,13 +38,14 @@ Messages:
 	* `adopted(Parent)` when added to the umwelt of a CA
 
 * In from a parent
-	* ready_actuation(Goal) - a parent communicates an actuation it wants the effector CA to execute
-	* wellbeing_transfer(WellbeingValues) - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* `ready_actuation(Goal)` - a parent communicates an actuation it wants the effector CA to execute
+	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
+	* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{name:Name, object:Object, value:Value}
 
 * Out to a parent	
 	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
 	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
-    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value}
 	
 Events:
 
@@ -54,11 +55,10 @@ Events:
 * In from parents
 	* topic: intent, payload: [id = Id, priority = Priority, goals = [Goal, ...] - a parent CA communicates an affordance it built that it intends to execute if possible
 	* topic: intent_completed, payload: [id = Id, executed = Boolean] - ignored
-	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about how many of a given action the effector CA experiences were executed
 	
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: WellbeingPayload  - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* topic: wellbeing_changed, payload: Wellbeing  - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Queries:
 
@@ -74,10 +74,10 @@ State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
 	* observations - actions last executed - [executed(Action), ...]
-	* experiences - experiences from last execution - [Action(EffectorName, Boolean), ...]
+	* experiences - experiences from last execution - [experience{name:EffectorName, object:Action, value:Boolean, tolerance: 0), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
-	* wellbeing - wellbeing values - initially [fullness = 100, integrity = 100, engagement = 0]
+	* wellbeing - wellbeing values - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
 
 Lifecycle
   * Created for a body effector
@@ -107,6 +107,7 @@ effector CA recomputes its observations and experiences.
 :- use_module(utils(logger)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/static_ca)).
 
 name_from_effector(Effector, Name) :-
 	atomic_list_concat([effector, Effector.id], ':', Name).
@@ -167,6 +168,10 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
+% Prediction = prediction{name:Name, object:Object, value:Value}
+handled(message(prediction(Prediction), Parent), State, NewState) :-
+	static_ca:prediction_handled(Prediction, Parent, State, NewState).
+
 handled(message(ready_actuation(Goal), Parent), State, NewState) :-
 	goal_action(Goal, State, Action),
 	log(info, effector_ca, "~@ is readying action ~p from goal ~p", [self, Action, Goal]),
@@ -207,17 +212,14 @@ handled(event(executed, _, _), State, NewState) :-
 		;
 		State3 = State2
 		),
-	actuations_reset(State3, NewState).	
-	
-handled(event(prediction, PredictionPayload, Parent), State, State) :-
-	ca_support:prediction_handled(PredictionPayload, Parent, State).
+	actuations_reset(State3, NewState).		
 
 handled(event(Topic, Payload, Parent), State, NewState) :-
 	ca_support : handled(event(Topic, Payload, Parent), State, NewState).
 
 %%%%
 
-initial_wellbeing([fullness = 1.0, integrity = 1.0, engagement = 0.0]).
+initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}).
 
 subscribed_to_global_events() :-
 	all_subscribed([executed]).
@@ -252,7 +254,7 @@ wellbeing_changed(State, UpdatedWellbeing) :-
 	Fullness1 is max(Fullness - Count, 0),
 	Integrity1 is max(Integrity - Count, 0),
 	Engagement1 is min(Engagement + Count, 100),
-	UpdatedWellbeing = [fullness = Fullness1, integrity = Integrity1, engagement = Engagement1],
+	UpdatedWellbeing = wellbeing{fullness:Fullness1, integrity:Integrity1, engagement:Engagement1},
 	published(wellbeing_changed, UpdatedWellbeing).
 
 actuations_reset(State, NewState) :-
@@ -272,7 +274,7 @@ experiences_from_observations(State, Experiences) :-
 
 experiences_from_executions([], _, []).
 experiences_from_executions([executed(Action) | Rest], EffectorName, [Experience | OtherExperiences]) :-
-	Experience =.. [Action, EffectorName, true],
+	Experience = experience{name:EffectorName, object:Action, value:true, tolerance: 0},
 	experiences_from_executions(Rest, EffectorName, OtherExperiences).
 
 action_url(State, Action, ActionUrl) :-

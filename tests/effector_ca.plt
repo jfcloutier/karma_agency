@@ -1,4 +1,6 @@
 /*
+Tests of effector CAs
+
 %% Start world and body servers
 [load].
 [load_tests].
@@ -84,13 +86,13 @@ test(intent_executed) :-
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
-    Prediction1 = [experience = spin(EffectorName, false)],
-	published(prediction, Prediction1),
+    Prediction1 = prediction{name:EffectorName, object:spin, value:false},
+	message_sent(EffectorCA, prediction(Prediction1)),
     % Get a prediction error message
-	get_message(message(prediction_error(Prediction1, true), EffectorCA)),
+	get_matching_message(prediction_error{prediction: Prediction1, actual_value:true}, message(prediction_error(_), EffectorCA)),
     % Correctly predict the experience that reverse_spin was executed
-    Prediction2 = [experience = reverse_spin(EffectorName, true)],
-	published(prediction, Prediction2),
+    Prediction2 = prediction{name:EffectorName, object:reverse_spin, value:true},
+	message_sent(EffectorCA, prediction(Prediction2)),
     % Don't get an error prediction message
-	\+ get_message(message(prediction_error(Prediction2, _), EffectorCA), 1),
+	\+ get_matching_message(prediction_error{prediction: Prediction2},message(prediction_error(_), EffectorCA), 1),
     published(intent_completed, [id = Id, executed = true]).

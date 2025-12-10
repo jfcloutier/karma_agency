@@ -22,19 +22,17 @@ Messages:
 	* `adopted(Parent)` when added to the umwelt of a CA
 
 * Out to a parent
-    * `prediction_error(PredictionPayload, ActualValue)` - responding to prediction event - the parent is wrong about how many times an action was executed
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value}
 
 * In from a parent
- 	* wellbeing_transfer(WellbeingPayload) - payload is [fullness = N1, integrity = N2, engagement = N3]
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value}
+ 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
-
-* In from parents
-	* topic: prediction, payload: [experience = Experience] - a parent makes a prediction about how many of a given action the effector CA experiences were executed
 	
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: WellbeingPayload  - payload is [fullness = N1, integrity = N2, engagement = N3]
+	* topic: wellbeing_changed, payload: Wellbeing  - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Queries:
 
@@ -48,7 +46,7 @@ State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
 	* experiences - experiences from last reading - [distance(SensorName, Value)]
-	* wellbeing - wellbeing metrics - initially [fullness = 100, integrity = 100, engagement = 0]
+	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
 
 Lifecycle:
   * Created once for a body sensor
@@ -68,6 +66,7 @@ Lifecycle:
 :- use_module(actors(worker)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/static_ca)).
 
 %! name_from_sensor(+Sensor, -Name) is det
 % the name of the sensor CA given the sensor it wraps
@@ -93,7 +92,8 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     initial_wellbeing(InitialWellbeing),
-    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[], wellbeing-InitialWellbeing], State),
+    unknown_experience(Sensor, UnknownExperience),
+    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[UnknownExperience], wellbeing-InitialWellbeing], State),
 	subscribed_to_events(),
     published(ca_started, [level(0)]).
 
@@ -132,6 +132,12 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
+% Prediction = prediction{name:Name, object:Object, value:Value}
+handled(message(prediction(Prediction), Parent), State, NewState) :-
+    log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
+    experiences_updated(Prediction, State, State1),
+ 	static_ca : prediction_handled(Prediction, Parent, State1, NewState).
+
 handled(message(Message, Source), State, NewState) :-
    ca_support: handled(message(Message, Source), State, NewState).
 
@@ -140,12 +146,6 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     member(Parent, Parents),
     unsubscribed_from(Parent),
     dec_state(State, parents, Parent, NewState).
-
-handled(event(prediction, PredictionPayload, Parent), State, NewState) :-
-    log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, PredictionPayload, Parent, State]),
-    option(experience(PredictedExperience), PredictionPayload),
-    experiences_updated(PredictedExperience, State, NewState),
- 	ca_support : prediction_handled(PredictionPayload, Parent, NewState).
 
 handled(event(Topic, Payload, Source), State, NewState) :-
     ca_support : handled(event(Topic, Payload, Source), State, NewState).
@@ -158,10 +158,13 @@ handled(message(Message, Source), State, NewState) :-
 
 %%%%
 
-initial_wellbeing([fullness = 1.0, integrity = 1.0, engagement = 0.0]).
+initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}).
 
 subscribed_to_events() :-
 	all_subscribed([ca_terminated]).
+
+unknown_experience(Sensor, Experience) :-
+    Experience = experience{name:Sensor.id, object:Sensor.capabilities.sense, value:unknown}.
 
 sense_name(State, SenseName) :-
     SenseName = State.sensor.capabilities.sense.
@@ -176,16 +179,17 @@ sense_url(State, SenseURL) :-
     SenseURL = State.sensor.url.
 
 % Read the sensor value, update wellbeing and publish wellbeing_changed, update experience in latest reading.
-experiences_updated(PredictedExperience, State, NewState) :-
-    PredictedExperience =.. [SenseName, SensorName, _],
+experiences_updated(Prediction, State, NewState) :-
+    prediction{name:SensorName, object:SenseName} :< Prediction,
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_read(State, reading(Value, Tolerance, _)),
     !,
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
-    Experience =.. [SenseName, SensorName, Value-Tolerance],
+    Experience = experience{name:SensorName, object:SenseName, value:Value, tolerance:Tolerance},
     put_state(State, experiences, [Experience],  State1),
-    put_wellbeing(State1, UpdatedWellbeing, NewState).
+    put_wellbeing(State1, UpdatedWellbeing, NewState),
+    log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     sense_url(State, Url),
@@ -203,7 +207,7 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     UpdatedFullness is Fullness + DeltaFullness - 1,
     UpdatedIntegrity is Integrity + DeltaIntegrity - 1,
     UpdatedEngagement is Engagement + DeltaEngagement + 1,
-    UpdatedWellbeing = [fullness = UpdatedFullness, integrity = UpdatedIntegrity, engagement = UpdatedEngagement],
+    UpdatedWellbeing = wellbeing{fullness:UpdatedFullness, integrity:UpdatedIntegrity, engagement:UpdatedEngagement},
     published(wellbeing_changed, UpdatedWellbeing).
 
 % Changes in wellbeing specific to the sensor reading

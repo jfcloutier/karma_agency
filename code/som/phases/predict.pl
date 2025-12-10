@@ -67,7 +67,7 @@ random_predictions_from_domain(ExperienceDomain, Predictions) :-
           (member(Predictable, ExperienceDomain),
           predictable{name:Name, object:Object} :< Predictable,
           random_domain_value(Predictable.value, Value),
-          Prediction = predicted{name:Name, object:Object, value:Value}
+          Prediction = prediction{name:Name, object:Object, value:Value}
           ),
           Predictions).
 
@@ -90,8 +90,8 @@ grow_predictions([CAPrediction | Rest], Acc, NewPredictions) :-
     grow_predictions(Rest, [CAPrediction | Acc], NewPredictions).
 
 conflicting_predictions(Prediction, OtherPrediction) :-
-    predicted{name: Name, object: Object} :< Prediction,
-    predicted{name: Name, object: Object} :< OtherPrediction.
+    prediction{name: Name, object: Object} :< Prediction,
+    prediction{name: Name, object: Object} :< OtherPrediction.
 
 predictions_sent_to_umwelt(State, Predictions) :-
     get_state(State, umwelt, Umwelt), 

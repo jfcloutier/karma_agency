@@ -63,14 +63,14 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
-	* `prediction(Predicted)`
-	* `prediction_error(PredictionPayload, ActualValue)` - responding with the correct value to a prediction event where the prediction is incorrect
+	* `prediction(Prediction)`
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value}
 		
 * In from a parent
 	* ready_actuation(Goal, Boolean) - a parent communicates that the dynamic CA was selected (or not) to realize a goal by actuating whatever plan the dynamic CA chose or built
 
 * In 
-	* wellbeing_transfer(WellbeingValues) - payload is [fullness = Delta1, integrity = Delta2, engagement = Delta3] - a transfer in either direction of wellbeing
+	* wellbeing_transfer(Wellbeing) - Wellbeing is wellbeing{fullness: Delta1, integrity:Delta2, engagement:Delta3} - a transfer in either direction of wellbeing
 
 Events:
 
@@ -86,10 +86,10 @@ Events:
 
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: WellbeingPayload  - [fullness = N1, integrity = N2, engagement = N3]
+	* topic: wellbeing_changed, payload: Wellbeing  - wellbeing{fullness:N1, integrity:N2, engagement:N3}
 	* topic: end_of_timeframe, payload: [level=Level]
 	* topic: end_of_life, payload: [level=Level]
-	* topic: experience_domain_changed, payload: ExperienceDomain - [predicatble(name: ExperienceName, object: ExperienceObject, value: ValueDomain), ...]
+	* topic: experience_domain_changed, payload: ExperienceDomain - [predicatble{name: ExperienceName, object: ExperienceObject, value: ValueDomain}, ...]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
 * Queries:
@@ -100,7 +100,7 @@ Events:
   * latency -> Integer (secs)
   * umwelt -> CA names
   * experience_domain -> [Predictable, ...]
-  * wellbeing -> [fullness = N1, integrity = N2, engagement = N3]
+  * wellbeing -> Wellbeing
 
 Lifecycle
 ---------
@@ -214,11 +214,10 @@ remember_level(Options, Level) :-
 	assert(level(Level)).
 
 announce_adoptions(Umwelt) :-
-	forall(member(Child, Umwelt), message_sent(Child, adopted)).
+	concurrent_forall(member(Child, Umwelt), message_sent(Child, adopted)).
 
-% TODO - prediction/1, prediction_error/1, experience_domain/1 etc.
 subscribed_to_events :-
-	forall(member(Topic, [ca_started, ca_terminated, prediction, experience_domain, directives]),
+	forall(member(Topic, [ca_started, ca_terminated]),
 		subscribed(Topic)).
 
 % Empty time frame 
@@ -255,9 +254,9 @@ handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
 	published(end_of_timeframe, [level(Level)]),
 	new_timeframe(State1, NewState)).
 
-handled(message(prediction(Predicted), CA), State, NewState) :-
+handled(message(prediction(Prediction), CA), State, NewState) :-
 	phase:timeframe_property_value(State, predictions_in, PredictionsIn),
-	PredictionIn = prediction_in{predicted:Predicted, by: CA},
+	PredictionIn = prediction_in{prediction:Prediction, by: CA},
 	timeframe_updated(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
@@ -307,7 +306,8 @@ handled(event(ca_terminated, _, Source), State, NewState) :-
 	log(info, dynamic_ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
 % TODO
 handled(event(goal, Goal, Source), State, State).
-% TODO
+
+% TODO?
 handled(event(experience_domain, ExperienceDomain, Source), State, State).
 
 handled(event(Topic, Payload, Source), State, State) :-

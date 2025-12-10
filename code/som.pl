@@ -61,7 +61,7 @@ effector_cas_started([Effector|Others]) :-
 	subtract(Others, Twins, Rest),
 	effector_cas_started(Rest).
 
-% Create the first CA capable of mitosis (it divides fullness). Give it all static CAs as its umwelt.
+% Create the first CA. Give it all static CAs as its umwelt.
 growing :-
 	dynamic_ca : name_from_level(1, CA),
 	log(info, som, "First level one CA ~p", [CA]),
@@ -70,7 +70,6 @@ growing :-
 		dynamic_ca,
 		CA,
 		[init([level(1), umwelt(Umwelt)])]),
-	forall(member(UmweltCA, Umwelt), message_sent(UmweltCA, adopted)),
 	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
 	
 % % Recruit 2 or more CAs at the given level eager to participate in the umwelt of a CA one level up
