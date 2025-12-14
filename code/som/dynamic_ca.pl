@@ -64,7 +64,7 @@ Messages:
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
 	* `prediction(Prediction)`
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value}
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:COnfidence}
 		
 * In from a parent
 	* ready_actuation(Goal, Boolean) - a parent communicates that the dynamic CA was selected (or not) to realize a goal by actuating whatever plan the dynamic CA chose or built

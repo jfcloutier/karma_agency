@@ -15,7 +15,7 @@ run_tests(wellbeing).
 
 test(sub_wellbeing) :-
     Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:1.0},
-    Wellbeing1 = Wellbeing.sub(wellbeing{fullness:0.5, integrity: 0.0, engagement:2.0}),
+    Wellbeing1 = Wellbeing.sub(wellbeing{fullness:0.5, integrity: 0.0, engagement:1.0}),
     assertion(Wellbeing1.fullness == 0.5),
     assertion(Wellbeing1.integrity == 1.0),
     assertion(Wellbeing1.engagement == 0.0).
@@ -29,7 +29,7 @@ test(div_wellbeing) :-
 
 test(add_wellbeing) :-
     Wellbeing = wellbeing{fullness:1.0, integrity:0.5, engagement:0.0},
-    Wellbeing1 = Wellbeing.add(wellbeing{fullness:0.5, integrity: 0.0, engagement:2.0}),
+    Wellbeing1 = Wellbeing.add(wellbeing{fullness:0.5, integrity: 0.0, engagement:1.0}),
     assertion(Wellbeing1.fullness == 1.0),
     assertion(Wellbeing1.integrity == 0.5),
     assertion(Wellbeing1.engagement == 1.0).

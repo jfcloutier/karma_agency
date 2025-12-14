@@ -25,7 +25,11 @@ get_matching_message(Pattern, Term) :-
 get_matching_message(Pattern, Term, Timeout) :-
     freeze_var_in_term(Pattern, Term),
     thread_self(Name),
-    thread_get_message(Name, Term, [timeout(Timeout)]).
+    thread_get_message(Name, Term, [timeout(Timeout)]), !.
+
+get_matching_message(Pattern, Term, _) :-
+    log(error, test_helper, "Failed to get message ~p matching ~p", [Term, Pattern]),
+    fail.
 
 freeze_var_in_term(Pattern, Term) :-
     var_in_term(Var, Term),

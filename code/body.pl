@@ -73,9 +73,15 @@ convert_json_pairs([], Pairs, Pairs).
 
 convert_json_pairs([Tag=json(KVs)|Rest], Acc, Pairs) :-
 	!, 
-	json_to_dict(KVs, Tag, Dict), 
+	(options_have_keys(KVs, [from, to]) ->
+		json_to_dict(KVs, range, Dict)
+		;
+	    json_to_dict(KVs, Tag, Dict)),
 	convert_json_pairs(Rest, [Tag = Dict|Acc], Pairs).
 
 convert_json_pairs([KV|Rest], Acc, Pairs) :-
 	convert_json_pairs(Rest, [KV|Acc], Pairs).
+
+options_have_keys(Options, Keys) :-
+	dict_options(D, Options), dict_keys(D, Ks), subtract(Ks, Keys, []).
 

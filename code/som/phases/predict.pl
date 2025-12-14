@@ -59,15 +59,16 @@ ca_random_predictions(CA, Predictions) :-
 % TODO
 apply_causal_theory(_, Observations, Observations).
 
-% sensor experience domain = [predictable{name:SenseName, object:SensorName, value:SenseDomain}]
-% effector experience domain = [predictable{name:Action, object:EffectorName, value:boolean), ...]
+% sensor experience domain = [predictable{name:SenseName, object:SensorName, domain:SenseDomain}]
+% effector experience domain = [predictable{name:Action, object:EffectorName, domain:boolean), ...]
 random_predictions_from_domain(ExperienceDomain, Predictions) :-
     log(info, predict, "Making random predictions from domain ~p", [ExperienceDomain]),    
     setof(Prediction,
           (member(Predictable, ExperienceDomain),
           predictable{name:Name, object:Object} :< Predictable,
-          random_domain_value(Predictable.value, Value),
-          Prediction = prediction{name:Name, object:Object, value:Value}
+          % The value of a predictable
+          random_domain_value(Predictable.domain, Value, Confidence),
+          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
           ),
           Predictions).
 

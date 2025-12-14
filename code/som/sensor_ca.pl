@@ -22,10 +22,10 @@ Messages:
 	* `adopted(Parent)` when added to the umwelt of a CA
 
 * Out to a parent
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value}
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -40,12 +40,12 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> [predictable{name:distance, object:SensorName, value:SenseDomain}]
+    * experience_domain -> [predictable{name:distance, object:SensorName, domain:SenseDomain}]
 
 State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
-	* experiences - experiences from last reading - [distance(SensorName, Value)]
+	* experiences - experiences from last reading - [experience(name:SensorName, object:Sense, value:Value, confidence:1.0)] - ignore tolerance
 	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
 
 Lifecycle:
@@ -92,8 +92,7 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     initial_wellbeing(InitialWellbeing),
-    unknown_experience(Sensor, UnknownExperience),
-    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[UnknownExperience], wellbeing-InitialWellbeing], State),
+    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[], wellbeing-InitialWellbeing], State),
 	subscribed_to_events(),
     published(ca_started, [level(0)]).
 
@@ -112,7 +111,7 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(experience_domain), State, [predictable{name:SenseName, object:SensorName, value:SenseDomain}]) :-
+handled(query(experience_domain), State, [predictable{name:SenseName, object:SensorName, domain:SenseDomain}]) :-
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_domain(State, SenseDomain).
@@ -132,7 +131,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value}
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
@@ -163,9 +162,6 @@ initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}).
 subscribed_to_events() :-
 	all_subscribed([ca_terminated]).
 
-unknown_experience(Sensor, Experience) :-
-    Experience = experience{name:Sensor.id, object:Sensor.capabilities.sense, value:unknown}.
-
 sense_name(State, SenseName) :-
     SenseName = State.sensor.capabilities.sense.
 
@@ -183,10 +179,12 @@ experiences_updated(Prediction, State, NewState) :-
     prediction{name:SensorName, object:SenseName} :< Prediction,
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
-    sense_read(State, reading(Value, Tolerance, _)),
+    % Ignore tolerance and timestamp in reading for now
+    sense_read(State, reading(Value, _, _)),
     !,
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
-    Experience = experience{name:SensorName, object:SenseName, value:Value, tolerance:Tolerance},
+    % A sensor is 100% confident in what it experiences
+    Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0},
     put_state(State, experiences, [Experience],  State1),
     put_wellbeing(State1, UpdatedWellbeing, NewState),
     log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).

@@ -33,13 +33,8 @@ handled(event(Topic, Payload, Source), State, State) :-
 from_parent(Source, State) :-
     get_state(State, parents, Parents),
     member(Source, Parents).
-    
-same_experience_value(Value1, Value2, Tolerance) :-
-    number(Value1),
-    number(Value2),
-    abs(Value2 - Value1) =< Tolerance.
 
-same_experience_value(Value, Value, _) :-
+same_experience_value(Value, Value) :-
     Value \== unknown.
 
 get_wellbeing(State, Fullness, Integrity, Engagement) :-

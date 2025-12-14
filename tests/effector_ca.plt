@@ -45,7 +45,7 @@ test(effector_experience_domain) :-
         (query_answered(EffectorCA, experience_domain, ExperienceDomain),
          query_answered(EffectorCA, action_domain, ActionDomain),
          forall(member(Predictable, ExperienceDomain),
-                assertion(unifiable(Predictable, predictable{name:_, object:_, value:boolean}, _))
+                assertion(unifiable(Predictable, predictable{name:_, object:_, domain:boolean}, _))
             ),
          forall(member(Predictable, ExperienceDomain),
             member(Predictable.name, ActionDomain)
@@ -86,12 +86,12 @@ test(intent_executed) :-
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
-    Prediction1 = prediction{name:EffectorName, object:spin, value:false},
+    Prediction1 = prediction{name:EffectorName, object:spin, value:false, confidence:1.0},
 	message_sent(EffectorCA, prediction(Prediction1)),
     % Get a prediction error message
 	get_matching_message(prediction_error{prediction: Prediction1, actual_value:true}, message(prediction_error(_), EffectorCA)),
     % Correctly predict the experience that reverse_spin was executed
-    Prediction2 = prediction{name:EffectorName, object:reverse_spin, value:true},
+    Prediction2 = prediction{name:EffectorName, object:reverse_spin, value:true, confidence:1.0},
 	message_sent(EffectorCA, prediction(Prediction2)),
     % Don't get an error prediction message
 	\+ get_matching_message(prediction_error{prediction: Prediction2},message(prediction_error(_), EffectorCA), 1),

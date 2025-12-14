@@ -51,7 +51,7 @@ test(inaccurate_prediction) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{name:SensorName, object:contact, value:pressed},
+	Prediction = prediction{name:SensorName, object:contact, value:pressed, confidence:1.0},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue == released).
@@ -63,7 +63,7 @@ test(experience_acquired) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{name:SensorName, object:color, value:red},
+	Prediction = prediction{name:SensorName, object:color, value:red, confidence:1.0},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue \== red),
@@ -80,7 +80,7 @@ test(wellbeing_updated) :-
 	query_answered(SensorCA, state, State),
 	get_state(State, wellbeing, InitialWellbeing),
 	% Get the sensor CA to read its sensor and message back a prediction error
-	Prediction = prediction{name:SensorName, object:color, value:green},
+	Prediction = prediction{name:SensorName, object:color, value:green, confidence:1.0},
 	message_sent(SensorCA, prediction(Prediction)),
 	!,
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
