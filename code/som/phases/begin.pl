@@ -17,17 +17,18 @@ The CA sends to a relative D(measure) - wellbeing(measure, Relative) if > 0
 :- use_module(agency(som/wellbeing)).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% resolving WorkStatus to more(IntermediateState), or it can be done(EndState) as the last or only solution. 
-unit_of_work(CA, State, done(NewState)) :-
+% resolving WorkStatus to more(IntermediateState, WellbeingDeltas), or it can be done(EndState, WellbeingDeltas) as the last or only solution. 
+
+% No state change but wellbeing deltas from diffusion
+unit_of_work(CA, State, done(State, WellbeingDeltas)) :-
     state{parents:Parents, umwelt:Umwelt, wellbeing:Wellbeing} :< State,
     append(Parents, Umwelt, Relatives),
     length(Relatives, Count),
     % Diffusable to each relative
     Diffusable = Wellbeing.div(Count),
-    diffused(CA, Diffusable, Relatives, DiffusedWellbeing),
-    Remaining = Wellbeing.sub(DiffusedWellbeing),
-    NewState = State.put(wellbeing, Remaining),
-    log(info, begin, "Phase begin done for CA ~w with ~p", [CA, NewState]).
+    diffused(CA, Diffusable, Relatives, Diffused),
+    WellbeingDeltas = Diffused.neg(),
+    log(info, begin, "Phase begin done for CA ~w with wellbeing delta from diffusion~p", [CA, WellbeingDeltas]).
 
 diffused(_, DiffusableWellbeing, [], DiffusableWellbeing).
 diffused(CA, DiffusableWellbeing, [Relative | Rest], DiffusedWellbeing) :-

@@ -11,23 +11,25 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/phase)).
 :- use_module(agency(som/domain)).
+:- use_module(agency(som/wellbeing)).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% resolving WorkStatus to more(IntermediateState), or it can be done(EndState) as the last or only solution. 
+% resolving WorkStatus to more(IntermediateState, WellbeingDeltas), or it can be done(EndState, WellbeingDeltas) as the last or only solution. 
 
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
-unit_of_work(CA, State, done(NewState)) :-
+unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
     log(info, predict, "Predicting for CA ~w from ~p", [CA, State]),
     predictions(State, Predictions),
     % All predictions sent to the entire umwelt
     predictions_sent_to_umwelt(State, Predictions),
-    put_in_timeframe(State, [predictions_out-Predictions], NewState),
+    put_state(State, predictions_out, Predictions, NewState),
+    wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w with ~p", [CA, NewState]).
 
 predictions(State, Predictions) :-
     get_state(State, umwelt, Umwelt),
-    get_from_timeframe(State, observations, Observations),
+    get_state(State, observations, Observations),
     get_state(State, causal_theory, CausalTheory),
     predictions_from_observations(CausalTheory, Observations, Umwelt, Predictions),
     log(info, predict, "~@ predicts ~p", [self, Predictions]).

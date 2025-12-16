@@ -89,7 +89,6 @@ Events:
 	* topic: wellbeing_changed, payload: Wellbeing  - wellbeing{fullness:N1, integrity:N2, engagement:N3}
 	* topic: end_of_timeframe, payload: [level=Level]
 	* topic: end_of_life, payload: [level=Level]
-	* topic: experience_domain_changed, payload: ExperienceDomain - [predictable{name: ExperienceName, object: ExperienceObject, value: ValueDomain}, ...]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
 * Queries:
@@ -113,21 +112,18 @@ At any point in the lifecycle, the dynamic CA immediately processes all events a
 
 Executing a lifecycle phase:
 
-1. Receive a lifecycle message (advance to next phase) from itself with an updated state
-2. Merge the current state with the updated state
-3. Start a timeboxed, async task for this phase with the new state
-4. The task may emit events and messages to other CAs
-5. On ending the task (b/c its done or time has expired),
-   send the next phase lifecycle message to self with the modified state
+1. The CA initializes by creating an initial state with phase `initiating`
+2. Transition to the next phase
+3. Start a timeboxed thread for this phase with a copy of the CA's state
+4. Empty out the CA state properties consumed by the phase
+4. The task may emit events and messages to its and other CAs
+5. On ending the task (b/c its done or time has expired), send a message to the CA with the modified state
+6. Add to the CA state what the task produced, including contributions to wellbeing
 
-Pattern: Lifecycle message to self -> Phase task -> Follow-up lifecycle message to self
+When all phases of a timeframe have completed:
 
-tick -> Initialize new time frame from the previous one -> observe
-observe -> Make predictions about umwelt experiences -> experience
-experience -> Compile observations, update own experiences from observations -> act
-act -> Select a goal (a held experience to impact) and attempt to realize it via a plan directing the umwelt to change its experiences -> assess
-assess -> Evaluate the accuracy of the causal theory and the effectiveness of past plans, perhaps request a new causal theory, update affordances -> age
-age -> Maybe modify the SOM (cytosis/apoptosis) and diffuse stress -> tick
+1. memorize key state properties in this timeframe
+2. decide whether to start a new timeframe 
 
 State
 -----
@@ -135,21 +131,19 @@ State
 Data:
     * parents - parent CAs
     * umwelt - child CAs
+    * phase - the name of the current time frame phase
+	* predictions_out - predictions made
+	* predictions_in - predictions received
+	* prediction_errors - prediction errors received
+	* observations - current observations
+	* experiences - current experiences
+	* directives_in - received directives
+	* goal - selected goal {experience:Experience, impact:Impact, priority:Priority}
+	* plan - plan to achieve the goal [directive, ...]
 	* causal_theory - current causal theory or `none`
 	* affordances - [goal-directives, ...]
 	* wellbeing - wellbeing metrics {fullness:Percent, integrity:Percent, engagement:Percent}
-	* goal - selected goal {experience:Experience, impact:Impact, priority:Priority}
-	* plan - plan to achieve the goal [directive, ...]
-    * time_frame - the current time frame
-	  * start_time
-	  * phase - the current time frame phase
-	  * predictions_out - predictions made
-	  * predictions_in - predictions received
-	  * prediction_errors -prediction errors received
-	  * observations - current observations
-	  * experiences - current experiences
-	  * directives - received directives
-    * history - [TimeFrame, ...]
+    * timeframes - [Timeframe, ...] - Latest first. A Timeframe remembers only observations, goal and plan
 */
 
 :- module(dynamic_ca, []).
@@ -196,18 +190,26 @@ recruit(Name, Eagerness) :-
 init(Options, State) :-
 	self(Name),
 	log(info, dynamic_ca, "Initiating dynamic ca ~w with ~p", [Name, Options]),
-	empty_state(EmptyState),
 	remember_level(Options, Level),
 	option(umwelt(Umwelt), Options),
 	latency(Level, Latency),
-	empty_time_frame(TimeFrame),
 	initial_wellbeing(Wellbeing),
-	put_state(EmptyState, [latency - Latency, parents - [], umwelt - Umwelt, causal_theory - none, wellbeing - Wellbeing, timeframe - TimeFrame, history - [], alive - true], InitialState),
+	initial_state(Latency, Umwelt, Wellbeing, InitialState),
 	subscribed_to_events(),
 	announce_adoptions(Umwelt),
 	% Start life
 	published(ca_started, [level(Level)]),
 	phase_transition(InitialState, State).
+
+initial_state(Latency, Umwelt, Wellbeing, State) :-
+	empty_state(EmptyState),
+	put_state(EmptyState, 
+		[alive - true, latency - Latency, parents - [], umwelt - Umwelt, 
+		 causal_theory - none, wellbeing - Wellbeing, phase - initiating,
+		 predictions_in - [], predictions_out - [], prediction_errors - [],
+		 observations - [], experiences - [], affordances - [],
+		 goal - none, plan - [],
+		 timeframes - []], State).
 
 remember_level(Options, Level) :-
 	option(level(Level), Options),
@@ -243,25 +245,24 @@ handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
+handled(message(end_of_phase(PhaseState, WellbeingDeltas), _), State, NewState) :-
+	Phase = PhaseState.phase,
 	log(info, dynamic_ca, "End of phase ~w for ~@ with state ~p", [Phase, self, PhaseState]),
-	current_phase(State, Phase),
-	% TODO - Need to merge more than wellbeing - new state = state of the CA having received messages while phase executed + properties changed by the phase
-	merge_wellbeing(PhaseState, State, State1),
+	merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
 		; 
 		log(info, dynamic_ca, "Timeframe ended"),
 		level(Level),
 		published(end_of_timeframe, [level(Level)]),
-		% TODO - the next timeframe starts as the previous timeframe but with an initial phase and start time
+		% The next timeframe starts after memorializing the terminated timeframe and with an initial phase
 		new_timeframe(State1, NewState)
 	).
 
 handled(message(prediction(Prediction), CA), State, NewState) :-
-	get_from_timeframe(State, predictions_in, PredictionsIn),
+	get_state(State, predictions_in, PredictionsIn),
 	PredictionIn = prediction_in{prediction:Prediction, by: CA},
-	put_in_timeframe(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
+	put_state(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
 	put_state(State, causal_theory, CausalTheory, NewState).
@@ -308,11 +309,10 @@ handled(event(ca_started, _, _), State, State).
 handled(event(ca_terminated, _, Source), State, NewState) :-
 	removed_from_umwelt(Source, State, NewState),
 	log(info, dynamic_ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
-% TODO
-handled(event(goal, Goal, Source), State, State).
 
-% TODO?
-handled(event(experience_domain, ExperienceDomain, Source), State, State).
+% TODO
+% handled(event(goal, Goal, Source), State, State).
+handled(event(goal, _, _), State, State).
 
 handled(event(Topic, Payload, Source), State, State) :-
 	ca_support : handled(event(Topic, Payload, Source), State, State).
@@ -329,12 +329,24 @@ initial_wellbeing(Wellbeing) :-
 
 overall_wellbeing(_, 1).
 
-merge_wellbeing(PhaseState, State, NewState) :-
-	log(info, dynamic_ca, "Merge wellbeing from phase state ~p into state ~p", [PhaseState, State]),
+% Merge wellbeing deltas and properties changed by the phase
+merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, NewState) :-
+	phase_consumes_produces(Phase, _, ProducedProperties),
+	merge_phase_state_properties(ProducedProperties, PhaseState, State, State1),
+	merge_wellbeing(State1, WellbeingDeltas, NewState).
+	
+merge_phase_state_properties([], _, State, State).
+
+merge_phase_state_properties([Property | Rest], PhaseState, State, NewState) :-
+	get_state(PhaseState, Property, PropertyValue),
+	put_state(State, Property, PropertyValue, State1),
+	merge_phase_state_properties(Rest, PhaseState, State1, NewState).
+
+merge_wellbeing(State, WellbeingDeltas, NewState) :-
+	log(info, dynamic_ca, "Merge wellbeing deltas ~p into state ~p", [WellbeingDeltas, State]),
 	get_state(State, wellbeing, Wellbeing),
-	get_state(PhaseState, timeframe, Timeframe),
-	apply_wellbeing_deltas(Wellbeing, Timeframe.wellbeing_deltas, Wellbeing1),
-	put_state(PhaseState, wellbeing, Wellbeing1, NewState).
+	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
+	put_state(State, wellbeing, Wellbeing1, NewState).
 
 apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
 	log(info, dynamic_ca, "Apply wellbeing deltas ~p to wellbeing ~p", [WellbeingDeltas, Wellbeing]),
@@ -345,28 +357,33 @@ apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
 
 % Not at end of timeframe (there's a next phase)
 timeframe_continues(State) :-
-	current_phase(State, Phase),
-	next_phase(Phase, _).
+	next_phase(State.phase, _).
 	
+% The next timeframe starts after memorializing the terminated timeframe and with an initial phase
+% 
 new_timeframe(State, NewState) :-
 	get_state(State, alive, true) ->
 		timeframe_created(State, State1),
-		log(info, dynamic_ca, "New timeframe created for CA ~@", [self]),
+		log(info, dynamic_ca, "New timeframe started for CA ~@", [self]),
 		phase_transition(State1, NewState)
 	;
-		end_of_life(State).
+		end_of_life(State, NewState).
 
-% Create a new timeframe at the initiating phase with 0 wellbeing deltas from current one and put current one in history
+% Remember the terminated timeframe and set the phase to initiating
 timeframe_created(State, NewState) :-
-	get_state(State, timeframe, Timeframe),
-	acc_state(State, history, Timeframe, State1),
-	NewTimeframe = Timeframe.put(#{phase:initiating, wellbeing_deltas:wellbeing_deltas{fullness:0, integrity:0, engagement:0}}),
-	put_state(State1, timeframe, NewTimeframe, NewState).
+	retained_timeframe(State, Timeframe),
+	acc_state(State, timeframes, Timeframe, State1),
+	put_state(State1, phase, initiating, NewState).
+
+retained_timeframe(State, Timeframe) :-
+	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan} :< State,
+	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan}.
 
 % TODO - Die gracefully and let others know
-end_of_life(State) :-
+end_of_life(State, State) :-
 	level(Level),
 	published(end_of_life, [level(Level)]).
 
 % TODO
-domain_from_experiences(Experiences, []).
+% domain_from_experiences(Experiences, []).
+domain_from_experiences(_, []).

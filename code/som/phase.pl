@@ -22,7 +22,7 @@ The sequence of phases is
 * conclude      - the timeframe concludes - update wellbeing measures and emit wellbeing changes
 */
 
-:- module(phase, [current_phase/2, next_phase/2, phase_transition/2, get_from_timeframe/3,  put_in_timeframe/3]).
+:- module(phase, [next_phase/2, phase_consumes_produces/3, phase_transition/2]).
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
@@ -36,11 +36,8 @@ The sequence of phases is
 :- use_module(agency(som/phases/assess)).
 :- use_module(agency(som/phases/conclude)).
 
-
-% phase_status(Phase, Status) - Status is running or stopped
-:- thread_local phase_status/2.
-% phase_time_limit(Phase, Time) - Time limit before a phase is stopped
-:- thread_local phase_time_limit/2.
+% phase_time_limit(Time) - Time limit before a phase is stopped
+:- thread_local phase_time_limit/1.
 
 % Phase transitions
 % Timeframe started (goes right to begin)
@@ -53,6 +50,18 @@ next_phase(experience, plan).
 next_phase(plan, act).
 next_phase(act, assess).
 next_phase(assess, conclude).
+
+% The state properties consumes (empties) and produces (replaces)
+phase_consumes_produces(initiating, [], []).
+phase_consumes_produces(begin, [], []).
+phase_consumes_produces(predict, [], [predictions_out]).
+phase_consumes_produces(observe, [predictions_out, prediction_errors, predictions_in], [observations]).
+phase_consumes_produces(experience, [], [experiences]).
+phase_consumes_produces(plan, [], []).
+phase_consumes_produces(act, [], []).
+phase_consumes_produces(assess, [], []).
+phase_consumes_produces(conclude, [], []).
+
 
 % Timeboxing of phases as fraction of the latency of a timeframe
 phase_timebox(observe, 0.2).
@@ -67,73 +76,75 @@ phase_timebox(_, 0.1).
 phase_transition(State, NewState) :- 
 	self(CA),
     log(info, phase, "Phase transition of CA ~w in state ~p", [CA, State]),
-    current_phase(State, EndedPhase),
-	next_phase(EndedPhase, Phase),
+    transition_states(CA, State, PhaseState, NewState),
+    % Start the phase thread with the transitioned-to state
+    thread_create(phase:started(CA, PhaseState), _, [detached(true)]).
+
+% The phase state does not consume properties, the new state does. 
+transition_states(CA, State, PhaseState, NewCAState) :-
+    EndedPhase = State.phase,
+    next_phase(EndedPhase, Phase),
+    put_state(State, phase, Phase, PhaseState),
     log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
-    put_in_timeframe(State, [phase - Phase], NewState),
-    % Start the phase thread. It then waits for go.
-	thread_create(phase:started(Phase, CA, NewState), _, [detached(true)]).
+    phase_consumes_produces(Phase, Consumes, _),
+    consume_state_properties(PhaseState, Consumes, NewCAState).
 
-current_phase(State, Phase) :-
-    get_from_timeframe(State, phase, Phase).
-
-% Update the timeframe of a CA state
-put_in_timeframe(State, Pairs, NewState) :-
-    get_state(State, timeframe, Timeframe),
-    put_state(Timeframe, Pairs, NewTimeframe),
-    put_state(State, timeframe, NewTimeframe, NewState).
-
-get_from_timeframe(State, Property, Value) :-
-    get_state(State, timeframe, Timeframe),
-    get_dict(Property, Timeframe, Value).
+% Note - This assumes that a consumed property is being reset to an empty list
+consume_state_properties(State, [], State).
+consume_state_properties(State, [Property | Rest], NewState) :-
+    put_state(State, Property, [], State1),
+    consume_state_properties(State1, Rest, NewState).
 
 %%%% IN PHASE THREAD
 
 % Run in the phase's thread until done or status is stopped.
 % A phase is run in its own thread so that the CA thread can receive messages while the phase is executing.
 % The last action is to send the CA a message with the updated state.
-started(Phase, CA, State) :-
+started(CA, State) :-
     get_state(State, latency, Latency),
     timebox_phase(Phase, Latency),
     % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
     % resolving WorkStatus to more(IntermediateState, Changed), or it can be done(EndState, Changed) as the last or only solution.
     % where Changed are the names of the state properties
     Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
+    Phase = State.phase,
     log(info, phase, "Starting phase ~w (~@) for CA ~w with goal ~p", [Phase, self, CA, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
-    remember_one(phase_status(Phase, running)),
-    phase_executed(Phase, WorkEngine, CA, State, PhaseEndState),
-    message_sent(CA, end_of_phase(Phase, PhaseEndState)).
+    run_phase(CA, Phase, WorkEngine).
 
 % Timebox a phase but only if it is meant to be
 timebox_phase(Phase, Latency) :-
-    phase_timeout(Phase, Latency, Delay),
+    phase_max_time(Phase, Latency, Delay),
     get_time(Now),
     Deadline is Now + Delay,
     log(info, phase, "Setting end of phase ~w of ~@ to ~w seconds from now", [Phase, self, Delay]),
-    remember_one(phase_time_limit(Phase, Deadline)).
-
-phase_executed(Phase, WorkEngine, CA, PhaseState, PhaseState) :-
-    phase_ended(Phase),
-    !,
-    log(info, phase, "Phase ~w for CA ~p was stopped", [Phase, CA]),
-    engine_destroy(WorkEngine).
-
-phase_executed(Phase, WorkEngine, CA, _, PhaseEndState) :-
+    remember_one(phase_time_limit(Deadline)).
+    
+run_phase(CA, Phase, WorkEngine) :-
     log(info, phase, "Doing unit of work in phase ~w for CA ~p", [Phase, CA]),
     work_engine_cranked(WorkEngine, WorkStatus),
     log(info, phase, "Unit of work in phase ~w for CA ~w done with ~p", [Phase, CA, WorkStatus]),
-    work_status_handled(Phase, WorkStatus, NewPhaseState),
-    phase_executed(Phase, WorkEngine, CA, NewPhaseState, PhaseEndState).
+    work_status_handled(WorkStatus, WorkEngine, CA).
 
-work_status_handled(Phase, done(EndState), EndState) :-
-    remember_one(phase_status(Phase, stopped)).
+work_status_handled(done(EndState, WellbeingDeltas), WorkEngine, CA) :-
+    phase_done(CA, WorkEngine, EndState, WellbeingDeltas).
 
-work_status_handled(_, more(IntermediateState), IntermediateState).
+work_status_handled(more(IntermediateState, WellbeingDeltas), WorkEngine, CA) :-
+    phase_timeout() -> 
+        phase_done(CA, WorkEngine, IntermediateState, WellbeingDeltas)
+        ;
+        Phase = IntermediateState.phase,
+        run_phase(CA, Phase, WorkEngine).
 
-work_status_handled(Phase, WorkStatus, _) :-
-    log(info, phase, "@@@ Not handling work status of ~@ for phase ~w: ~p", [self, Phase, WorkStatus]),
+work_status_handled(WorkStatus, _, _) :-
+    log(info, phase, "@@@ Not handling work status of ~@: ~p", [self, WorkStatus]),
     fail.
+
+phase_done(CA, WorkEngine, PhaseEndState, WellbeingDeltas) :-
+    Phase = PhaseEndState.phase,
+    log(info, phase, "Phase ~w for CA ~p done with end state ~p and wellbeing deltas ~p", [Phase, CA, PhaseEndState, WellbeingDeltas]),
+    engine_destroy(WorkEngine),
+    message_sent(CA, end_of_phase(PhaseEndState, WellbeingDeltas)).
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
     engine_next_reified(WorkEngine, Next),
@@ -146,15 +157,13 @@ interpret_unit_of_work(no, _) :-
 interpret_unit_of_work(exception(Error), _) :-
     log(warn, phase, "Exception from engine. Got ~p", [Error]),
     throw(Error).
-    
-phase_ended(Phase) :-
-    phase_status(Phase, stopped), !.
 
-phase_ended(Phase) :-
+phase_timeout() :-
     get_time(Now),
-    phase_time_limit(Phase, TimeLimit),
+    phase_time_limit(TimeLimit),
     Now > TimeLimit.
 
+% TODO - put in prolog_utils
 remember_one(Term) :-
     Term =.. [Head | Args],
     length(Args, Arity),
@@ -164,6 +173,6 @@ remember_one(Term) :-
     retractall(Retracted),
     assertz(Term).
 
-phase_timeout(Phase, Latency, Delay) :-
+phase_max_time(Phase, Latency, Delay) :-
     phase_timebox(Phase, Fraction),
     Delay is Latency * Fraction.
