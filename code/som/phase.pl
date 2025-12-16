@@ -64,10 +64,11 @@ phase_consumes_produces(conclude, [], []).
 
 
 % Timeboxing of phases as fraction of the latency of a timeframe
-phase_timebox(observe, 0.2).
+phase_timebox(predict, 0.3).
+phase_timebox(observe, 0.1).
 phase_timebox(experience, 0.2).
-phase_timebox(plan, 0.5).
-phase_timebox(_, 0.1).
+phase_timebox(plan, 0.4).
+phase_timebox(_, 0).
 
 %%%% IN dCA THREAD
 
@@ -140,10 +141,21 @@ work_status_handled(WorkStatus, _, _) :-
     log(info, phase, "@@@ Not handling work status of ~@: ~p", [self, WorkStatus]),
     fail.
 
+run_the_clock(Phase) :-
+    get_time(Now),
+    phase_time_limit(TimeLimit),
+    Now < TimeLimit,
+    Sleep is TimeLimit - Now,
+    log(info, phase, "Running the clock for phase ~w for ~w seconds", [Phase, Sleep]),
+    sleep(Sleep).
+
+run_the_clock(_).
+
 phase_done(CA, WorkEngine, PhaseEndState, WellbeingDeltas) :-
     Phase = PhaseEndState.phase,
     log(info, phase, "Phase ~w for CA ~p done with end state ~p and wellbeing deltas ~p", [Phase, CA, PhaseEndState, WellbeingDeltas]),
     engine_destroy(WorkEngine),
+    run_the_clock(Phase),
     message_sent(CA, end_of_phase(PhaseEndState, WellbeingDeltas)).
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
