@@ -22,7 +22,7 @@ The sequence of phases is
 * conclude      - the timeframe concludes - update wellbeing measures and emit wellbeing changes
 */
 
-:- module(phase, [current_phase/2, next_phase/2, phase_transition/2, timeframe_updated/3]).
+:- module(phase, [current_phase/2, next_phase/2, phase_transition/2, get_from_timeframe/3,  put_in_timeframe/3]).
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
@@ -70,67 +70,69 @@ phase_transition(State, NewState) :-
     current_phase(State, EndedPhase),
 	next_phase(EndedPhase, Phase),
     log(info, phase, "Phase transition of CA ~w from ~w to ~w", [CA, EndedPhase, Phase]),
-    timeframe_updated(State, [phase - Phase], NewState),
+    put_in_timeframe(State, [phase - Phase], NewState),
     % Start the phase thread. It then waits for go.
 	thread_create(phase:started(Phase, CA, NewState), _, [detached(true)]).
 
 current_phase(State, Phase) :-
-    get_state(State, timeframe, Timeframe),
-    Phase = Timeframe.phase.
+    get_from_timeframe(State, phase, Phase).
 
 % Update the timeframe of a CA state
-timeframe_updated(State, Pairs, NewState) :-
+put_in_timeframe(State, Pairs, NewState) :-
     get_state(State, timeframe, Timeframe),
     put_state(Timeframe, Pairs, NewTimeframe),
     put_state(State, timeframe, NewTimeframe, NewState).
 
-timeframe_property_value(State, Property, Value) :-
+get_from_timeframe(State, Property, Value) :-
     get_state(State, timeframe, Timeframe),
     get_dict(Property, Timeframe, Value).
 
 %%%% IN PHASE THREAD
 
 % Run in the phase's thread until done or status is stopped.
-% The last action is to send Name a message with the updated state
+% A phase is run in its own thread so that the CA thread can receive messages while the phase is executing.
+% The last action is to send the CA a message with the updated state.
 started(Phase, CA, State) :-
     get_state(State, latency, Latency),
-    timebox_phase_thread(Phase, Latency),
+    timebox_phase(Phase, Latency),
+    % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
+    % resolving WorkStatus to more(IntermediateState, Changed), or it can be done(EndState, Changed) as the last or only solution.
+    % where Changed are the names of the state properties
     Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
     log(info, phase, "Starting phase ~w (~@) for CA ~w with goal ~p", [Phase, self, CA, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
     remember_one(phase_status(Phase, running)),
-    executing_phase(Phase, WorkEngine, CA, State).
+    phase_executed(Phase, WorkEngine, CA, State, PhaseEndState),
+    message_sent(CA, end_of_phase(Phase, PhaseEndState)).
 
 % Timebox a phase but only if it is meant to be
-timebox_phase_thread(Phase, Latency) :-
+timebox_phase(Phase, Latency) :-
     phase_timeout(Phase, Latency, Delay),
     get_time(Now),
     Deadline is Now + Delay,
     log(info, phase, "Setting end of phase ~w of ~@ to ~w seconds from now", [Phase, self, Delay]),
     remember_one(phase_time_limit(Phase, Deadline)).
 
-executing_phase(Phase, WorkEngine, CA, PhaseState) :-
+phase_executed(Phase, WorkEngine, CA, PhaseState, PhaseState) :-
     phase_ended(Phase),
     !,
     log(info, phase, "Phase ~w for CA ~p was stopped", [Phase, CA]),
-    engine_destroy(WorkEngine),
-    message_sent(CA, end_of_phase(Phase, PhaseState)).
+    engine_destroy(WorkEngine).
 
-executing_phase(Phase, WorkEngine, CA, _) :-
+phase_executed(Phase, WorkEngine, CA, _, PhaseEndState) :-
     log(info, phase, "Doing unit of work in phase ~w for CA ~p", [Phase, CA]),
     work_engine_cranked(WorkEngine, WorkStatus),
     log(info, phase, "Unit of work in phase ~w for CA ~w done with ~p", [Phase, CA, WorkStatus]),
-    work_status_handled(Phase, CA, WorkEngine, WorkStatus).
+    work_status_handled(Phase, WorkStatus, NewPhaseState),
+    phase_executed(Phase, WorkEngine, CA, NewPhaseState, PhaseEndState).
 
-work_status_handled(Phase, CA, WorkEngine, done(EndState)) :-
-    remember_one(phase_status(Phase, stopped)),
-    executing_phase(Phase, WorkEngine, CA, EndState).
+work_status_handled(Phase, done(EndState), EndState) :-
+    remember_one(phase_status(Phase, stopped)).
 
-work_status_handled(Phase, CA, WorkEngine, more(IntermediateState)) :-
-    executing_phase(Phase, WorkEngine, CA, IntermediateState).
+work_status_handled(_, more(IntermediateState), IntermediateState).
 
-work_status_handled(Phase, CA, _, WorkStatus) :-
-    log(info, phase, "@@@ Not handling work status for phase ~w of CA ~w: ~p", [Phase, CA, WorkStatus]),
+work_status_handled(Phase, WorkStatus, _) :-
+    log(info, phase, "@@@ Not handling work status of ~@ for phase ~w: ~p", [self, Phase, WorkStatus]),
     fail.
 
 work_engine_cranked(WorkEngine, WorkStatus) :-

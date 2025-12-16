@@ -63,7 +63,7 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
-	* `prediction(Prediction)`
+	* `prediction(Prediction)` - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence} - Name is a reproducible id of the derivation, Object is what the prediction is about (distance, trend...)
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:COnfidence}
 		
 * In from a parent
@@ -89,7 +89,7 @@ Events:
 	* topic: wellbeing_changed, payload: Wellbeing  - wellbeing{fullness:N1, integrity:N2, engagement:N3}
 	* topic: end_of_timeframe, payload: [level=Level]
 	* topic: end_of_life, payload: [level=Level]
-	* topic: experience_domain_changed, payload: ExperienceDomain - [predicatble{name: ExperienceName, object: ExperienceObject, value: ValueDomain}, ...]
+	* topic: experience_domain_changed, payload: ExperienceDomain - [predictable{name: ExperienceName, object: ExperienceObject, value: ValueDomain}, ...]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
   
 * Queries:
@@ -221,6 +221,7 @@ subscribed_to_events :-
 		subscribed(Topic)).
 
 % Empty time frame 
+% The timeframe part of the CA state captures the phase-driven state part of the state
 empty_time_frame(EmptyTimeframe) :-
 	get_time(Now),
 	WellbeingDeltas = wellbeing_deltas{fullness:0, integrity:0, engagement:0},
@@ -245,19 +246,22 @@ handled(message(adopted, Parent), State, NewState) :-
 handled(message(end_of_phase(Phase, PhaseState), _), State, NewState) :-
 	log(info, dynamic_ca, "End of phase ~w for ~@ with state ~p", [Phase, self, PhaseState]),
 	current_phase(State, Phase),
+	% TODO - Need to merge more than wellbeing - new state = state of the CA having received messages while phase executed + properties changed by the phase
 	merge_wellbeing(PhaseState, State, State1),
     (timeframe_continues(State1) ->
-	phase_transition(State1, NewState)
-	; 
-	log(info, dynamic_ca, "Timeframe ended"),
-	level(Level),
-	published(end_of_timeframe, [level(Level)]),
-	new_timeframe(State1, NewState)).
+		phase_transition(State1, NewState)
+		; 
+		log(info, dynamic_ca, "Timeframe ended"),
+		level(Level),
+		published(end_of_timeframe, [level(Level)]),
+		% TODO - the next timeframe starts as the previous timeframe but with an initial phase and start time
+		new_timeframe(State1, NewState)
+	).
 
 handled(message(prediction(Prediction), CA), State, NewState) :-
-	phase:timeframe_property_value(State, predictions_in, PredictionsIn),
+	get_from_timeframe(State, predictions_in, PredictionsIn),
 	PredictionIn = prediction_in{prediction:Prediction, by: CA},
-	timeframe_updated(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
+	put_in_timeframe(State, [predictions_in:[PredictionIn | PredictionsIn]], NewState).
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
 	put_state(State, causal_theory, CausalTheory, NewState).
@@ -330,7 +334,7 @@ merge_wellbeing(PhaseState, State, NewState) :-
 	get_state(State, wellbeing, Wellbeing),
 	get_state(PhaseState, timeframe, Timeframe),
 	apply_wellbeing_deltas(Wellbeing, Timeframe.wellbeing_deltas, Wellbeing1),
-	put_state(State, wellbeing, Wellbeing1, NewState).
+	put_state(PhaseState, wellbeing, Wellbeing1, NewState).
 
 apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
 	log(info, dynamic_ca, "Apply wellbeing deltas ~p to wellbeing ~p", [WellbeingDeltas, Wellbeing]),

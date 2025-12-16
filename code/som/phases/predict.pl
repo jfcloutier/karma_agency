@@ -12,8 +12,8 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 :- use_module(agency(som/phase)).
 :- use_module(agency(som/domain)).
 
-% unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(IntermediateState) or done(EndState) as last solution. 
+% unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
+% resolving WorkStatus to more(IntermediateState), or it can be done(EndState) as the last or only solution. 
 
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
@@ -22,14 +22,14 @@ unit_of_work(CA, State, done(NewState)) :-
     predictions(State, Predictions),
     % All predictions sent to the entire umwelt
     predictions_sent_to_umwelt(State, Predictions),
-    timeframe_updated(State, [predictions_out-Predictions], NewState),
+    put_in_timeframe(State, [predictions_out-Predictions], NewState),
     log(info, predict, "Phase predict done for CA ~w with ~p", [CA, NewState]).
 
 predictions(State, Predictions) :-
     get_state(State, umwelt, Umwelt),
-    get_state(State, timeframe, Timeframe),
+    get_from_timeframe(State, observations, Observations),
     get_state(State, causal_theory, CausalTheory),
-    predictions_from_observations(CausalTheory, Timeframe.observations, Umwelt, Predictions),
+    predictions_from_observations(CausalTheory, Observations, Umwelt, Predictions),
     log(info, predict, "~@ predicts ~p", [self, Predictions]).
 
 % No observations yet. Guess randomly from experience domains.
@@ -74,25 +74,38 @@ random_predictions_from_domain(ExperienceDomain, Predictions) :-
 
 % Add Prediction to Predictions, removing conflicting (randomly chosen) if any
 % Two predictions conflict if they have the same name and are about the same object
+% The one with greater confidence wins, else pick one randomly
 grow_predictions([], Predictions, Predictions).
 grow_predictions([CAPrediction | Rest], Acc, NewPredictions) :-
     member(OtherPrediction, Acc),
     conflicting_predictions(CAPrediction, OtherPrediction),
     !,
-    (maybe ->
+    (resolve_conflict(CAPrediction, OtherPrediction, CAPrediction) ->
         delete(Acc, OtherPrediction, Acc1),
         Acc2 = [CAPrediction | Acc1]
         ;
         Acc2 = Acc
     ),
     grow_predictions(Rest, Acc2, NewPredictions).
-
+     
 grow_predictions([CAPrediction | Rest], Acc, NewPredictions) :-
     grow_predictions(Rest, [CAPrediction | Acc], NewPredictions).
 
+% Predictions conflict if they have the same name (the name of the predicted experience)
+% and object (what the prediction is about e.g. color, distance, luminance, count, more, coincide, trend)
 conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{name: Name, object: Object} :< Prediction,
     prediction{name: Name, object: Object} :< OtherPrediction.
+
+resolve_conflict(Prediction, OtherPrediction, Either) :-
+    Prediction.confidence == OtherPrediction.confidence,
+    (maybe -> Either = Prediction; Either = OtherPrediction).
+
+resolve_conflict(Prediction, OtherPrediction, OtherPrediction) :-
+    Prediction.confidence < OtherPrediction.confidence.
+
+resolve_conflict(Prediction, OtherPrediction, Prediction) :-
+    Prediction.confidence > OtherPrediction.confidence.
 
 predictions_sent_to_umwelt(State, Predictions) :-
     get_state(State, umwelt, Umwelt), 

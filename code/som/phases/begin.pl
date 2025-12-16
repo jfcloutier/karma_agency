@@ -16,8 +16,8 @@ The CA sends to a relative D(measure) - wellbeing(measure, Relative) if > 0
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 
-% unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(IntermediateState), or done(EndState) as last solution. 
+% unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
+% resolving WorkStatus to more(IntermediateState), or it can be done(EndState) as the last or only solution. 
 unit_of_work(CA, State, done(NewState)) :-
     state{parents:Parents, umwelt:Umwelt, wellbeing:Wellbeing} :< State,
     append(Parents, Umwelt, Relatives),

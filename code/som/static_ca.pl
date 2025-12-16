@@ -41,7 +41,7 @@ domain(State, Domain) :-
     ;
     Domain = boolean.
 
-% Assumed: The predicted and experienced value always fall within their domain
+% Assumed: The predicted and experienced value differ and always fall within their domain
 prediction_error_confidence(PredictedValue, ExperiencedValue, Domain, Confidence) :-
     is_dict(Domain, range),
     range{from:From, to:To} :< Domain,

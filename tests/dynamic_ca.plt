@@ -34,7 +34,6 @@ test(timeframes) :-
 			SOMChildren), query_answered(CA, type, dynamic_ca)),
 		L),
 	assertion(L \== []),
-	get_message(event(end_of_timeframe, _, _)),
 	get_message(event(end_of_timeframe, _, _)).
 
 :- end_tests(dynamic_ca).

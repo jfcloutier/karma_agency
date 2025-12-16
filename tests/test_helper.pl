@@ -18,7 +18,6 @@ get_message(Term, Timeout) :-
     thread_self(Name),
     thread_get_message(Name, Term, [timeout(Timeout)]).
 
-% TODO - TEST THIS AND USE IT
 get_matching_message(Pattern, Term) :-
     get_matching_message(Pattern, Term, 5).
 
@@ -28,7 +27,7 @@ get_matching_message(Pattern, Term, Timeout) :-
     thread_get_message(Name, Term, [timeout(Timeout)]), !.
 
 get_matching_message(Pattern, Term, _) :-
-    log(error, test_helper, "Failed to get message ~p matching ~p", [Term, Pattern]),
+    log(info, test_helper, "Failed to get message ~p matching ~p", [Term, Pattern]),
     fail.
 
 freeze_var_in_term(Pattern, Term) :-
