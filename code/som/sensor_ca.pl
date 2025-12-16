@@ -67,6 +67,7 @@ Lifecycle:
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/static_ca)).
+:- use_module(agency(som/wellbeing)).
 
 %! name_from_sensor(+Sensor, -Name) is det
 % the name of the sensor CA given the sensor it wraps
@@ -186,7 +187,7 @@ experiences_updated(Prediction, State, NewState) :-
     % A sensor is 100% confident in what it experiences
     Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0},
     put_state(State, experiences, [Experience],  State1),
-    put_wellbeing(State1, UpdatedWellbeing, NewState),
+    put_state(State1, wellbeing, UpdatedWellbeing, NewState),
     log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-
@@ -200,20 +201,16 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     delta_fullness(SenseName, Value, DeltaFullness),
     delta_integrity(SenseName, Value, DeltaIntegrity),
     delta_engagement(SenseName, Value, DeltaEngagement),
-    get_wellbeing(State, Fullness, Integrity, Engagement),
-    !,
-    UpdatedFullness is Fullness + DeltaFullness - 1,
-    UpdatedIntegrity is Integrity + DeltaIntegrity - 1,
-    UpdatedEngagement is Engagement + DeltaEngagement + 1,
-    UpdatedWellbeing = wellbeing{fullness:UpdatedFullness, integrity:UpdatedIntegrity, engagement:UpdatedEngagement},
+    get_state(State, wellbeing, Wellbeing),
+    UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -DeltaFullness, integrity: DeltaIntegrity, engagement: DeltaEngagement}),
     published(wellbeing_changed, UpdatedWellbeing).
 
 % Changes in wellbeing specific to the sensor reading
-delta_fullness(color, green, 10).
+delta_fullness(color, green, 0.2).
 delta_fullness(_, _, 0).
 
-delta_integrity(contact, pressed, -10).
-delta_integrity(color, red, -10).
+delta_integrity(contact, pressed, -0.2).
+delta_integrity(color, red, -0.2).
 delta_integrity(_, _, 0).
 
 delta_engagement(_, _, 0).

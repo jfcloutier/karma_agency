@@ -2,7 +2,7 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, get_wellbeing/4, put_wellbeing/3, wellbeing_transfered/3, well_enough/1]).
+:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
@@ -36,16 +36,6 @@ from_parent(Source, State) :-
 
 same_experience_value(Value, Value) :-
     Value \== unknown.
-
-get_wellbeing(State, Fullness, Integrity, Engagement) :-
-    get_state(State, wellbeing, Wellbeing),
-	option(fullness(Fullness), Wellbeing),
-	option(integrity(Integrity), Wellbeing),
-	option(engagement(Engagement), Wellbeing).
-
-put_wellbeing(State, UpdatedWellbeing, NewState) :-
-    log(info, ca_support, "~@ put wellbeing ~p", [self, UpdatedWellbeing]),
-	put_state(State, wellbeing, UpdatedWellbeing, NewState).
 
 wellbeing_transfered(State, WellbeingTransfer, NewState) :-
     get_state(State, wellbeing, Wellbeing),

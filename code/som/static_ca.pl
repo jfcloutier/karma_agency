@@ -25,8 +25,9 @@ prediction_handled(Prediction, Parent, State, State) :-
         % Confidence is based on deviation from predicted value given value domain, if domain is a range
         domain(State, Domain),
         prediction_error_confidence(Prediction.value, Experience.value, Domain, Confidence),
-        log(debug, static_ca, "Prediction error confidence is ~w", [Confidence]),
-		message_sent(Parent, prediction_error(prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Confidence}))
+        PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Confidence},
+        log(info, static_ca, "Sending prediction error ~p to ~w", [PredictionError, Parent]),
+		message_sent(Parent, prediction_error(PredictionError))
 	).	
 
 about_experience(Prediction, State, Experience) :-

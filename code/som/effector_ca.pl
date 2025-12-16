@@ -208,7 +208,7 @@ handled(event(executed, _, _), State, NewState) :-
 	experiences_from_observations(State1, Experiences),
 	put_state(State1, experiences, Experiences, State2),
 	(wellbeing_changed(State2, UpdatedWellbeing) ->
-		put_wellbeing(State2, UpdatedWellbeing, State3)
+		put_state(State2, wellbeing, UpdatedWellbeing, State3)
 		;
 		State3 = State2
 		),
@@ -247,14 +247,11 @@ can_do_goal(Goal, State) :-
 % and increments engagement by 1 (we acted in the world).
 % Fails if wellbeing was not changed.
 wellbeing_changed(State, UpdatedWellbeing) :-
-	get_wellbeing(State, Fullness, Integrity, Engagement),
+	get_state(State, wellbeing, Wellbeing),
 	get_state(State, observations, Observations),
 	length(Observations, Count),
-	Count > 0,
-	Fullness1 is max(Fullness - Count, 0),
-	Integrity1 is max(Integrity - Count, 0),
-	Engagement1 is min(Engagement + Count, 100),
-	UpdatedWellbeing = wellbeing{fullness:Fullness1, integrity:Integrity1, engagement:Engagement1},
+    Delta is Count * 0.1,
+	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -Delta, integrity: -Delta, engagement: Delta}),
 	published(wellbeing_changed, UpdatedWellbeing).
 
 actuations_reset(State, NewState) :-
