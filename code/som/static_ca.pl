@@ -11,7 +11,9 @@ Static CA support
 
 :- use_module(utils(logger)).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence} - Confidence is between 0.0 and 1.0
+%%% In static CA thread
+
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs} - Confidence is between 0.0 and 1.0
 % Experience = experience{name:Name, object:Object, value:Value, confidence:Confidence}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence}
 % No state change for the moment

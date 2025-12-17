@@ -21,9 +21,10 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
     log(info, predict, "Predicting for CA ~w from ~p", [CA, State]),
     predictions(CA, State, Predictions),
-    % All predictions sent to the entire umwelt
-    predictions_sent_to_umwelt(CA, State, Predictions),
-    put_state(State, predictions_out, Predictions, NewState),
+    resolve_conflicting_predictions(Predictions, [], Predictions1),
+    log(info, predict, "~w made predictions ~p", [CA, Predictions1]),
+    predictions_sent_to_umwelt(CA, Predictions1),
+    put_state(State, predictions_out, Predictions1, NewState),
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w with ~p", [CA, NewState]).
 
@@ -49,49 +50,50 @@ predictions_from_observations(CausalTheory, Observations, _, Predictions) :-
 umwelt_random_predictions([], Acc, Acc).
 
 umwelt_random_predictions([Child | Rest], Acc, UmweltPredictions) :-
-    log(info, predict, "Making random predictions"),
+    log(info, predict, "Making random predictions for ~w", [Child]),
     ca_random_predictions(Child, Predictions),
-    grow_predictions(Predictions, Acc, Acc1),
+    append(Acc, Predictions, Acc1),
     umwelt_random_predictions(Rest, Acc1, UmweltPredictions).
 
 ca_random_predictions(CA, Predictions) :-
-    query_answered(CA, experience_domain, ExperienceDomain),
-    random_predictions_from_domain(ExperienceDomain, Predictions).
+    query_answered(CA, experience_domain, Predictables),
+    random_predictions_from_predictables(Predictables, Predictions).
 
 % TODO
 apply_causal_theory(_, Observations, Observations).
 
-% sensor experience domain = [predictable{name:SensorName, object:SenseName, domain:SenseDomain}]
-% effector experience domain = [predictable{name:EffectorName, object:Action, domain:boolean), ...]
-random_predictions_from_domain(ExperienceDomain, Predictions) :-
-    log(info, predict, "Making random predictions from domain ~p", [ExperienceDomain]),    
+% sensor experience domain = [predictable{name:SensorName, object:SenseName, domain:SenseDomain, by:SensorCA}]
+% effector experience domain = [predictable{name:EffectorName, object:Action, domain:boolean, by:EffectorCA), ...]
+% Make a prediction for each predictable
+random_predictions_from_predictables(Predictables, Predictions) :-
+    log(info, predict, "Making random predictions from domain ~p", [Predictables]),    
     setof(Prediction,
-          (member(Predictable, ExperienceDomain),
-          predictable{name:Name, object:Object} :< Predictable,
+          (member(Predictable, Predictables),
+          predictable{name:Name, object:Object, by:CA} :< Predictable,
           % The value of a predictable
           random_domain_value(Predictable.domain, Value, Confidence),
-          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
+          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:[CA]}
           ),
           Predictions).
 
-% Add Prediction to Predictions, removing conflicting (randomly chosen) if any
+% Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object
-% The one with greater confidence wins, else pick one randomly
-grow_predictions([], Predictions, Predictions).
-grow_predictions([CAPrediction | Rest], Acc, NewPredictions) :-
-    member(OtherPrediction, Acc),
-    conflicting_predictions(CAPrediction, OtherPrediction),
-    !,
-    (resolve_conflict(CAPrediction, OtherPrediction, CAPrediction) ->
-        delete(Acc, OtherPrediction, Acc1),
-        Acc2 = [CAPrediction | Acc1]
-        ;
-        Acc2 = Acc
-    ),
-    grow_predictions(Rest, Acc2, NewPredictions).
-     
-grow_predictions([CAPrediction | Rest], Acc, NewPredictions) :-
-    grow_predictions(Rest, [CAPrediction | Acc], NewPredictions).
+% The one with greater confidence wins, else pick one randomly.
+% When resolving two predictions into one, combine who they are for.
+resolve_conflicting_predictions([], Predictions, Predictions).
+resolve_conflicting_predictions([Prediction | Rest], Acc, ResolvedPredictions) :-
+    findall(OtherPrediction, (member(OtherPrediction, Rest), conflicting_predictions(Prediction, OtherPrediction)), ConflictingPredictions),
+    resolve_conflicts([Prediction | ConflictingPredictions], Eliminated, Resolution),
+    subtract(Rest, Eliminated, Others),
+    resolve_conflicting_predictions(Others, [Resolution | Acc], ResolvedPredictions).
+
+resolve_conflicts([Prediction], [], Prediction).
+
+resolve_conflicts(Predictions, Eliminated, Resolution) :-
+    choose_high_confidence_prediction(Predictions, Prediction),
+    delete(Predictions, Prediction, Eliminated),
+    setof(For, (member(P, Predictions), For = P.for), AllFor),
+    Resolution = Prediction.put([for = AllFor]).
 
 % Predictions conflict if they have the same name (the name of the predicted experience)
 % and object (what the prediction is about e.g. color, distance, luminance, count, more, coincide, trend)
@@ -99,23 +101,29 @@ conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{name: Name, object: Object} :< Prediction,
     prediction{name: Name, object: Object} :< OtherPrediction.
 
-resolve_conflict(Prediction, OtherPrediction, Either) :-
-    Prediction.confidence == OtherPrediction.confidence,
-    (maybe -> Either = Prediction; Either = OtherPrediction).
+% Select randomly a prediction with the highest confidence
+choose_high_confidence_prediction(Predictions, Prediction) :-
+    random_permutation(Predictions, Permutation),
+    highest_confidence_prediction(Permutation, Prediction).
 
-resolve_conflict(Prediction, OtherPrediction, OtherPrediction) :-
-    Prediction.confidence < OtherPrediction.confidence.
+highest_confidence_prediction([Candidate | Rest], Prediction) :-
+   highest_confidence_prediction(Rest, Candidate, Prediction). 
 
-resolve_conflict(Prediction, OtherPrediction, Prediction) :-
-    Prediction.confidence > OtherPrediction.confidence.
+highest_confidence_prediction([], Prediction, Prediction).
 
-predictions_sent_to_umwelt(CA, State, Predictions) :-
-    get_state(State, umwelt, Umwelt), 
-    forall(member(UmweltCA, Umwelt), predictions_sent_to_ca(CA, UmweltCA, Predictions)).
+highest_confidence_prediction([Candidate | Rest], BestSoFar, Prediction) :-
+    Candidate.confidence > BestSoFar.confidence ->
+        highest_confidence_prediction(Rest, Candidate, Prediction) 
+        ;
+        highest_confidence_prediction(Rest, BestSoFar, Prediction).
+  
+predictions_sent_to_umwelt(CA, [Prediction | Rest]) :-
+    For = Prediction.for, 
+    forall(member(UmweltCA, For), prediction_sent_to_ca(CA, UmweltCA, Prediction)),
+    predictions_sent_to_umwelt(CA, Rest).
 
-predictions_sent_to_ca(CA, UmweltCA, [Prediction | Rest]) :-
-    message_sent(UmweltCA, prediction(Prediction)),
-    log(info, predict, "~w sent prediction ~p to ~w", [CA, Prediction, UmweltCA]),
-    predictions_sent_to_ca(CA, UmweltCA, Rest).
+predictions_sent_to_umwelt(_, []).
 
-predictions_sent_to_ca(_, _, []).
+prediction_sent_to_ca(CA, UmweltCA, Prediction) :-
+    message_sent(UmweltCA, prediction(Prediction), CA),
+    log(info, predict, "~w sent prediction ~p to ~w", [CA, Prediction, UmweltCA]).

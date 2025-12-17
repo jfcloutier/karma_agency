@@ -25,7 +25,7 @@ Messages:
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -40,7 +40,7 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> [predictable{name:distance, object:SensorName, domain:SenseDomain}]
+    * experience_domain -> [predictable{name:distance, object:SensorName, domain:SenseDomain, by:CA}]
 
 State:
 	* parents - parent CAs
@@ -112,7 +112,8 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(experience_domain), State, [predictable{name:SensorName, object:SenseName, domain:SenseDomain}]) :-
+handled(query(experience_domain), State, [predictable{name:SensorName, object:SenseName, domain:SenseDomain, by:Name}]) :-
+    self(Name),
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_domain(State, SenseDomain).
@@ -132,7 +133,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
