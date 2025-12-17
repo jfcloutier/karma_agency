@@ -20,19 +20,19 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
 unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
     log(info, predict, "Predicting for CA ~w from ~p", [CA, State]),
-    predictions(State, Predictions),
+    predictions(CA, State, Predictions),
     % All predictions sent to the entire umwelt
-    predictions_sent_to_umwelt(State, Predictions),
+    predictions_sent_to_umwelt(CA, State, Predictions),
     put_state(State, predictions_out, Predictions, NewState),
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w with ~p", [CA, NewState]).
 
-predictions(State, Predictions) :-
+predictions(CA, State, Predictions) :-
     get_state(State, umwelt, Umwelt),
     get_state(State, observations, Observations),
     get_state(State, causal_theory, CausalTheory),
     predictions_from_observations(CausalTheory, Observations, Umwelt, Predictions),
-    log(info, predict, "~@ predicts ~p", [self, Predictions]).
+    log(info, predict, "~w predicts ~p", [CA, Predictions]).
 
 % No observations yet. Guess randomly from experience domains.
 predictions_from_observations(_, [], Umwelt, Predictions) :-
@@ -61,8 +61,8 @@ ca_random_predictions(CA, Predictions) :-
 % TODO
 apply_causal_theory(_, Observations, Observations).
 
-% sensor experience domain = [predictable{name:SenseName, object:SensorName, domain:SenseDomain}]
-% effector experience domain = [predictable{name:Action, object:EffectorName, domain:boolean), ...]
+% sensor experience domain = [predictable{name:SensorName, object:SenseName, domain:SenseDomain}]
+% effector experience domain = [predictable{name:EffectorName, object:Action, domain:boolean), ...]
 random_predictions_from_domain(ExperienceDomain, Predictions) :-
     log(info, predict, "Making random predictions from domain ~p", [ExperienceDomain]),    
     setof(Prediction,
@@ -109,13 +109,13 @@ resolve_conflict(Prediction, OtherPrediction, OtherPrediction) :-
 resolve_conflict(Prediction, OtherPrediction, Prediction) :-
     Prediction.confidence > OtherPrediction.confidence.
 
-predictions_sent_to_umwelt(State, Predictions) :-
+predictions_sent_to_umwelt(CA, State, Predictions) :-
     get_state(State, umwelt, Umwelt), 
-    concurrent_forall(member(Child, Umwelt), predictions_sent_to_ca(Child, Predictions)).
+    forall(member(UmweltCA, Umwelt), predictions_sent_to_ca(CA, UmweltCA, Predictions)).
 
-predictions_sent_to_ca(CA, [Prediction | Rest]) :-
-    message_sent(CA, prediction(Prediction)),
-    log(info, predict, "Prediction ~p sent to ~w", [Prediction, CA]),
-    predictions_sent_to_ca(CA, Rest).
+predictions_sent_to_ca(CA, UmweltCA, [Prediction | Rest]) :-
+    message_sent(UmweltCA, prediction(Prediction)),
+    log(info, predict, "~w sent prediction ~p to ~w", [CA, Prediction, UmweltCA]),
+    predictions_sent_to_ca(CA, UmweltCA, Rest).
 
-predictions_sent_to_ca(_, []).
+predictions_sent_to_ca(_, _, []).

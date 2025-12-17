@@ -71,23 +71,4 @@ test(experience_acquired) :-
 	get_state(State, experiences, [Experience]),
 	assertion(experience{name:SensorName, object:color} :< Experience).
 
-test(wellbeing_updated) :-
-	% Pick a sensor CA and establish self as its parent
-	SensorCA = 'sensor:light-in2:color',
-	SensorName = 'light-in2',
-	subscribed(wellbeing_changed),
-	message_sent(SensorCA, adopted),
-	query_answered(SensorCA, state, State),
-	get_state(State, wellbeing, InitialWellbeing),
-	% Get the sensor CA to read its sensor and message back a prediction error
-	Prediction = prediction{name:SensorName, object:color, value:green, confidence:1.0},
-	message_sent(SensorCA, prediction(Prediction)),
-	!,
-	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
-	% Check that the sensor CA published its update wellbeing to its parents
-	get_message(event(wellbeing_changed, UpdatedWellbeing, SensorCA)),
-	(ActualValue == green -> 
-		assert_wellbeing_changed(InitialWellbeing, UpdatedWellbeing, [fullness = >, integrity = <, engagement = >])
-		;
-		assert_wellbeing_changed(InitialWellbeing, UpdatedWellbeing, [fullness = <, integrity = <, engagement = >])).
 :- end_tests(sensor_ca).

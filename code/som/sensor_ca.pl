@@ -112,7 +112,7 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(experience_domain), State, [predictable{name:SenseName, object:SensorName, domain:SenseDomain}]) :-
+handled(query(experience_domain), State, [predictable{name:SensorName, object:SenseName, domain:SenseDomain}]) :-
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     sense_domain(State, SenseDomain).
@@ -134,7 +134,7 @@ handled(message(adopted, Parent), State, NewState) :-
 
 % Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
-    log(info, sensor_ca, "~@ is handling prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
+    log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
  	static_ca : prediction_handled(Prediction, Parent, State1, NewState).
 
@@ -177,16 +177,18 @@ sense_url(State, SenseURL) :-
 
 % Read the sensor value, update wellbeing and publish wellbeing_changed, update experience in latest reading.
 experiences_updated(Prediction, State, NewState) :-
+    log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
     prediction{name:SensorName, object:SenseName} :< Prediction,
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     % Ignore tolerance and timestamp in reading for now
     sense_read(State, reading(Value, _, _)),
     !,
-    wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
     % A sensor is 100% confident in what it experiences
     Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0},
+    log(info, sensor_ca, "~@ experiences ~p", [self, Experience]),
     put_state(State, experiences, [Experience],  State1),
+    wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
     put_state(State1, wellbeing, UpdatedWellbeing, NewState),
     log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).
 
@@ -198,11 +200,14 @@ sense_read(State, reading(Value, Tolerance, Timestamp)) :-
 
 % Update wellbeing from reading.
 wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
+    log(info, sensor_ca, "Changing wellbeing from sense ~w having value ~w", [SenseName, Value]),
     delta_fullness(SenseName, Value, DeltaFullness),
     delta_integrity(SenseName, Value, DeltaIntegrity),
     delta_engagement(SenseName, Value, DeltaEngagement),
     get_state(State, wellbeing, Wellbeing),
-    UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -DeltaFullness, integrity: DeltaIntegrity, engagement: DeltaEngagement}),
+    DeltaWellbeing = wellbeing{fullness: DeltaFullness, integrity: DeltaIntegrity, engagement: DeltaEngagement},
+    log(info, sensor_ca, "Change in wellbeing is ~p", [DeltaWellbeing]),
+    UpdatedWellbeing = Wellbeing.add(DeltaWellbeing),
     published(wellbeing_changed, UpdatedWellbeing).
 
 % Changes in wellbeing specific to the sensor reading
