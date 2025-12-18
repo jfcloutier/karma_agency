@@ -40,12 +40,12 @@ Messages:
 * In from a parent
 	* `ready_actuation(Goal)` - a parent communicates an actuation it wants the effector CA to execute
 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
-* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs]}
+* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs]}
 
 * Out to a parent	
 	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
 	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence}
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 	
 Events:
 
@@ -169,7 +169,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs}
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
 	static_ca:prediction_handled(Prediction, Parent, State, NewState).
 

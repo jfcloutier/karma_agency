@@ -15,7 +15,7 @@ test(get_matching_dict_message) :-
     thread_self(Self),
     thread_create(
         (thread_self(Thread),
-        thread_send_message(Self, message(prediction(prediction{name:sensor1, object:distance, value:10, confidence:1.0, for:[Self]}), Thread))
+        thread_send_message(Self, message(prediction(prediction{name:sensor1, object:distance, value:10, confidence:1.0, by: Thread, for:[Self]}), Thread))
         ), 
         Thread),
     get_matching_message(prediction{value:Value}, message(prediction(X), _)),
@@ -26,7 +26,7 @@ test(not_matching_dict_message) :-
     thread_self(Self),
     thread_create(
         (thread_self(Thread),
-        thread_send_message(Self, message(prediction(prediction{name:sensor1, object:distance, value:10, confidence:1.0, for:[Self]}), Thread))
+        thread_send_message(Self, message(prediction(prediction{name:sensor1, object:distance, value:10, confidence:1.0, by: Thread, for:[Self]}), Thread))
         ), 
         Thread),
     \+ get_matching_message(prediction_error{}, message(prediction(_), _), 0.1).

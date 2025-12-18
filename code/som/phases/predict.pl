@@ -32,49 +32,55 @@ predictions(CA, State, Predictions) :-
     get_state(State, umwelt, Umwelt),
     get_state(State, observations, Observations),
     get_state(State, causal_theory, CausalTheory),
-    predictions_from_observations(CausalTheory, Observations, Umwelt, Predictions),
+    predictions_from_observations(CA, CausalTheory, Observations, Umwelt, Predictions),
     log(info, predict, "~w predicts ~p", [CA, Predictions]).
 
 % No observations yet. Guess randomly from experience domains.
-predictions_from_observations(_, [], Umwelt, Predictions) :-
+predictions_from_observations(CA, _, [], Umwelt, Predictions) :-
     !,
-    umwelt_random_predictions(Umwelt, [], Predictions).
+    umwelt_random_predictions(CA, Umwelt, [], Predictions).
 
 % No causal theory yet; predicting previous observations.
-predictions_from_observations(none, Observations, _, Observations).
+predictions_from_observations(_, none, Observations, _, Predictions) :-
+    observations_as_predictions(Observations, Predictions).
 
 % Apply causal theory to predict the next observations.
-predictions_from_observations(CausalTheory, Observations, _, Predictions) :-
-    apply_causal_theory(CausalTheory, Observations, Predictions).
+predictions_from_observations(CA, CausalTheory, Observations, _, Predictions) :-
+    apply_causal_theory(CA, CausalTheory, Observations, NextObservations),
+    observations_as_predictions(NextObservations, Predictions).
 
-umwelt_random_predictions([], Acc, Acc).
+umwelt_random_predictions(_, [], Acc, Acc).
 
-umwelt_random_predictions([Child | Rest], Acc, UmweltPredictions) :-
-    log(info, predict, "Making random predictions for ~w", [Child]),
-    ca_random_predictions(Child, Predictions),
+umwelt_random_predictions(CA, [UnweltCA | Rest], Acc, UmweltPredictions) :-
+    log(info, predict, "Making random predictions for ~w", [UnweltCA]),
+    ca_random_predictions(CA, UnweltCA, Predictions),
     append(Acc, Predictions, Acc1),
-    umwelt_random_predictions(Rest, Acc1, UmweltPredictions).
+    umwelt_random_predictions(CA, Rest, Acc1, UmweltPredictions).
 
-ca_random_predictions(CA, Predictions) :-
-    query_answered(CA, experience_domain, Predictables),
-    random_predictions_from_predictables(Predictables, Predictions).
+ca_random_predictions(CA, UmweltCA, Predictions) :-
+    query_answered(UmweltCA, experience_domain, Predictables),
+    random_predictions_from_predictables(CA, Predictables, Predictions).
 
-% TODO
-apply_causal_theory(_, Observations, Observations).
+% TODO - Applying a causal theory to current observations produces expected observations to be converted into predictions
+apply_causal_theory(_, _, Observations, Observations).
 
 % sensor experience domain = [predictable{name:SensorName, object:SenseName, domain:SenseDomain, by:SensorCA}]
 % effector experience domain = [predictable{name:EffectorName, object:Action, domain:boolean, by:EffectorCA), ...]
 % Make a prediction for each predictable
-random_predictions_from_predictables(Predictables, Predictions) :-
+random_predictions_from_predictables(CA, Predictables, Predictions) :-
     log(info, predict, "Making random predictions from domain ~p", [Predictables]),    
     setof(Prediction,
           (member(Predictable, Predictables),
-          predictable{name:Name, object:Object, by:CA} :< Predictable,
+          predictable{name:Name, object:Object, by:UmweltCA} :< Predictable,
           % The value of a predictable
           random_domain_value(Predictable.domain, Value, Confidence),
-          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:[CA]}
+          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}
           ),
           Predictions).
+
+% TODO - translate expected observations into predictions.
+observations_as_predictions(_, Predictions) :-
+    Predictions = [].
 
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object

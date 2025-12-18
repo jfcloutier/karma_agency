@@ -63,8 +63,8 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
-	* `prediction(Prediction)` - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:COnfidence}
+	* `prediction(Prediction)` - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 		
 * In from a parent
 	* ready_actuation(Goal, Boolean) - a parent communicates that the dynamic CA was selected (or not) to realize a goal by actuating whatever plan the dynamic CA chose or built
@@ -259,14 +259,12 @@ handled(message(end_of_phase(PhaseState, WellbeingDeltas), _), State, NewState) 
 		new_timeframe(State1, NewState)
 	).
 
-handled(message(prediction(Prediction), CA), State, NewState) :-
-	PredictionIn = Prediction.put([from = CA]),
+handled(message(prediction(Prediction), _), State, NewState) :-
 	% TODO - Maybe reply with a prediction error
-	acc_state(State, predictions_in, PredictionIn, NewState).
+	acc_state(State, predictions_in, Prediction, NewState).
 
-handled(message(prediction_error(PredictionError), CA), State, NewState) :-
-	PredictionError1 = PredictionError.put([from = CA]),
-	acc_state(State, prediction_errors, PredictionError1 , NewState).
+handled(message(prediction_error(PredictionError), _), State, NewState) :-
+	acc_state(State, prediction_errors, PredictionError, NewState).
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
 	put_state(State, causal_theory, CausalTheory, NewState).

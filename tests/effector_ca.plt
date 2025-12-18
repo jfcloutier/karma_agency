@@ -86,13 +86,13 @@ test(intent_executed) :-
     get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
-    Prediction1 = prediction{name:EffectorName, object:spin, value:false, confidence:1.0, for:[EffectorCA]},
+    Prediction1 = prediction{name:EffectorName, object:spin, value:false, confidence:1.0, by: Self, for:[EffectorCA]},
 	message_sent(EffectorCA, prediction(Prediction1)),
     % Get a prediction error message
-	get_matching_message(prediction_error{prediction: Prediction1, actual_value:true}, message(prediction_error(_), EffectorCA)),
+	get_matching_message(prediction_error{prediction:Prediction1, actual_value:true, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
     % Correctly predict the experience that reverse_spin was executed
-    Prediction2 = prediction{name:EffectorName, object:reverse_spin, value:true, confidence:1.0, for:[EffectorCA]},
+    Prediction2 = prediction{name:EffectorName, object:reverse_spin, value:true, confidence:1.0, by: Self, for:[EffectorCA]},
 	message_sent(EffectorCA, prediction(Prediction2)),
     % Don't get an error prediction message
-	\+ get_matching_message(prediction_error{prediction: Prediction2},message(prediction_error(_), EffectorCA), 1),
+	\+ get_matching_message(prediction_error{prediction:Prediction2, value:_, by:_}, message(prediction_error(_), EffectorCA), 1),
     published(intent_completed, [id = Id, executed = true]).

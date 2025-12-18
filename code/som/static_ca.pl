@@ -13,9 +13,9 @@ Static CA support
 
 %%% In static CA thread
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs} - Confidence is between 0.0 and 1.0
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs} - Confidence is between 0.0 and 1.0
 % Experience = experience{name:Name, object:Object, value:Value, confidence:Confidence}
-% PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence}
+% PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
 prediction_handled(Prediction, Parent, State, State) :-
     log(info, static_ca, "~@ is handling prediction ~p in state ~p", [self, Prediction, State]),
@@ -27,7 +27,8 @@ prediction_handled(Prediction, Parent, State, State) :-
         % Confidence is based on deviation from predicted value given value domain, if domain is a range
         domain(State, Domain),
         prediction_error_confidence(Prediction.value, Experience.value, Domain, Confidence),
-        PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Confidence},
+        self(StaticCA),
+        PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Confidence, by:StaticCA},
         log(info, static_ca, "~@ is sending prediction error ~p to ~w", [self, PredictionError, Parent]),
 		message_sent(Parent, prediction_error(PredictionError))
 	).	

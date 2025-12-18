@@ -22,10 +22,10 @@ Messages:
 	* `adopted(Parent)` when added to the umwelt of a CA
 
 * Out to a parent
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence}
+	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -133,7 +133,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, for:CAs}
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
