@@ -63,7 +63,7 @@ effector_cas_started([Effector|Others]) :-
 
 % Create the first CA. Give it all static CAs as its umwelt.
 growing :-
-	dynamic_ca : name_from_level(1, CA),
+	dynamic_ca : ca_name([level=1, prefix=stem], CA),
 	log(info, som, "First level one CA ~p", [CA]),
     static_cas(Umwelt),
 	supervisor : worker_child_started(som,
@@ -71,30 +71,6 @@ growing :-
 		CA,
 		[init([level(1), umwelt(Umwelt)])]),
 	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
-	
-% % Recruit 2 or more CAs at the given level eager to participate in the umwelt of a CA one level up
-% umwelt_recruited(Level, Umwelt) :-
-% 	recruits(Level, Recruits),
-% 	pick_some(Recruits, Umwelt).
-
-% recruits(Level, Recruits) :-
-% 	findall(CA,
-% 		at_level(Level, CA),
-% 		Candidates),
-% 	length(Candidates, N),
-% 	N > 1,
-% 	random_permutation(Candidates, PermutatedCandidates),
-% 	findall(Eagerness - Recruit,
-% 		(member(Recruit, PermutatedCandidates),
-% 			recruit(Recruit, Eagerness),
-% 			Eagerness > 0),
-% 		Pairs),
-% 	keysort(Pairs, SortedPairs),
-% 	pairs_values(SortedPairs, Recruits).
-
-% recruit(CA, P) :-
-% 	ca_module_from_name(CA, Module),
-% 	Module : recruit(CA, P).
 
 at_level(Level, CA) :-
 	supervisor : children(som, CAs),

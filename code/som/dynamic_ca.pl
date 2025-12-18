@@ -56,6 +56,7 @@ Messages:
 
 * In
 	* `adopted(Parent)` - when added to the umwelt of a dynamic CA one level up
+	* `phase_done(PhaseEndState, WellbeingDeltas)` - sent from itself when a phase is done
 	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the dynamic CA
 	* `die` - when the dynamic CA has reached end-of-life
 	
@@ -86,7 +87,7 @@ Events:
 
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: Wellbeing  - wellbeing{fullness:N1, integrity:N2, engagement:N3}
+	* topic: end_of_phase, payload: [phase=Phase, state=State],
 	* topic: end_of_timeframe, payload: [level=Level]
 	* topic: end_of_life, payload: [level=Level]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
@@ -152,38 +153,34 @@ Data:
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
-:- use_module(library(uuid)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/phase)).
 
 % Thread state
 :- thread_local level/1, timer/1.
 
-%! name_from_level(+Level, -Name) is det
-% Get a unique name for a dynamic CA given the level it occupies in the SOM
-name_from_level(Level, Name) :-
-	uuid(ID),
-	atomic_list_concat([ca, level, Level, id, ID], ":", Name).
+%! ca_name(+Options, -Name) is det
+% Get a presumably unique name for a dynamic CA given naming options
+ca_name(Options, Name) :-
+	option(level(Level), Options),
+	option(prefix(Prefix), Options),
+	atomic_list_concat([ca, level, Level, Prefix], ":", Name).
 
 %! latency(+Level, -Latency) is det
 % The time in seconds allocated to a cognition actor to complete a time frame given its level in the SOM
 latency(Level, Latency) :-
 	Latency is max(0.1, 2 ** (Level - 1) / 2).
 
-%! level(+Name, -Level) is det
+%! level_from_name(+Name, -Level) is det
 % Get the level of a named CA
 level_from_name(Name, Level) :-
-	atomic_list_concat([ca, level, LevelAtom, id, _], ":", Name),
+	atomic_list_concat([ca, level, LevelAtom | _], ":", Name),
 	atom_number(LevelAtom, Level).
 
 %! umwelt(+Name, -Umwelt) is det
 % Get the umwelt (a list of CA names) of a named CA
 umwelt(Name, Umwelt) :-
 	query_answered(Name, umwelt, Umwelt).
-
-% Eagerness is between 0 and 1 with 1 the maximum level of enthusiasm to be recruited in an umwelt
-recruit(Name, Eagerness) :-
-	query_answered(Name, recruit, Eagerness).
 
 % Worker
 
@@ -245,9 +242,9 @@ handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(end_of_phase(PhaseState, WellbeingDeltas), _), State, NewState) :-
+handled(message(phase_done(PhaseState, WellbeingDeltas), _), State, NewState) :-
 	Phase = PhaseState.phase,
-	log(info, dynamic_ca, "End of phase ~w for ~@ with state ~p", [Phase, self, PhaseState]),
+	log(info, dynamic_ca, "Phase ~w done for ~@ with state ~p", [Phase, self, PhaseState]),
 	merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
@@ -287,20 +284,8 @@ handled(query(experience_domain), State, ExperienceDomain) :-
 	get_state(State, experiences, Experiences),
 	domain_from_experiences(Experiences, ExperienceDomain).
 
-/*
-A dynamic CA can be recruited only if it has a causal theory.
-The probability that it accepts goes up:
-* the less it participates in umwelts already
-* the higher its wellbeing
-*/
-handled(query(recruit), State, Eagerness) :-
-	get_state(State, causal_theory, _),
-	get_state(State, parents, Parents),
-	length(Parents, NumParents),
-	overall_wellbeing(State, Wellbeing),
-    Eagerness is Wellbeing / ((NumParents + 1) ** 2).
-
-handled(query(recruit), _, 0).
+handled(query(wellbeing), State, Wellbeing) :-
+	get_state(State, wellbeing, Wellbeing).
 
 handled(query(Query), Source, Answer) :-
 	ca_support : handled(query(Query), Source, Answer).

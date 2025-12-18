@@ -56,7 +56,6 @@ test(effector_experience_domain) :-
 test(intent_executed) :-
     EffectorCA = 'effector:tacho_motor-outA',
     EffectorName = 'tacho_motor-outA',
-    subscribed(wellbeing_changed),
     query_answered(EffectorCA, state, InitialState),
     get_state(InitialState, wellbeing, InitialWellbeing),
    % adopt
@@ -82,8 +81,10 @@ test(intent_executed) :-
   	body : actions_executed(Host),
     % executed 
     published(executed),
+    % Allow time for the wellbeing to update
+    sleep(1),
     % wellbeing updated
-    get_message(event(wellbeing_changed, FinalWellbeing, EffectorCA)),
+    query_answered(EffectorCA, wellbeing, FinalWellbeing),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
     Prediction1 = prediction{name:EffectorName, object:spin, value:false, confidence:1.0, by: Self, for:[EffectorCA]},

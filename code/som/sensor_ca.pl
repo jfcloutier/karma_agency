@@ -32,7 +32,6 @@ Events:
 	
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: Wellbeing  - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Queries:
 
@@ -41,6 +40,7 @@ Queries:
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
     * experience_domain -> [predictable{name:distance, object:SensorName, domain:SenseDomain, by:CA}]
+    * wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
 
 State:
 	* parents - parent CAs
@@ -176,7 +176,7 @@ sensor_name(State, SensorName) :-
 sense_url(State, SenseURL) :-
     SenseURL = State.sensor.url.
 
-% Read the sensor value, update wellbeing and publish wellbeing_changed, update experience in latest reading.
+% Read the sensor value, update wellbeing, update experience in latest reading.
 experiences_updated(Prediction, State, NewState) :-
     log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
     prediction{name:SensorName, object:SenseName} :< Prediction,
@@ -208,8 +208,7 @@ wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     get_state(State, wellbeing, Wellbeing),
     DeltaWellbeing = wellbeing{fullness: DeltaFullness, integrity: DeltaIntegrity, engagement: DeltaEngagement},
     log(info, sensor_ca, "Change in wellbeing is ~p", [DeltaWellbeing]),
-    UpdatedWellbeing = Wellbeing.add(DeltaWellbeing),
-    published(wellbeing_changed, UpdatedWellbeing).
+    UpdatedWellbeing = Wellbeing.add(DeltaWellbeing).
 
 % Changes in wellbeing specific to the sensor reading
 delta_fullness(color, green, 0.2).

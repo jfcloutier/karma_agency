@@ -15,5 +15,3 @@ unit_of_work(CA, State, done(EndState, WellbeingDeltas)) :-
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase assess ended for CA ~w", [CA]).
 
-unit_of_work(_, State, done(State, WellbeingDeltas)) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).

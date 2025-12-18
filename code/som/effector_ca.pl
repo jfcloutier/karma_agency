@@ -19,7 +19,6 @@ parent CA <-- actuation_ready(goal) --- umwelt CA
 ...
 (initiating CA tells the body to execute all primed actuations)
 initiating CA ---- executed ---->> all CAs
-parent CA <<-- wellbeing_changed -- umwelt CA
 
 Note: -->> denote event broadcasts and --> denote message unicasts
 
@@ -58,7 +57,6 @@ Events:
 	
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: wellbeing_changed, payload: Wellbeing  - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Queries:
 
@@ -69,6 +67,8 @@ Queries:
     * experience_domain -> always responds with [predictable{name:Action, object:EffectorName, domain:boolean, by:CA}, ...] 
 		- Action is an action the effector can execute
 	* action_domain -> the actions the effector_ca can take
+	* wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
+
 
 State:
 	* parents - parent CAs
@@ -159,6 +159,9 @@ handled(query(experience_domain), State, ExperienceDomain) :-
 
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
+
+handled(query(wellbeing), State, Wellbeing) :-
+	get_state(State, wellbeing, Wellbeing).
 
 handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
@@ -252,8 +255,7 @@ wellbeing_changed(State, UpdatedWellbeing) :-
 	get_state(State, observations, Observations),
 	length(Observations, Count),
     Delta is Count * 0.1,
-	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -Delta, integrity: -Delta, engagement: Delta}),
-	published(wellbeing_changed, UpdatedWellbeing).
+	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -Delta, integrity: -Delta, engagement: Delta}).
 
 actuations_reset(State, NewState) :-
 	put_state(State, actuations, [], NewState).

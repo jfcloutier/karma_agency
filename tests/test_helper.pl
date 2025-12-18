@@ -1,4 +1,4 @@
-:- module(test_helper, [init_som/0, terminate_som/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
+:- module(test_helper, [init_som/0, terminate_som/0, clear_messages/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
@@ -35,16 +35,29 @@ freeze_var_in_term(Pattern, Term) :-
     !,
     freeze_var(Var, Pattern).
 
+var_in_term(_, Term) :-
+    atomic(Term), !, fail.
+
 var_in_term(Var, Term) :-
     var(Term),
+    !,
     Var = Term.
 
+var_in_term(_, []) :-
+    !, fail.
+
 var_in_term(Var, [Term | Rest]):-
-    var_in_term(Var, Term) ; var_in_term(Var, Rest).
+    !,
+    (var_in_term(Var, Term) ; var_in_term(Var, Rest)).
 
 var_in_term(Var, Term) :-
     Term =.. [_ | Args],
     var_in_term(Var, Args).
+
+freeze_var(Var, option(Name, Value)) :-
+    !,
+    Option =.. [Name, Value],
+    freeze(Var, option(Option, Var)).
 
 freeze_var(Var, Pattern) :-
     is_dict(Pattern), !,
@@ -69,3 +82,11 @@ assert_wellbeing_changed(PreviousWellbeing, NewWellbeing, Changes) :-
     assertion(call(FullnessComp, NewFullness, PreviousFullness)),
     assertion(call(IntegrityComp, NewIntegrity, PreviousIntegrity)),
     assertion(call(EngagementComp, NewEngagement, PreviousEngagement)).
+
+clear_messages() :-
+    thread_peek_message(_) ->
+        thread_get_message(Message),
+        log(debug, test_helper, "Cleared message ~p", [Message]),
+        clear_messages()
+        ;
+        true.

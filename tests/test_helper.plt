@@ -4,7 +4,7 @@ Tests of test helper functions
 run_tests(test_helper).
 */
 
-:- begin_tests(test_helper, []).
+:- begin_tests(test_helper, [cleanup(clear_messages)]).
 
 :- use_module(test_helper).
 :- use_module(utils(logger)).
@@ -51,6 +51,17 @@ test(not_matching_list_message) :-
         Thread),
     \+ get_matching_message([6,7,8], message(choice(_)), 0.1).
 
+test(get_matching_options_message) :-
+    thread_self(Self),
+    thread_create(
+        (thread_self(Thread),
+        thread_send_message(Self, event(boom, [sound=loud, distance=far]))
+        ), 
+        Thread),
+    get_matching_message(option(sound, loud), event(boom, Payload), 0.1),
+    assertion(option(sound(loud), Payload)),
+    assertion(option(distance(far), Payload)).
+
 test(get_matching_other_message) :-
     thread_self(Self),
     thread_create(
@@ -71,4 +82,4 @@ test(not_matching_other_message) :-
         Thread),
     \+ get_matching_message(something(_), message(_), 0.1).
 
-:- end_tests(test_helper).
+:- end_tests(test_helper).    

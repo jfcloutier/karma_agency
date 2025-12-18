@@ -10,7 +10,6 @@ run_tests(dynamic_ca).
 :- begin_tests(dynamic_ca, [setup(init_som), cleanup(terminate_som)]).
 
 :- use_module(test_helper).
-
 :- use_module(utils(logger)).
 :- use_module(actors(supervisor)).
 :- use_module(actors(actor_utils)).
@@ -21,9 +20,10 @@ run_tests(dynamic_ca).
 :- set_log_level(info).
 
 % The SOM is initialized and starts growing.
-% Succeed once a dynamic CA was created and has completed two timeframes.
-test(timeframes) :-
-	all_subscribed([end_of_timeframe, ca_started]),
+% Succeed once a dynamic CA was created and has completed a first timeframe and all of its phases.
+test(timeframe) :-
+	all_subscribed([end_of_phase, end_of_timeframe, end_of_life, ca_started]),
+	% TODO - add constant init values like max_timeframes, which would be set to 1 for this test
 	som : growing,
 	get_message(event(ca_started, [level(1)], _)),
 	query_answered(som, children, SOMChildren),
@@ -34,7 +34,18 @@ test(timeframes) :-
 			SOMChildren), query_answered(CA, type, dynamic_ca)),
 		L),
 	assertion(L \== []),
-	get_message(event(end_of_timeframe, _, _)).
+	!,
+	get_matching_message(option(phase, begin), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, predict), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, observe), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, experience), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, plan), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, act), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, assess), event(end_of_phase,_, CA), 1),
+	get_matching_message(option(phase, conclude), event(end_of_phase,_, CA), 1),
+
+	get_message(event(end_of_timeframe, _, _)),
+	get_message(event(end_of_life, _, _)).
 
 :- end_tests(dynamic_ca).
 

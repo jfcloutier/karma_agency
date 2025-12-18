@@ -26,6 +26,7 @@ The sequence of phases is
 
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
+:- use_module(actors(pubsub)).
 :- use_module(actors(timer)).
 :- use_module(agency(som/phases/begin)).
 :- use_module(agency(som/phases/predict)).
@@ -59,7 +60,7 @@ phase_consumes_produces(observe, [predictions_out, prediction_errors, prediction
 phase_consumes_produces(experience, [], [experiences]).
 phase_consumes_produces(plan, [], []).
 phase_consumes_produces(act, [], []).
-phase_consumes_produces(assess, [], []).
+phase_consumes_produces(assess, [], [alive]).
 phase_consumes_produces(conclude, [], []).
 
 
@@ -156,7 +157,10 @@ phase_done(CA, WorkEngine, PhaseEndState, WellbeingDeltas) :-
     log(info, phase, "Phase ~w for CA ~p done with end state ~p and wellbeing deltas ~p", [Phase, CA, PhaseEndState, WellbeingDeltas]),
     engine_destroy(WorkEngine),
     run_the_clock(Phase),
-    message_sent(CA, end_of_phase(PhaseEndState, WellbeingDeltas)).
+    % The engine sends the CA that started it a message that the phase is done
+    message_sent(CA, phase_done(PhaseEndState, WellbeingDeltas)),
+    % This event is currently only used in tests
+    published(end_of_phase, [phase=Phase, state=PhaseEndState], CA).
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
     engine_next_reified(WorkEngine, Next),

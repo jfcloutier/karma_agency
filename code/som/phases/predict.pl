@@ -40,14 +40,14 @@ predictions_from_observations(CA, _, [], Umwelt, Predictions) :-
     !,
     umwelt_random_predictions(CA, Umwelt, [], Predictions).
 
-% No causal theory yet; predicting previous observations.
-predictions_from_observations(_, none, Observations, _, Predictions) :-
-    observations_as_predictions(Observations, Predictions).
+% No causal theory yet; predicting current observations.
+predictions_from_observations(CA, none, Observations, _, Predictions) :-
+    observations_as_predictions(CA, Observations, Predictions).
 
 % Apply causal theory to predict the next observations.
 predictions_from_observations(CA, CausalTheory, Observations, _, Predictions) :-
     apply_causal_theory(CA, CausalTheory, Observations, NextObservations),
-    observations_as_predictions(NextObservations, Predictions).
+    observations_as_predictions(CA, NextObservations, Predictions).
 
 umwelt_random_predictions(_, [], Acc, Acc).
 
@@ -78,9 +78,14 @@ random_predictions_from_predictables(CA, Predictables, Predictions) :-
           ),
           Predictions).
 
-% TODO - translate expected observations into predictions.
-observations_as_predictions(_, Predictions) :-
-    Predictions = [].
+% Translate expected observations into predictions.
+observations_as_predictions(CA, Observations, Predictions) :-
+    findall(Prediction, (member(Observation, Observations), observation_as_prediction(CA, Observation, Prediction)), Predictions).
+        
+% Turn an observation into a prediction
+observation_as_prediction(CA, Observation, Prediction) :-
+    observation{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, of:UmweltCA} :< Observation,
+    Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}.
 
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object
