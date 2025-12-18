@@ -11,7 +11,13 @@ Evaluate causal theory and request new one if unsatisfactory, grant past plans a
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution. 
 unit_of_work(CA, State, done(EndState, WellbeingDeltas)) :-
-    put_state(State, alive, false, EndState),
+    staying_alive(State, Alive),
+    put_state(State, alive, Alive, EndState),
     wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, predict, "Phase assess ended for CA ~w", [CA]).
+    log(info, assess, "Phase assess ended for CA ~w", [CA]).
 
+staying_alive(State, Alive) :-
+    get_state(State, timeframe_count, Count),
+    get_state(State, settings, Settings),
+    option(max_timeframes(Max), Settings, infinity),
+    ((Max \== infinity, Count > Max) -> Alive = false ; Alive = true).

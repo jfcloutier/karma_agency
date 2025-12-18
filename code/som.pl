@@ -62,14 +62,17 @@ effector_cas_started([Effector|Others]) :-
 	effector_cas_started(Rest).
 
 % Create the first CA. Give it all static CAs as its umwelt.
-growing :-
+growing() :-
+	growing([]).
+
+growing(Settings) :-
 	dynamic_ca : ca_name([level=1, prefix=stem], CA),
 	log(info, som, "First level one CA ~p", [CA]),
     static_cas(Umwelt),
 	supervisor : worker_child_started(som,
 		dynamic_ca,
 		CA,
-		[init([level(1), umwelt(Umwelt)])]),
+		[init([level(1), umwelt(Umwelt), settings(Settings)])]),
 	log(info, som, "Added new CA ~w at level ~w with umwelt ~p", [CA, 1, Umwelt]).
 
 at_level(Level, CA) :-

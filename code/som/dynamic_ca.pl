@@ -189,24 +189,25 @@ init(Options, State) :-
 	log(info, dynamic_ca, "Initiating dynamic ca ~w with ~p", [Name, Options]),
 	remember_level(Options, Level),
 	option(umwelt(Umwelt), Options),
+	option(settings(Settings), Options),
 	latency(Level, Latency),
 	initial_wellbeing(Wellbeing),
-	initial_state(Latency, Umwelt, Wellbeing, InitialState),
+	initial_state(Latency, Umwelt, Settings, Wellbeing, InitialState),
 	subscribed_to_events(),
 	announce_adoptions(Umwelt),
 	% Start life
 	published(ca_started, [level(Level)]),
 	phase_transition(InitialState, State).
 
-initial_state(Latency, Umwelt, Wellbeing, State) :-
+initial_state(Latency, Umwelt, Settings, Wellbeing, State) :-
 	empty_state(EmptyState),
 	put_state(EmptyState, 
-		[alive - true, latency - Latency, parents - [], umwelt - Umwelt, 
+		[settings - Settings, alive - true, latency - Latency, parents - [], umwelt - Umwelt,
 		 causal_theory - none, wellbeing - Wellbeing, phase - initiating,
 		 predictions_in - [], predictions_out - [], prediction_errors - [],
 		 observations - [], experiences - [], affordances - [],
 		 goal - none, plan - [],
-		 timeframes - []], State).
+		 timeframes - [], timeframe_count - 0], State).
 
 remember_level(Options, Level) :-
 	option(level(Level), Options),
@@ -218,13 +219,6 @@ announce_adoptions(Umwelt) :-
 subscribed_to_events :-
 	forall(member(Topic, [ca_started, ca_terminated]),
 		subscribed(Topic)).
-
-% Empty time frame 
-% The timeframe part of the CA state captures the phase-driven state part of the state
-empty_time_frame(EmptyTimeframe) :-
-	get_time(Now),
-	WellbeingDeltas = wellbeing_deltas{fullness:0, integrity:0, engagement:0},
-	EmptyTimeframe = timeframe{start_time:Now, phase:initiating, predictions_out:[], predictions_in:[], prediction_errors:[], observations:[], experiences:[], directives:[], affordances:[], wellbeing_deltas:WellbeingDeltas}.
 
 signal_processed(control(stopped)) :-
 	worker : stopped.
@@ -352,7 +346,8 @@ new_timeframe(State, NewState) :-
 	get_state(State, alive, true) ->
 		timeframe_created(State, State1),
 		log(info, dynamic_ca, "New timeframe started for CA ~@", [self]),
-		phase_transition(State1, NewState)
+		inc_timeframe_count(State1, State2),
+		phase_transition(State2, NewState)
 	;
 		end_of_life(State, NewState).
 
@@ -365,6 +360,12 @@ timeframe_created(State, NewState) :-
 retained_timeframe(State, Timeframe) :-
 	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan} :< State,
 	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan}.
+
+inc_timeframe_count(State, NewState) :-
+	log(info, dynamic_ca, "Incrementing timeframe count in ~p", [State]),
+	get_state(State, timeframe_count, Count),
+	Inc is Count + 1,
+	put_state(State, timeframe_count, Inc, NewState).
 
 % TODO - Die gracefully and let others know
 end_of_life(State, State) :-
