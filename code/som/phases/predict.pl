@@ -19,14 +19,14 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
 unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
-    log(info, predict, "Predicting for CA ~w from ~p", [CA, State]),
+    log(info, predict, "Predicting for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]),
     predictions(CA, State, Predictions),
     resolve_conflicting_predictions(Predictions, [], Predictions1),
     log(info, predict, "~w made predictions ~p", [CA, Predictions1]),
     predictions_sent_to_umwelt(CA, Predictions1),
     put_state(State, predictions_out, Predictions1, NewState),
     wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, predict, "Phase predict done for CA ~w with ~p", [CA, NewState]).
+    log(info, predict, "Phase predict done for CA ~w", [CA]).
 
 predictions(CA, State, Predictions) :-
     get_state(State, umwelt, Umwelt),
@@ -90,20 +90,19 @@ observation_as_prediction(CA, Observation, Prediction) :-
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object
 % The one with greater confidence wins, else pick one randomly.
-% When resolving two predictions into one, combine who they are for.
+% When resolving conflicting predictions into one, combine who they are for.
 resolve_conflicting_predictions([], Predictions, Predictions).
 resolve_conflicting_predictions([Prediction | Rest], Acc, ResolvedPredictions) :-
     findall(OtherPrediction, (member(OtherPrediction, Rest), conflicting_predictions(Prediction, OtherPrediction)), ConflictingPredictions),
-    resolve_conflicts([Prediction | ConflictingPredictions], Eliminated, Resolution),
-    subtract(Rest, Eliminated, Others),
+    resolve_conflicts([Prediction | ConflictingPredictions], Resolution),
+    subtract(Rest, ConflictingPredictions, Others),
     resolve_conflicting_predictions(Others, [Resolution | Acc], ResolvedPredictions).
 
-resolve_conflicts([Prediction], [], Prediction).
+resolve_conflicts([Prediction], Prediction).
 
-resolve_conflicts(Predictions, Eliminated, Resolution) :-
-    choose_high_confidence_prediction(Predictions, Prediction),
-    delete(Predictions, Prediction, Eliminated),
-    setof(For, (member(P, Predictions), For = P.for), AllFor),
+resolve_conflicts(ConflictingPredictions, Resolution) :-
+    high_confidence_prediction(ConflictingPredictions, Prediction),
+    setof(For, (member(P, ConflictingPredictions), For = P.for), AllFor),
     Resolution = Prediction.put([for = AllFor]).
 
 % Predictions conflict if they have the same name (the name of the predicted experience)
@@ -113,7 +112,7 @@ conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{name: Name, object: Object} :< OtherPrediction.
 
 % Select randomly a prediction with the highest confidence
-choose_high_confidence_prediction(Predictions, Prediction) :-
+high_confidence_prediction(Predictions, Prediction) :-
     random_permutation(Predictions, Permutation),
     highest_confidence_prediction(Permutation, Prediction).
 
@@ -130,11 +129,11 @@ highest_confidence_prediction([Candidate | Rest], BestSoFar, Prediction) :-
   
 predictions_sent_to_umwelt(CA, [Prediction | Rest]) :-
     For = Prediction.for, 
-    forall(member(UmweltCA, For), prediction_sent_to_ca(CA, UmweltCA, Prediction)),
+    forall(member(UmweltCA, For), prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA)),
     predictions_sent_to_umwelt(CA, Rest).
 
 predictions_sent_to_umwelt(_, []).
 
-prediction_sent_to_ca(CA, UmweltCA, Prediction) :-
+prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA) :-
     message_sent(UmweltCA, prediction(Prediction), CA),
     log(info, predict, "~w sent prediction ~p to ~w", [CA, Prediction, UmweltCA]).

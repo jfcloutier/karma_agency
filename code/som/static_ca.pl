@@ -14,7 +14,7 @@ Static CA support
 %%% In static CA thread
 
 % Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs} - Confidence is between 0.0 and 1.0
-% Experience = experience{name:Name, object:Object, value:Value, confidence:Confidence}
+% Experience = experience{name:Name, object:Object, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
 prediction_handled(Prediction, Parent, State, State) :-
@@ -24,11 +24,9 @@ prediction_handled(Prediction, Parent, State, State) :-
     log(info, static_ca, "Prediction ~p is about experience ~p of ~@", [Prediction, Experience, self]),
 	(ca_support : same_experience_value(Prediction.value, Experience.value) ->
 		true;
-        % Confidence is based on deviation from predicted value given value domain, if domain is a range
-        domain(State, Domain),
-        prediction_error_confidence(Prediction.value, Experience.value, Domain, Confidence),
+        % Confidence in the prediction error by static CAs is always 100%
         self(StaticCA),
-        PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Confidence, by:StaticCA},
+        PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:1.0, by:StaticCA},
         log(info, static_ca, "~@ is sending prediction error ~p to ~w", [self, PredictionError, Parent]),
 		message_sent(Parent, prediction_error(PredictionError))
 	).	
@@ -39,25 +37,25 @@ about_experience(Prediction, State, Experience) :-
     member(Experience, Experiences),
     experience{name:Name, object:Object} :< Experience.
 
-domain(State, Domain) :-
-    get_state(State, sensor, Sensor) ->
-    Domain = Sensor.capabilities.domain
-    ;
-    Domain = boolean.
+% domain(State, Domain) :-
+%     get_state(State, sensor, Sensor) ->
+%     Domain = Sensor.capabilities.domain
+%     ;
+%     Domain = boolean.
 
 % Assumed: The predicted and experienced value differ and always fall within their domain
-prediction_error_confidence(unknown, _, _, 1.0) :- !.
-prediction_error_confidence(_, unknown, _, 1.0) :- !.
-prediction_error_confidence(PredictedValue, ExperiencedValue, Domain, Confidence) :-
-    is_dict(Domain, range),
-    range{from:From, to:To} :< Domain,
-    Delta is abs(PredictedValue - ExperiencedValue),
-    deviation(Delta, From, To, Deviation),
-    Confidence is 1.0 - Deviation.   
+% prediction_error_confidence(unknown, _, _, 1.0) :- !.
+% prediction_error_confidence(_, unknown, _, 1.0) :- !.
+% prediction_error_confidence(PredictedValue, ExperiencedValue, Domain, Confidence) :-
+%     is_dict(Domain, range),
+%     range{from:From, to:To} :< Domain,
+%     Delta is abs(PredictedValue - ExperiencedValue),
+%     deviation(Delta, From, To, Deviation),
+%     Confidence is 1.0 - Deviation.   
 
-% If the domain is not a range then the confidence in the prediction being in error is 100%
-prediction_error_confidence(_, _, _, 1.0).
+% % If the domain is not a range then the confidence in the prediction being in error is 100%
+% prediction_error_confidence(_, _, _, 1.0).
 
-deviation(Delta, From, To, Deviation) :-
-    Span is To - From,
-    Deviation is min(1.0, (Delta ** 2) / Span).
+% deviation(Delta, From, To, Deviation) :-
+%     Span is To - From,
+%     Deviation is min(1.0, (Delta ** 2) / Span).

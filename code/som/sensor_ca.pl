@@ -133,7 +133,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
+% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
@@ -186,7 +186,8 @@ experiences_updated(Prediction, State, NewState) :-
     sense_read(State, reading(Value, _, _)),
     !,
     % A sensor is 100% confident in what it experiences
-    Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0},
+    self(SensorCA),
+    Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0, by:SensorCA},
     log(info, sensor_ca, "~@ experiences ~p", [self, Experience]),
     put_state(State, experiences, [Experience],  State1),
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),

@@ -28,7 +28,7 @@ unit_of_work(CA, State, done(State, WellbeingDeltas)) :-
     Diffusable = Wellbeing.div(Count),
     diffused(CA, Diffusable, Relatives, Diffused),
     WellbeingDeltas = Diffused.neg(),
-    log(info, begin, "Phase begin done for CA ~w with wellbeing delta from diffusion~p", [CA, WellbeingDeltas]).
+    log(info, begin, "Phase begin done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
 
 diffused(_, DiffusableWellbeing, [], DiffusableWellbeing).
 diffused(CA, DiffusableWellbeing, [Relative | Rest], DiffusedWellbeing) :-

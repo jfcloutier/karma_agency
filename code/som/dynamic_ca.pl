@@ -101,6 +101,7 @@ Events:
   * umwelt -> CA names
   * experience_domain -> [Predictable, ...]
   * wellbeing -> Wellbeing
+  * experiences -> [Experience, ...]
 
 Lifecycle
 ---------
@@ -324,7 +325,7 @@ merge_phase_state_properties([Property | Rest], PhaseState, State, NewState) :-
 	merge_phase_state_properties(Rest, PhaseState, State1, NewState).
 
 merge_wellbeing(State, WellbeingDeltas, NewState) :-
-	log(info, dynamic_ca, "Merge wellbeing deltas ~p into state ~p", [WellbeingDeltas, State]),
+	log(info, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDeltas]),
 	get_state(State, wellbeing, Wellbeing),
 	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
 	put_state(State, wellbeing, Wellbeing1, NewState).

@@ -56,7 +56,7 @@ next_phase(assess, conclude).
 phase_consumes_produces(initiating, [], []).
 phase_consumes_produces(begin, [], []).
 phase_consumes_produces(predict, [], [predictions_out]).
-phase_consumes_produces(observe, [predictions_out, prediction_errors, predictions_in], [observations]).
+phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
 phase_consumes_produces(experience, [], [experiences]).
 phase_consumes_produces(plan, [], []).
 phase_consumes_produces(act, [], []).
@@ -77,8 +77,8 @@ phase_timebox(_, 0).
 % So that the dCA's main thread can continue to receive messages etc. while the phase is being executed
 phase_transition(State, NewState) :- 
 	self(CA),
-    log(info, phase, "Phase transition of CA ~w in state ~p", [CA, State]),
     transition_states(CA, State, PhaseState, NewState),
+    log(info, phase, "Phase transition of CA ~w with state ~p", [CA, NewState]),
     % Start the phase thread with the transitioned-to state
     thread_create(phase:started(CA, PhaseState), _, [detached(true)]).
 
@@ -110,7 +110,6 @@ started(CA, State) :-
     % where Changed are the names of the state properties
     Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
     Phase = State.phase,
-    log(info, phase, "Starting phase ~w (~@) for CA ~w with goal ~p", [Phase, self, CA, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
     run_phase(CA, Phase, WorkEngine).
 

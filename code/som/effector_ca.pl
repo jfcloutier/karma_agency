@@ -74,7 +74,7 @@ State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
 	* observations - actions last executed - [executed(Action), ...]
-	* experiences - experiences from last execution - [experience{name:EffectorName, object:Action, value:Boolean, confidence: 1.0), ...]
+	* experiences - experiences from last execution - [experience{name:EffectorName, object:Action, value:Boolean, confidence: 1.0, by:EffectorCA), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
 	* wellbeing - wellbeing values - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
@@ -274,7 +274,8 @@ experiences_from_observations(State, Experiences) :-
 
 experiences_from_executions([], _, []).
 experiences_from_executions([executed(Action) | Rest], EffectorName, [Experience | OtherExperiences]) :-
-	Experience = experience{name:EffectorName, object:Action, value:true, confidence: 1.0},
+	self(EffectorCA),
+	Experience = experience{name:EffectorName, object:Action, value:true, confidence: 1.0, by:EffectorCA},
 	experiences_from_executions(Rest, EffectorName, OtherExperiences).
 
 action_url(State, Action, ActionUrl) :-
