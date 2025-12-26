@@ -64,7 +64,7 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
-	* `prediction(Prediction)` - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
+	* `prediction(Prediction)` - Prediction = prediction{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by: CA, for:CAs} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 		
 * In from a parent

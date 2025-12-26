@@ -12,7 +12,7 @@ Merge predictions and prediction errors into new observations.
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution.
 
-% observation{name:Name, object:Object, value:Value, confidence:Confidence, by:CA: of:UmweltCAs}
+% observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA: of:UmweltCAs}
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
 unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
     observed(CA, State, Observations),
@@ -41,8 +41,8 @@ high_confidence_prediction_errors([PredictionError | Rest], Acc, TopPredictionEr
 
 % Prediction errors conflict if they are about possibly conflicting predictions
 conflicting_prediction_errors(PredictionError, OtherPredictionError) :-
-    prediction{name:Name, object:Object} :< PredictionError.prediction,
-    prediction{name:Name, object:Object} :< OtherPredictionError.prediction.
+    prediction{origin:Origin, kind:Kind} :< PredictionError.prediction,
+    prediction{origin:Origin, kind:Kind} :< OtherPredictionError.prediction.
 
 % Find the most confident prediction error among a conflicting list
 highest_confidence_prediction_error([PredictionError1 | Rest], PredictionError) :-
@@ -87,13 +87,13 @@ contradiction_to_observation(Prediction, PredictionError, CA, Observation) :-
  
 contradicted_by(Prediction, PredictionError) :-
     WrongPrediction = PredictionError.prediction,
-    prediction{name:Name, object:Object} :< WrongPrediction,
-    prediction{name:Name, object:Object} :< Prediction.
+    prediction{origin:Origin, kind:Kind} :< WrongPrediction,
+    prediction{origin:Origin, kind:Kind} :< Prediction.
 
 prediction_to_observation(Prediction, CA, Observation) :-
-    prediction{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, for:UmweltCAs} :< Prediction,
-    Observation = observation{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, of:UmweltCAs}.
+    prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, for:UmweltCAs} :< Prediction,
+    Observation = observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs}.
 
 prediction_error_to_observation(PredictionError, CA, Observation) :-
-    prediction{name:Name, object:Object, for:UmweltCAs} :< PredictionError.prediction,
-    Observation = observation{name:Name, object:Object, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA, of:UmweltCAs}.
+    prediction{origin:Origin, kind:Kind, for:UmweltCAs} :< PredictionError.prediction,
+    Observation = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA, of:UmweltCAs}.

@@ -65,10 +65,13 @@ phase_consumes_produces(conclude, [], []).
 
 
 % Timeboxing of phases as fraction of the latency of a timeframe
+
+% Allow time for umwelt CAs to respond with prediction errors
 phase_timebox(predict, 0.3).
-phase_timebox(observe, 0.1).
-phase_timebox(experience, 0.2).
-phase_timebox(plan, 0.4).
+% Limit the time allocated to producing an open-ended stream of experiences
+phase_timebox(experience, 0.1).
+% Allow time for umwelt CAs to respond to the plan's directives
+phase_timebox(plan, 0.6).
 phase_timebox(_, 0).
 
 %%%% IN dCA THREAD

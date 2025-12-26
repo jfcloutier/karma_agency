@@ -13,8 +13,8 @@ Static CA support
 
 %%% In static CA thread
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs} - Confidence is between 0.0 and 1.0
-% Experience = experience{name:Name, object:Object, value:Value, confidence:Confidence, by:CA}
+% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by: CA, for:CAs} - Confidence is between 0.0 and 1.0
+% Experience = experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
 prediction_handled(Prediction, Parent, State, State) :-
@@ -32,10 +32,10 @@ prediction_handled(Prediction, Parent, State, State) :-
 	).	
 
 about_experience(Prediction, State, Experience) :-
-    prediction{name:Name, object:Object} :< Prediction,
+    prediction{origin:Origin, kind:Kind} :< Prediction,
     get_state(State, experiences, Experiences),
     member(Experience, Experiences),
-    experience{name:Name, object:Object} :< Experience.
+    experience{origin:Origin, kind:Kind} :< Experience.
 
 % domain(State, Domain) :-
 %     get_state(State, sensor, Sensor) ->

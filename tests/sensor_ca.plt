@@ -51,7 +51,7 @@ test(inaccurate_prediction) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{name:SensorName, object:contact, value:pressed, confidence:1.0, by: Self, for:[SensorCA]},
+	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:contact, value:pressed, confidence:1.0, by: Self, for:[SensorCA]},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue == released).
@@ -63,12 +63,12 @@ test(experience_acquired) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{name:SensorName, object:color, value:red, confidence:1.0, by: Self, for:[SensorCA]},
+	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:color, value:red, confidence:1.0, by: Self, for:[SensorCA]},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue \== red),
 	query_answered(SensorCA, state, State),
 	get_state(State, experiences, [Experience]),
-	assertion(experience{name:SensorName, object:color} :< Experience).
+	assertion(experience{origin:object{type:sensor, id:SensorName}, kind:color} :< Experience).
 
 :- end_tests(sensor_ca).

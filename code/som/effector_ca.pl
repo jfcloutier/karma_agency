@@ -39,7 +39,7 @@ Messages:
 * In from a parent
 	* `ready_actuation(Goal)` - a parent communicates an actuation it wants the effector CA to execute
 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
-* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs]}
+* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, confidence:Confidence, by: CA, for:CAs]}
 
 * Out to a parent	
 	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
@@ -64,7 +64,7 @@ Queries:
     * level - 0
 	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> always responds with [predictable{name:Action, object:EffectorName, domain:boolean, by:CA}, ...] 
+    * experience_domain -> always responds with [predictable{ origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:CA}, ...] 
 		- Action is an action the effector can execute
 	* action_domain -> the actions the effector_ca can take
 	* wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
@@ -74,7 +74,7 @@ State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
 	* observations - actions last executed - [executed(Action), ...]
-	* experiences - experiences from last execution - [experience{name:EffectorName, object:Action, value:Boolean, confidence: 1.0, by:EffectorCA), ...]
+	* experiences - experiences from last execution - [experience{origin:EffectorObject, kind:Action, value:Boolean, confidence: 1.0, by:EffectorCA), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
 	* wellbeing - wellbeing values - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
@@ -155,7 +155,7 @@ handled(query(experience_domain), State, ExperienceDomain) :-
 	self(Name),
 	get_state(State, action_domain, ActionDomain),
 	effector_name(State, EffectorName),
-	bagof(predictable{name:Action, object:EffectorName, domain:boolean, by:Name}, member(Action, ActionDomain), ExperienceDomain).
+	bagof(predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:Name}, member(Action, ActionDomain), ExperienceDomain).
 
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
@@ -172,7 +172,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
+% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, confidence:Confidence, by: CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
 	static_ca:prediction_handled(Prediction, Parent, State, NewState).
 
@@ -275,7 +275,7 @@ experiences_from_observations(State, Experiences) :-
 experiences_from_executions([], _, []).
 experiences_from_executions([executed(Action) | Rest], EffectorName, [Experience | OtherExperiences]) :-
 	self(EffectorCA),
-	Experience = experience{name:EffectorName, object:Action, value:true, confidence: 1.0, by:EffectorCA},
+	Experience = experience{origin:object{type:effector, id:EffectorName}, kind:Action, value:true, confidence: 1.0, by:EffectorCA},
 	experiences_from_executions(Rest, EffectorName, OtherExperiences).
 
 action_url(State, Action, ActionUrl) :-

@@ -64,17 +64,17 @@ ca_random_predictions(CA, UmweltCA, Predictions) :-
 % TODO - Applying a causal theory to current observations produces expected observations to be converted into predictions
 apply_causal_theory(_, _, Observations, Observations).
 
-% sensor experience domain = [predictable{name:SensorName, object:SenseName, domain:SenseDomain, by:SensorCA}]
-% effector experience domain = [predictable{name:EffectorName, object:Action, domain:boolean, by:EffectorCA), ...]
+% sensor experience domain = [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:SensorCA}]
+% effector experience domain = [predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:EffectorCA), ...]
 % Make a prediction for each predictable
 random_predictions_from_predictables(CA, Predictables, Predictions) :-
     log(info, predict, "Making random predictions from domain ~p", [Predictables]),    
     setof(Prediction,
           (member(Predictable, Predictables),
-          predictable{name:Name, object:Object, by:UmweltCA} :< Predictable,
+          predictable{origin:Origin, kind:Kind, by:UmweltCA} :< Predictable,
           % The value of a predictable
           random_domain_value(Predictable.domain, Value, Confidence),
-          Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}
+          Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}
           ),
           Predictions).
 
@@ -84,8 +84,8 @@ observations_as_predictions(CA, Observations, Predictions) :-
         
 % Turn an observation into a prediction
 observation_as_prediction(CA, Observation, Prediction) :-
-    observation{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, of:UmweltCA} :< Observation,
-    Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}.
+    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCA} :< Observation,
+    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}.
 
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object
@@ -108,8 +108,8 @@ resolve_conflicts(ConflictingPredictions, Resolution) :-
 % Predictions conflict if they have the same name (the name of the predicted experience)
 % and object (what the prediction is about e.g. color, distance, luminance, count, more, coincide, trend)
 conflicting_predictions(Prediction, OtherPrediction) :-
-    prediction{name: Name, object: Object} :< Prediction,
-    prediction{name: Name, object: Object} :< OtherPrediction.
+    prediction{origin:Origin, kind:Kind} :< Prediction,
+    prediction{origin:Origin, kind:Kind} :< OtherPrediction.
 
 % Select randomly a prediction with the highest confidence
 high_confidence_prediction(Predictions, Prediction) :-

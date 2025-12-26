@@ -25,7 +25,7 @@ Messages:
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by: CA, for:CAs}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by: CA, for:CAs}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -39,13 +39,13 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> [predictable{name:distance, object:SensorName, domain:SenseDomain, by:CA}]
+    * experience_domain -> [predictable{origin:object{type:sensor, id:SensorName}, kind:distance, domain:SenseDomain, by:CA}]
     * wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
 
 State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
-	* experiences - experiences from last reading - [experience(name:SensorName, object:Sense, value:Value, confidence:1.0)] - ignore tolerance
+	* experiences - experiences from last reading - [experience{origin:object{type:sensor, id:SensorName}, kind:Sense, value:Value, confidence:1.0}] - ignore tolerance
 	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
 
 Lifecycle:
@@ -112,7 +112,7 @@ handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
 
-handled(query(experience_domain), State, [predictable{name:SensorName, object:SenseName, domain:SenseDomain, by:Name}]) :-
+handled(query(experience_domain), State, [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:Name}]) :-
     self(Name),
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
@@ -133,7 +133,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{name:Name, object:Object, value:Value, confidence:Confidence, by:CA, for:CAs}
+% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
     experiences_updated(Prediction, State, State1),
@@ -179,7 +179,7 @@ sense_url(State, SenseURL) :-
 % Read the sensor value, update wellbeing, update experience in latest reading.
 experiences_updated(Prediction, State, NewState) :-
     log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
-    prediction{name:SensorName, object:SenseName} :< Prediction,
+    prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName} :< Prediction,
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     % Ignore tolerance and timestamp in reading for now
@@ -187,7 +187,7 @@ experiences_updated(Prediction, State, NewState) :-
     !,
     % A sensor is 100% confident in what it experiences
     self(SensorCA),
-    Experience = experience{name:SensorName, object:SenseName, value:Value, confidence:1.0, by:SensorCA},
+    Experience = experience{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:1.0, by:SensorCA},
     log(info, sensor_ca, "~@ experiences ~p", [self, Experience]),
     put_state(State, experiences, [Experience],  State1),
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
