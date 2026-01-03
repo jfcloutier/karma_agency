@@ -106,7 +106,7 @@ resolve_conflicts(ConflictingPredictions, Resolution) :-
     Resolution = Prediction.put([for = AllFor]).
 
 % Predictions conflict if they have the same name (the name of the predicted experience)
-% and object (what the prediction is about e.g. color, distance, luminance, count, more, coincide, trend)
+% and object (what the prediction is about e.g. color, distance, luminance, count, more, trend)
 conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{origin:Origin, kind:Kind} :< Prediction,
     prediction{origin:Origin, kind:Kind} :< OtherPrediction.

@@ -1,5 +1,7 @@
 /*
-Evaluate causal theory and request new one if unsatisfactory, grant past plans affordance status if goals achieved
+Evaluate goodness of each experience.
+Evaluate causal theory and request new one if unsatisfactory.
+Grant past plans affordance status if goals achieved
 */
 
 :- module(assess, []).
