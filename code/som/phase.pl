@@ -15,10 +15,10 @@ The sequence of phases is
 * begin         - the timeframe begins - update wellbeing from diffusion
 * predict       - make predictions from current observations 
 * observe       - merge predictions and prediction errors into new observations, elevate umwelt observations, remove obsolete observations
-* experience    - integrate updated history of observations into new experiences, remove obsolete experiences, (re)assign value
+* experience    - integrate updated history of observations into new experiences, remove obsolete experiences
 * plan          - formulate and prioritize goals (formulated and received), select a goal, construct a plan and emit it
 * act           - confirm plan feasibility, execute it, remember the goal and plan for later assessment
-* assess        - evaluate causal theory and request new one if unsatisfactory, grant past plans affordance status if their goals were achieved
+* assess        - evaluate causal theory and request new one if unsatisfactory, assign normativity to experiences, grant past plans affordance status if their goals were achieved
 * conclude      - the timeframe concludes - update wellbeing measures and emit wellbeing changes
 */
 
@@ -102,19 +102,14 @@ consume_state_properties(State, [Property | Rest], NewState) :-
 
 %%%% IN PHASE THREAD
 
-% Run in the phase's thread until done or status is stopped.
+% Run in the phase's thread until the phase is done, because it ran out of work or it timed out.
 % A phase is run in its own thread so that the CA thread can receive messages while the phase is executing.
 % The last action is to send the CA a message with the updated state.
 started(CA, State) :-
     get_state(State, latency, Latency),
     timebox_phase(Phase, Latency),
-    % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-    % resolving WorkStatus to more(IntermediateState, Changed), or it can be done(EndState, Changed) as the last or only solution.
-    % where Changed are the names of the state properties
-    Goal =.. [:, Phase, unit_of_work(CA, State, WorkStatus)],
     Phase = State.phase,
-    engine_create(WorkStatus, Goal, WorkEngine),
-    run_phase(CA, Phase, WorkEngine).
+    work(CA, State, Phase).
 
 % Timebox a phase but only if it is meant to be
 timebox_phase(Phase, Latency) :-
@@ -123,46 +118,21 @@ timebox_phase(Phase, Latency) :-
     Deadline is Now + Delay,
     log(info, phase, "Setting end of phase ~w of ~@ to ~w seconds from now", [Phase, self, Delay]),
     remember_one(phase_time_limit(Deadline)).
+
+% Maybe do something before engaging into units of work
+% unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
+% resolving WorkStatus to more(IntermediatePhaseState, WellbeingDeltas), or it can be done(EndPhaseState, WellbeingDeltas) as the last or only solution.
+work(CA, State, Phase) :-
+    Phase:before_work(CA, State, NewPhaseState),
+    Goal =.. [:, Phase, unit_of_work(CA, NewPhaseState, WorkStatus)],
+    engine_create(WorkStatus, Goal, WorkEngine),
+    run_phase(CA, Phase, WorkEngine).
     
 run_phase(CA, Phase, WorkEngine) :-
     log(info, phase, "Doing unit of work in phase ~w for CA ~p", [Phase, CA]),
     work_engine_cranked(WorkEngine, WorkStatus),
     log(info, phase, "Unit of work in phase ~w for CA ~w done with ~p", [Phase, CA, WorkStatus]),
     work_status_handled(WorkStatus, WorkEngine, CA).
-
-work_status_handled(done(EndState, WellbeingDeltas), WorkEngine, CA) :-
-    phase_done(CA, WorkEngine, EndState, WellbeingDeltas).
-
-work_status_handled(more(IntermediateState, WellbeingDeltas), WorkEngine, CA) :-
-    phase_timeout() -> 
-        phase_done(CA, WorkEngine, IntermediateState, WellbeingDeltas)
-        ;
-        Phase = IntermediateState.phase,
-        run_phase(CA, Phase, WorkEngine).
-
-work_status_handled(WorkStatus, _, _) :-
-    log(info, phase, "@@@ Not handling work status of ~@: ~p", [self, WorkStatus]),
-    fail.
-
-run_the_clock(Phase) :-
-    get_time(Now),
-    phase_time_limit(TimeLimit),
-    Now < TimeLimit,
-    Sleep is TimeLimit - Now,
-    log(info, phase, "Running the clock for phase ~w for ~w seconds", [Phase, Sleep]),
-    sleep(Sleep).
-
-run_the_clock(_).
-
-phase_done(CA, WorkEngine, PhaseEndState, WellbeingDeltas) :-
-    Phase = PhaseEndState.phase,
-    log(info, phase, "Phase ~w for CA ~p done with end state ~p and wellbeing deltas ~p", [Phase, CA, PhaseEndState, WellbeingDeltas]),
-    engine_destroy(WorkEngine),
-    run_the_clock(Phase),
-    % The engine sends the CA that started it a message that the phase is done
-    message_sent(CA, phase_done(PhaseEndState, WellbeingDeltas)),
-    % This event is currently only used in tests
-    published(end_of_phase, [phase=Phase, state=PhaseEndState], CA).
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
     engine_next_reified(WorkEngine, Next),
@@ -176,10 +146,50 @@ interpret_unit_of_work(exception(Error), _) :-
     log(warn, phase, "Exception from engine. Got ~p", [Error]),
     throw(Error).
 
+work_status_handled(done(PhaseDoneState, WellbeingDeltas), WorkEngine, CA) :-
+    phase_done(CA, PhaseDoneState, WellbeingDeltas, WorkEngine).
+
+work_status_handled(more(IntermediatePhaseState, WellbeingDeltas), WorkEngine, CA) :-
+    phase_timeout() -> 
+        phase_done(CA, IntermediatePhaseState, WellbeingDeltas, WorkEngine)
+        ;
+        Phase = IntermediatePhaseState.phase,
+        run_phase(CA, Phase, WorkEngine).
+
+work_status_handled(WorkStatus, _, _) :-
+    log(info, phase, "@@@ Not handling work status of ~@: ~p", [self, WorkStatus]),
+    fail.
+
+% Last unit of work is done. Perhaps do some after-work, run the clock, and let the dynamic CA (and others) know.
+phase_done(CA, PhaseDoneState, WellbeingDeltas, WorkEngine) :-
+    Phase = PhaseDoneState.phase,
+    engine_destroy(WorkEngine),
+    Phase:after_work(CA, PhaseDoneState, FinalPhaseState),
+    log(info, phase, "Phase ~w for CA ~p done with end state ~p and wellbeing deltas ~p", [Phase, CA, FinalPhaseState, WellbeingDeltas]),
+    run_the_clock(Phase),
+    % The engine sends the CA that started it a message that the phase is done
+    message_sent(CA, phase_done(FinalPhaseState, WellbeingDeltas)),
+    % This event is currently only used in tests
+    published(end_of_phase, [phase=Phase, state=FinalPhaseState], CA).
+
+run_the_clock(Phase) :-
+    get_time(Now),
+    phase_time_limit(TimeLimit),
+    Now < TimeLimit,
+    Sleep is TimeLimit - Now,
+    log(info, phase, "Running the clock for phase ~w for ~w seconds", [Phase, Sleep]),
+    sleep(Sleep).
+
+run_the_clock(_).
+
 phase_timeout() :-
     get_time(Now),
     phase_time_limit(TimeLimit),
     Now > TimeLimit.
+
+phase_max_time(Phase, Latency, Delay) :-
+    phase_timebox(Phase, Fraction),
+    Delay is Latency * Fraction.
 
 % TODO - put in prolog_utils
 remember_one(Term) :-
@@ -190,7 +200,3 @@ remember_one(Term) :-
     % Because using abolish/1 erases the thread_local property
     retractall(Retracted),
     assertz(Term).
-
-phase_max_time(Phase, Latency, Delay) :-
-    phase_timebox(Phase, Fraction),
-    Delay is Latency * Fraction.

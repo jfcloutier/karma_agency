@@ -13,6 +13,12 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 :- use_module(agency(som/domain)).
 :- use_module(agency(som/wellbeing)).
 
+% No work done before units of work
+before_work(_, State, State).
+
+% No work done after last unit of work
+after_work(_, State, State).
+
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
 % resolving WorkStatus to more(IntermediateState, WellbeingDeltas), or it can be done(EndState, WellbeingDeltas) as the last or only solution. 
 

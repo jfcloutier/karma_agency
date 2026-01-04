@@ -8,6 +8,12 @@ Formulate and prioritize goals (formulated and received), select a goal, constru
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 
+% No work done before units of work
+before_work(_, State, State).
+
+% No work done after last unit of work
+after_work(_, State, State).
+
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution. 
 unit_of_work(CA, State, more(State, WellbeingDeltas)) :-
