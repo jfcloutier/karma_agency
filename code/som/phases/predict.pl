@@ -67,7 +67,7 @@ ca_random_predictions(CA, UmweltCA, Predictions) :-
     query_answered(UmweltCA, experience_domain, Predictables),
     random_predictions_from_predictables(CA, Predictables, Predictions).
 
-% TODO - Applying a causal theory to current observations produces expected observations to be converted into predictions
+% TODO - Applying a causal theory to current observations produces expected observations (caused and retained) to be converted into predictions
 apply_causal_theory(_, _, Observations, Observations).
 
 % sensor experience domain = [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:SensorCA}]
