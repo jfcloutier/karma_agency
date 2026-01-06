@@ -145,7 +145,7 @@ Data:
 	* causal_theory - current causal theory or `none`
 	* affordances - [goal-directives, ...]
 	* wellbeing - wellbeing metrics {fullness:Percent, integrity:Percent, engagement:Percent}
-    * timeframes - [Timeframe, ...] - Latest first. A Timeframe remembers only observations, goal and plan
+    * timeframes - [Timeframe, ...] - Latest first. A Timeframe remembers only observations, goals and plans
 */
 
 :- module(dynamic_ca, []).
@@ -156,6 +156,7 @@ Data:
 :- use_module(actors(worker)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/phase)).
+:- use_module(agency(som/wellbeing)).
 
 % Thread state
 :- thread_local level/1, timer/1.
@@ -208,7 +209,7 @@ initial_state(Latency, Umwelt, Settings, Wellbeing, State) :-
 		 predictions_in - [], predictions_out - [], prediction_errors - [],
 		 observations - [], experiences - [], affordances - [],
 		 goal - none, plan - [],
-		 timeframes - [], timeframe_count - 0], State).
+		 timeframes - [], timeframe_count - 1], State).
 
 remember_level(Options, Level) :-
 	option(level(Level), Options),
@@ -239,7 +240,7 @@ handled(message(adopted, Parent), State, NewState) :-
 
 handled(message(phase_done(PhaseState, WellbeingDeltas), _), State, NewState) :-
 	Phase = PhaseState.phase,
-	log(info, dynamic_ca, "Phase ~w done for ~@ with state ~p", [Phase, self, PhaseState]),
+	log(info, dynamic_ca, "Phase ~w done for ~@", [Phase, self]),
 	merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
@@ -322,20 +323,9 @@ merge_phase_state_properties([], _, State, State).
 merge_phase_state_properties([Property | Rest], PhaseState, State, NewState) :-
 	get_state(PhaseState, Property, PropertyValue),
 	put_state(State, Property, PropertyValue, State1),
+	Phase = PhaseState.phase,
+	log(info, dynamic_ca, "Merged state property ~w produced by phase ~w:  ~p", [Property, Phase, PropertyValue]),
 	merge_phase_state_properties(Rest, PhaseState, State1, NewState).
-
-merge_wellbeing(State, WellbeingDeltas, NewState) :-
-	log(info, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDeltas]),
-	get_state(State, wellbeing, Wellbeing),
-	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
-	put_state(State, wellbeing, Wellbeing1, NewState).
-
-apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
-	log(info, dynamic_ca, "Apply wellbeing deltas ~p to wellbeing ~p", [WellbeingDeltas, Wellbeing]),
-	Fullness is max(Wellbeing.fullness + WellbeingDeltas.fullness, 0),
-	Integrity is max(Wellbeing.integrity + WellbeingDeltas.integrity, 0),
-	Engagement is max(Wellbeing.engagement + WellbeingDeltas.engagement, 0),
-	NewWellbeing = wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}.
 
 % Not at end of timeframe (there's a next phase)
 timeframe_continues(State) :-
@@ -363,9 +353,9 @@ retained_timeframe(State, Timeframe) :-
 	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan}.
 
 inc_timeframe_count(State, NewState) :-
-	log(info, dynamic_ca, "Incrementing timeframe count in ~p", [State]),
 	get_state(State, timeframe_count, Count),
 	Inc is Count + 1,
+	log(info, dynamic_ca, "Incremented timeframe count in ~@ to ~w", [self, Inc]),
 	put_state(State, timeframe_count, Inc, NewState).
 
 % TODO - Die gracefully and let others know

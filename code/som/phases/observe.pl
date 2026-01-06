@@ -4,10 +4,12 @@ Merge predictions and prediction errors into new observations.
 
 :- module(observe, []).
 
+:- use_module(library(uuid)).
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 :- use_module(agency(som/dynamic_ca)).
+:- use_module(agency(som/ca_support)).
 
 % No work done before units of work
 before_work(_, State, State).
@@ -18,11 +20,12 @@ after_work(_, State, State).
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution.
 
-% observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA: of:UmweltCAs}
+% observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA: of:UmweltCAs, id:Id}
+% The object in an observation omits its "support set" (what was integrated in its synthesis as part of an umwelt experience) 
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
-unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
+unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     observed(CA, State, Observations),
-    put_state(State, observations, Observations, NewState),
+    StateDeltas = [observations-Observations],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
 
@@ -98,8 +101,20 @@ contradicted_by(Prediction, PredictionError) :-
 
 prediction_to_observation(Prediction, CA, Observation) :-
     prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, for:UmweltCAs} :< Prediction,
-    Observation = observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs}.
+    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs},
+    observation_id(ObservationWithoutId, Id),
+    Observation = ObservationWithoutId.put(id, Id).
 
 prediction_error_to_observation(PredictionError, CA, Observation) :-
     prediction{origin:Origin, kind:Kind, for:UmweltCAs} :< PredictionError.prediction,
-    Observation = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA, of:UmweltCAs}.
+    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA, of:UmweltCAs},
+    observation_id(ObservationWithoutId, Id),
+    Observation = ObservationWithoutId.put(id, Id).
+
+% Two observations from any CAs must have the same ids if they are semantically equivalent.
+observation_id(Observation, Id) :-
+    observation{origin:Object, kind:Kind, value:Value} :< Observation,
+    object_hash(Object, ObjectHash),
+    value_hash(Value, ValueHash),
+    atomic_list_hash([ObjectHash, Kind, ValueHash], Id).
+

@@ -24,13 +24,13 @@ after_work(_, State, State).
 
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
-unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
+unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     log(info, predict, "Predicting for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]),
     predictions(CA, State, Predictions),
     resolve_conflicting_predictions(Predictions, [], Predictions1),
     log(info, predict, "~w made predictions ~p", [CA, Predictions1]),
     predictions_sent_to_umwelt(CA, Predictions1),
-    put_state(State, predictions_out, Predictions1, NewState),
+    StateDeltas = [predictions_out-Predictions1],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w", [CA]).
 
@@ -67,7 +67,7 @@ ca_random_predictions(CA, UmweltCA, Predictions) :-
     query_answered(UmweltCA, experience_domain, Predictables),
     random_predictions_from_predictables(CA, Predictables, Predictions).
 
-% TODO - Applying a causal theory to current observations produces expected observations to be converted into predictions
+% TODO - Applying a causal theory to current observations produces expected observations (caused and retained) to be converted into predictions
 apply_causal_theory(_, _, Observations, Observations).
 
 % sensor experience domain = [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:SensorCA}]
