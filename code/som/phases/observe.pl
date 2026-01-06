@@ -19,6 +19,7 @@ after_work(_, State, State).
 % to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution.
 
 % observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA: of:UmweltCAs}
+% The object in an observation omits its "support set" (what was integrated in its synthesis as part of an umwelt experience) 
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
 unit_of_work(CA, State, done(NewState, WellbeingDeltas)) :-
     observed(CA, State, Observations),
