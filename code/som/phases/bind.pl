@@ -23,7 +23,7 @@ before_work(_, State, State).
 after_work(_, State, State).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% resolving WorkStatus to more(IntermediateState, WellbeingDeltas), or it can be done(EndState, WellbeingDeltas) as the last or only solution. 
+% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 % No state change but wellbeing deltas from diffusion
 unit_of_work(CA, State, done([], WellbeingDeltas)) :-

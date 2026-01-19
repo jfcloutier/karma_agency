@@ -21,6 +21,7 @@ prediction_handled(Prediction, Parent, State, State) :-
     log(info, static_ca, "~@ is handling prediction ~p in state ~p", [self, Prediction, State]),
     % The prediction must be about an experience else it is not relevant
 	about_experience(Prediction, State, Experience),
+    !,
     log(info, static_ca, "Prediction ~p is about experience ~p of ~@", [Prediction, Experience, self]),
 	(ca_support : same_experience_value(Prediction.value, Experience.value) ->
 		true;
@@ -29,7 +30,13 @@ prediction_handled(Prediction, Parent, State, State) :-
         PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:1.0, by:StaticCA},
         log(info, static_ca, "~@ is sending prediction error ~p to ~w", [self, PredictionError, Parent]),
 		message_sent(Parent, prediction_error(PredictionError))
-	).	
+	).
+
+prediction_handled(Prediction, Parent, State, State) :-
+    self(StaticCA),
+    PredictionError = prediction_error{prediction:Prediction, actual_value:unknown, confidence:1.0, by:StaticCA},
+    log(info, static_ca, "~@ is sending prediction error ~p to ~w", [self, PredictionError, Parent]),
+	message_sent(Parent, prediction_error(PredictionError)).
 
 about_experience(Prediction, State, Experience) :-
     prediction{origin:Origin, kind:Kind} :< Prediction,

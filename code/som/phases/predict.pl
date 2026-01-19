@@ -20,7 +20,7 @@ before_work(_, State, State).
 after_work(_, State, State).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% resolving WorkStatus to more(IntermediateState, WellbeingDeltas), or it can be done(EndState, WellbeingDeltas) as the last or only solution. 
+% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
@@ -79,8 +79,9 @@ random_predictions_from_predictables(CA, Predictables, Predictions) :-
           (member(Predictable, Predictables),
           predictable{origin:Origin, kind:Kind, by:UmweltCA} :< Predictable,
           % The value of a predictable
-          random_domain_value(Predictable.domain, Value, Confidence),
-          Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}
+          random_domain_value(Predictable.domain, Value),
+          % A random prediction is done with full, blind confidence because no evidence exists to attenuate it
+          Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:1.0, by: CA, for:[UmweltCA]}
           ),
           Predictions).
 
@@ -90,8 +91,8 @@ observations_as_predictions(CA, Observations, Predictions) :-
         
 % Turn an observation into a prediction
 observation_as_prediction(CA, Observation, Prediction) :-
-    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCA} :< Observation,
-    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:[UmweltCA]}.
+    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs} :< Observation,
+    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:UmweltCAs}.
 
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object

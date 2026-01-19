@@ -88,7 +88,7 @@ after_work(CA, State, NewState) :-
     log(info, experience, "Phase experience (after) for CA ~w elevated experiences ~p", [CA, ElevatedExperiences]).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 % Add one experience at a time, most relevant first.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
@@ -146,7 +146,7 @@ count_from_prior_object(State, Object, Count, CountedObservations) :-
     surviving_observations(State, PriorObservationIds, [], Observations),
     % Find maximal set of countable observations starting from surviving observation. Fails if nothing to count.
     countable_observations(State.observations, Observations, CountedObservations),
-    count(CountedObservations, Count).
+    length(CountedObservations, Count).
 
 
 % Observations from prior timeframe that are still current
@@ -224,11 +224,12 @@ same_value(Value1, Value2) :-
     same_object(Value1,Value2).
 
 count_experience(CA, Count, CountedObservations, Experience) :-
+    simple_count(Count, SimpleCount),
     average_confidence(CountedObservations, Confidence),
     Confidence > 0,
     sorted_ids(CountedObservations, CountedObservationIds),
     synthetic_object(CountedObservationIds, Object),
-    Experience = experience{origin:Object, kind:count, value:Count, confidence:Confidence, by:CA}.
+    Experience = experience{origin:Object, kind:count, value:SimpleCount, confidence:Confidence, by:CA}.
 
 more_experience(CA, Count1, CountedObservations1, Count2, CountedObservations2, Experience) :-
     Count1 \= Count2,
@@ -240,25 +241,26 @@ more_experience(CA, Count1, CountedObservations1, Count2, CountedObservations2, 
     average_confidence(CountedObservations2, Confidence2),
     (Confidence1 * Confidence2) > 0,
     Confidence is (Confidence1 + Confidence2) / 2,
-    (greater_count_than(Count1, Count2) ->
+    (grossly_more_than(Count1, Count2) ->
         Experience = experience{origin:Object1, kind:more, value:Object2, confidence:Confidence, by:CA}
         ;
         Experience = experience{origin:Object2, kind:more, value:Object1, confidence:Confidence, by:CA}
     ).
 
 trend_experience(CA, State, PriorObservation, Observation, Experience) :-
+    log(info, experience, "@@@ Making a trend experience on prior observation ~p and current observation ~p", [PriorObservation, Observation]),
     PriorValue = PriorObservation.value,
     CurrentValue = Observation.value,
-    sorted_ids([PriorObservation.id, Observation.id], ObservationIds),
+    sorted_ids([PriorObservation, Observation], ObservationIds),
     synthetic_object(ObservationIds, Object),
     (CurrentValue == PriorValue ->
-        TrendExperience = experience{object:Object, kind:trend, value:same, by:CA}
+        TrendExperience = experience{origin:Object, kind:trend, value:same, by:CA}
         ;
         CurrentValue > PriorValue ->
-        TrendExperience = experience{object:Object, kind:trend, value:up, by:CA}
+        TrendExperience = experience{origin:Object, kind:trend, value:up, by:CA}
         ;
         CurrentValue < PriorValue ->
-        TrendExperience = experience{object:Object, kind:trend, value:down, by:CA}
+        TrendExperience = experience{origin:Object, kind:trend, value:down, by:CA}
         ),
     average_confidence([PriorObservation, Observation], CurrentConfidence),
     trend_confidence(State, TrendExperience, CurrentConfidence, Confidence),
@@ -266,6 +268,7 @@ trend_experience(CA, State, PriorObservation, Observation, Experience) :-
 
 % Confidence in a trend is altered by its history 
 trend_confidence(State, TrendExperience, CurrentConfidence, Confidence) :-
+    log(info, experience, "Calculating trend confidence of ~p given current confidence ~w", [TrendExperience, CurrentConfidence]),
     previous_trend_experience(State, TrendExperience, PriorTrendExperience),
     !,
     adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence, Confidence).
@@ -302,15 +305,19 @@ all_ids([Item | Rest], Acc, AllIds) :-
     all_ids(Rest, [Id | Acc], AllIds).
 
 % Count from 1 to 3 and then many. Else counting fails.
-count(Items, Count) :-
-    length(Items, N),
+simple_count(N, Count) :-
     N > 0,
     (N > 3 -> Count = many ; Count = N).
 
-greater_count_than(Count, Count) :- fail, !.
-greater_count_than(many, _) :- !.
-greater_count_than(Count1, Count2) :-
+% Is a count perceivable as greater than another?
+% Comparing rounded log2 for numbers greater than 3.
+grossly_more_than(Count, Count) :- fail, !.
+grossly_more_than(Count1, Count2) :-
+    Count1 < 4,
     Count1 > Count2.
+grossly_more_than(Count1, Count2) :-
+    Count1 > 3,
+    round(Count1 ** 0.5) > round(Count2 ** 0.5).
 
 % experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 novel_experience(CA, State, Experience) :-
@@ -331,7 +338,7 @@ priority(Delta, Dict1, Dict2) :-
 new_experience(CA, _, count, Observations, Experience) :-
     select(Observation, Observations, OtherObservations),
     countable_observations(OtherObservations, [Observation], CountedObservations),
-    count(CountedObservations, Count),
+    length(CountedObservations, Count),
     Count > 1,
     count_experience(CA, Count, CountedObservations, Experience).
 
@@ -342,8 +349,8 @@ new_experience(CA, _, more, Observations, Experience) :-
     Observation1.id \= Observation2.id,
     countable_observations(OtherObservations1, [Observation1], CountedObservations1),
     countable_observations(OtherObservations2, [Observation2], CountedObservations2),
-    count(CountedObservations1, Count1),
-    count(CountedObservations2, Count2),
+    length(CountedObservations1, Count1),
+    length(CountedObservations2, Count2),
     Count1 > Count2,
     Count2 > 1,
     more_experience(CA, Count1, CountedObservations1, Count2, CountedObservations2, Experience).

@@ -278,7 +278,7 @@ handled(query(umwelt), State, Umwelt) :-
 
 handled(query(experience_domain), State, ExperienceDomain) :-
 	get_state(State, experiences, Experiences),
-	domain_from_experiences(Experiences, ExperienceDomain).
+	predictables_from_experiences(Experiences, ExperienceDomain).
 
 handled(query(wellbeing), State, Wellbeing) :-
 	get_state(State, wellbeing, Wellbeing).
@@ -364,5 +364,5 @@ end_of_life(State, State) :-
 	published(end_of_life, [level(Level)]).
 
 % TODO
-% domain_from_experiences(Experiences, []).
-domain_from_experiences(_, []).
+% predictables_from_experiences(Experiences, []).
+predictables_from_experiences(_, []).

@@ -18,7 +18,7 @@ before_work(_, State, State).
 after_work(_, State, State).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution.
+% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 % observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA: of:UmweltCAs, id:Id}
 % The object in an observation omits its "support set" (what was integrated in its synthesis as part of an umwelt experience) 
@@ -83,8 +83,8 @@ observation_from_prediction(Prediction, PredictionErrors, CA, Observation) :-
 observation_from_prediction(Prediction, _, CA, Observation) :-
     prediction_to_observation(Prediction, CA, Observation).
 
+% A prediction error more or equally confident than the contradicted prediction overrides the prediction and keeps the prediction error's confidence.
 % A prediction error less confident than the prediction erodes the confidence in the contradicted prediction.
-% A prediction error more or equally confident than the contradicted prediction overrides the prediction and keeps its confidence.
 contradiction_to_observation(Prediction, PredictionError, CA, Observation) :-
     PredictionError.confidence >= Prediction.confidence ->
         prediction_error_to_observation(PredictionError, CA, Observation1),

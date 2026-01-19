@@ -15,7 +15,7 @@ before_work(_, State, State).
 after_work(_, State, State).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(IntermediateState, WellbeingDeltas) or done(EndState, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 unit_of_work(_, _, done([], WellbeingDeltas)) :-
     wellbeing:empty_wellbeing(WellbeingDeltas).

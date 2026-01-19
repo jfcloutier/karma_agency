@@ -23,7 +23,7 @@ run_tests(dynamic_ca).
 % Succeed once a dynamic CA was created and has completed a first timeframe and all of its phases.
 test(timeframe) :-
 	all_subscribed([end_of_phase, end_of_timeframe, end_of_life, ca_started]),
-	som : growing([max_timeframes=1]),
+	som : growing([max_timeframes=2]),
 	get_message(event(ca_started, [level(1)], _)),
 	query_answered(som, children, SOMChildren),
 	assertion(SOMChildren \== unknown),
