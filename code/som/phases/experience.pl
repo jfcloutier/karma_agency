@@ -16,7 +16,7 @@ The kind of property/relation determines the domain of permissible values.
 Value domains of synthetic experiences: 
 
 * count: 1, 2, 3, `many`
-* trend: `up`, `down`, `same`, `ended`
+* trend: `up`, `down`, `ended`
 * more: an object
 
 Synthesizing experiences:
@@ -53,8 +53,8 @@ Finding a maximal set of observations (or two if a relation) for a kind of exper
         * Relations with same kind and origin X 2 (more object A --X-> * than object B --Y-> * - object A has more relations X than object B has relations Y)
     * `trend`: 2 or more trendables over the last N > 1 time frames
         * Properties with the same origin and kind
-            * If values are numerical, the values can be `up`, `down` or `same`
-            * Otherwise, the trend values can only be `same`
+            * If values are numerical, the values can be `up` or `down`
+            * Otherwise, the trend value can be `ended` if a trend from the prior timeframe is being updated
 
 Assigning confidence to an experience:
 
@@ -134,8 +134,8 @@ updated_experience(CA, State, trend, PriorExperience, UpdatedExperience) :-
     member(PriorObservation.id, PriorExperience.origin.support),
     member(Observation, State.observations),
     comparable_observations(PriorObservation, Observation),
-    !,
-    trend_experience(CA, State, PriorObservation, Observation, UpdatedExperience).
+    trend_experience(CA, State, PriorObservation, Observation, UpdatedExperience),
+    !.
 
 % If a prior experience can not be extended/changed by a current observation, it is ended
 updated_experience(_, _, trend, PriorExperience, UpdatedExperience) :-
@@ -247,15 +247,13 @@ more_experience(CA, Count1, CountedObservations1, Count2, CountedObservations2, 
         Experience = experience{origin:Object2, kind:more, value:Object1, confidence:Confidence, by:CA}
     ).
 
+% A trend goes up or down or else there is no trend
 trend_experience(CA, State, PriorObservation, Observation, Experience) :-
-    log(info, experience, "@@@ Making a trend experience on prior observation ~p and current observation ~p", [PriorObservation, Observation]),
     PriorValue = PriorObservation.value,
     CurrentValue = Observation.value,
     sorted_ids([PriorObservation, Observation], ObservationIds),
     synthetic_object(ObservationIds, Object),
-    (CurrentValue == PriorValue ->
-        TrendExperience = experience{origin:Object, kind:trend, value:same, by:CA}
-        ;
+    (CurrentValue \= PriorValue ->
         CurrentValue > PriorValue ->
         TrendExperience = experience{origin:Object, kind:trend, value:up, by:CA}
         ;
@@ -268,7 +266,6 @@ trend_experience(CA, State, PriorObservation, Observation, Experience) :-
 
 % Confidence in a trend is altered by its history 
 trend_confidence(State, TrendExperience, CurrentConfidence, Confidence) :-
-    log(info, experience, "Calculating trend confidence of ~p given current confidence ~w", [TrendExperience, CurrentConfidence]),
     previous_trend_experience(State, TrendExperience, PriorTrendExperience),
     !,
     adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence, Confidence).
@@ -382,7 +379,7 @@ elevated_static_ca_observations(State, Experiences) :-
 elevated_static_ca_observations(_, []).
 
 is_static_ca_observation(Observation) :-
-    memberchk(Observation.origin.type, [sensor, effector]).
+   memberchk(Observation.origin.type, [sensor, effector]).
 
 in_experiences(Observation, State) :-
     member(Experience, State.experiences), 
@@ -394,6 +391,7 @@ in_experience(ObservationId, Experience) :-
 
 in_experience(ObservationId, Experience) :-
     experience{kind:trend, value:Object} :< Experience,
+    is_dict(Object, object),
     ObservationIds = Object.support,
     member(ObservationId, ObservationIds).
 
