@@ -209,7 +209,7 @@ initial_state(Latency, Umwelt, Settings, Wellbeing, State) :-
 		 predictions_in - [], predictions_out - [], prediction_errors - [],
 		 observations - [], experiences - [], affordances - [],
 		 goal - none, plan - [],
-		 timeframes - [], timeframe_count - 1], State).
+		 timeframes - [], timeframe_count - 1, feeling - none], State).
 
 remember_level(Options, Level) :-
 	option(level(Level), Options),
@@ -349,8 +349,8 @@ timeframe_created(State, NewState) :-
 	put_state(State1, phase, initiating, NewState).
 
 retained_timeframe(State, Timeframe) :-
-	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan} :< State,
-	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan}.
+	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan, feeling:Feeling} :< State,
+	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan, feeling:Feeling}.
 
 inc_timeframe_count(State, NewState) :-
 	get_state(State, timeframe_count, Count),

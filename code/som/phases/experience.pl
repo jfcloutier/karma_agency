@@ -52,14 +52,14 @@ Finding a maximal set of observations (or two if a relation) for a kind of exper
         * Relations with same kind and value object X 2 (more * --X-> object A than * --Y-> object B - there are more objects with relations X to object A than there are objects with relation Y to object B)
         * Relations with same kind and origin X 2 (more object A --X-> * than object B --Y-> * - object A has more relations X than object B has relations Y)
     * `trend`: 2 or more trendables over the last N > 1 time frames
-        * Properties with the same origin and kind
-            * If values are numerical, the values can be `up` or `down`
+        * Trendables are number-valued properties with the same origin and kind
+            * A trend's value can be `up` or `down`
             * Otherwise, the trend value can be `ended` if a trend from the prior timeframe is being updated
 
 Assigning confidence to an experience:
 
 * Take the average confidence in the observed set(s) composing the synthetic object(s) of the experience (don't multiply individual confidences)
-* If a `trend`, confidence is boosted when the trend is maintained across timeframes (a trend over 5 timeframes is stronger than one over only 2)
+* If a `trend`, confidence is boosted when the trend's value is maintained across timeframes (an up trend over 5 timeframes is more confident than one over only 2)
 
 */
 

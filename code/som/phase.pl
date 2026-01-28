@@ -58,7 +58,7 @@ phase_consumes_produces(initiating, [], []).
 phase_consumes_produces(predict, [], [predictions_out]).
 phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
 phase_consumes_produces(experience, [], [experiences]).
-phase_consumes_produces(feel, [experiences], [experiences]).
+phase_consumes_produces(feel, [experiences], [feeling, experiences]).
 phase_consumes_produces(plan, [], []). % TODO
 phase_consumes_produces(act, [], []).  % TODO
 phase_consumes_produces(assess, [], [alive]).

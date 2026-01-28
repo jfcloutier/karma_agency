@@ -4,6 +4,9 @@ Functions on wellbeing dicts.
 
 :- module(wellbeing, []).
 
+dimension(Dimension) :-
+    member(Dimension, [fullness, integrity, engagement]).
+
 % Remove a wellbeing from another
 W.sub(D) := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
     Fullness is max(W.fullness - D.fullness, 0.0),
