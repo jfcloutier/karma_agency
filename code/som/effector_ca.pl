@@ -223,7 +223,7 @@ handled(event(Topic, Payload, Parent), State, NewState) :-
 
 %%%%
 
-initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}).
+initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}).
 
 subscribed_to_global_events() :-
 	all_subscribed([executed]).

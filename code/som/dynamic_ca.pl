@@ -209,7 +209,7 @@ initial_state(Latency, Umwelt, Settings, Wellbeing, State) :-
 		 predictions_in - [], predictions_out - [], prediction_errors - [],
 		 observations - [], experiences - [], affordances - [],
 		 goal - none, plan - [],
-		 timeframes - [], timeframe_count - 1], State).
+		 timeframes - [], timeframe_count - 1, feeling - none], State).
 
 remember_level(Options, Level) :-
 	option(level(Level), Options),
@@ -306,9 +306,9 @@ removed_from_umwelt(CA, State, NewState) :-
 	subtract(Umwelt, CA, Umwelt1),
 	put_state(State, umwelt, Umwelt1, NewState).
 
-
+% Maximum fullness and integrity. Neutral engagement.
 initial_wellbeing(Wellbeing) :-
-	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}.
+	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}.
 
 overall_wellbeing(_, 1).
 
@@ -349,8 +349,8 @@ timeframe_created(State, NewState) :-
 	put_state(State1, phase, initiating, NewState).
 
 retained_timeframe(State, Timeframe) :-
-	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan} :< State,
-	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan}.
+	state{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan, wellbeing:Wellbeing, feeling:Feeling} :< State,
+	Timeframe = timeframe{observations:Observations, experiences:Experiences, goal:Goal, plan:Plan, wellbeing:Wellbeing, feeling:Feeling}.
 
 inc_timeframe_count(State, NewState) :-
 	get_state(State, timeframe_count, Count),

@@ -58,7 +58,7 @@ phase_consumes_produces(initiating, [], []).
 phase_consumes_produces(predict, [], [predictions_out]).
 phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
 phase_consumes_produces(experience, [], [experiences]).
-phase_consumes_produces(feel, [experiences], [experiences]).
+phase_consumes_produces(feel, [experiences], [feeling, experiences]).
 phase_consumes_produces(plan, [], []). % TODO
 phase_consumes_produces(act, [], []).  % TODO
 phase_consumes_produces(assess, [], [alive]).
@@ -108,8 +108,8 @@ consume_state_properties(State, [Property | Rest], NewState) :-
 % The last action is to send the CA a message with the updated state.
 started(CA, State) :-
     get_state(State, latency, Latency),
-    timebox_phase(Phase, Latency),
     Phase = State.phase,
+    timebox_phase(Phase, Latency),
     work(CA, State, Phase).
 
 % Timebox a phase but only if it is meant to be

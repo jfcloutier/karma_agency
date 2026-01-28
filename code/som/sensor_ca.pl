@@ -46,7 +46,7 @@ State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
 	* experiences - experiences from last reading - [experience{origin:object{type:sensor, id:SensorName}, kind:Sense, value:Value, confidence:1.0}] - ignore tolerance
-	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
+	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}
 
 Lifecycle:
   * Created once for a body sensor
@@ -159,7 +159,7 @@ handled(message(Message, Source), State, NewState) :-
 
 %%%%
 
-initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}).
+initial_wellbeing(wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}).
 
 subscribed_to_events() :-
 	all_subscribed([ca_terminated]).
