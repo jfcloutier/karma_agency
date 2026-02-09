@@ -71,7 +71,7 @@ ca_random_predictions(CA, UmweltCA, Predictions) :-
 apply_causal_theory(_, _, Observations, Observations).
 
 % sensor experience domain = [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:SensorCA}]
-% effector experience domain = [predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:EffectorCA), ...]
+% effector experience domain = [predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:EffectorCA), ...]
 % Make a prediction for each predictable
 random_predictions_from_predictables(CA, Predictables, Predictions) :-
     log(info, predict, "Making random predictions from domain ~p", [Predictables]),    

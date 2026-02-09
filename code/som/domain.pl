@@ -9,6 +9,9 @@ Kinds of domains: boolean, percent, enumerated list, range{from:Int1,to:Int2}
 random_domain_value(boolean, Value) :-
     random_member(Value, [true, false]).
 
+random_domain_value(count, Value) :-
+    random_member(Value, [1,2,3]).
+
 random_domain_value(percent, Value) :-
     random_between(0, 100, Value).
 

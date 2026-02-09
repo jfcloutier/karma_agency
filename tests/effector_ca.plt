@@ -45,7 +45,7 @@ test(effector_experience_domain) :-
         (query_answered(EffectorCA, experience_domain, ExperienceDomain),
          query_answered(EffectorCA, action_domain, ActionDomain),
          forall(member(Predictable, ExperienceDomain),
-                assertion(unifiable(Predictable, predictable{origin:_, kind:_, domain:boolean, by:_}, _))
+                assertion(unifiable(Predictable, predictable{origin:_, kind:_, domain:count, by:_}, _))
             ),
          forall(member(Predictable, ExperienceDomain),
             member(Predictable.kind, ActionDomain)
@@ -87,12 +87,12 @@ test(intent_executed) :-
     query_answered(EffectorCA, wellbeing, FinalWellbeing),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
-    Prediction1 = prediction{origin:object{type:effector, id:EffectorName}, kind:spin, value:false, confidence:1.0, by: Self, for:[EffectorCA]},
+    Prediction1 = prediction{origin:object{type:effector, id:EffectorName}, kind:spin, value:0, confidence:1.0, by: Self, for:[EffectorCA]},
 	message_sent(EffectorCA, prediction(Prediction1)),
     % Get a prediction error message
-	get_matching_message(prediction_error{prediction:Prediction1, actual_value:true, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
+	get_matching_message(prediction_error{prediction:Prediction1, actual_value:1, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
     % Correctly predict the experience that reverse_spin was executed
-    Prediction2 = prediction{origin:object{type:effector, id:EffectorName}, kind:reverse_spin, value:true, confidence:1.0, by: Self, for:[EffectorCA]},
+    Prediction2 = prediction{origin:object{type:effector, id:EffectorName}, kind:reverse_spin, value:1, confidence:1.0, by: Self, for:[EffectorCA]},
 	message_sent(EffectorCA, prediction(Prediction2)),
     % Don't get an error prediction message
 	\+ get_matching_message(prediction_error{prediction:Prediction2, value:_, by:_}, message(prediction_error(_), EffectorCA), 1),

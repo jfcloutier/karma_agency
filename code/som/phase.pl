@@ -53,11 +53,17 @@ next_phase(plan, act).
 next_phase(act, assess).
 next_phase(assess, bind).
 
-% The state properties consumes (empties) and produces (replaces)
+% The state properties consumed and produced by each phase
+
+% None consumed or produced
 phase_consumes_produces(initiating, [], []).
-phase_consumes_produces(predict, [], [predictions_out]).
+% Out predictions are produced from consumed prior observations
+phase_consumes_produces(predict, [observation], [predictions_out]).
+% Observations produced from the predictions sent and prediction errors received
 phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
-phase_consumes_produces(experience, [], [experiences]).
+% Experiences are replaced by new experiences given prior experiences
+phase_consumes_produces(experience, [experiences], [experiences]).
+% An overall feeling is computed and experiences are replaced by felt experiences
 phase_consumes_produces(feel, [experiences], [feeling, experiences]).
 phase_consumes_produces(plan, [], []). % TODO
 phase_consumes_produces(act, [], []).  % TODO

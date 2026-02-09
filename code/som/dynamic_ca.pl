@@ -322,6 +322,7 @@ merge_phase_state_properties([], _, State, State).
 
 merge_phase_state_properties([Property | Rest], PhaseState, State, NewState) :-
 	get_state(PhaseState, Property, PropertyValue),
+	% Duplicates are removed
 	put_state(State, Property, PropertyValue, State1),
 	Phase = PhaseState.phase,
 	log(info, dynamic_ca, "Merged state property ~w produced by phase ~w:  ~p", [Property, Phase, PropertyValue]),

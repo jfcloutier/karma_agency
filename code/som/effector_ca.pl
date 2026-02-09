@@ -64,7 +64,7 @@ Queries:
     * level - 0
 	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> always responds with [predictable{ origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:CA}, ...] 
+    * experience_domain -> always responds with [predictable{ origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:CA}, ...] 
 		- Action is an action the effector can execute
 	* action_domain -> the actions the effector_ca can take
 	* wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
@@ -155,7 +155,7 @@ handled(query(experience_domain), State, ExperienceDomain) :-
 	self(Name),
 	get_state(State, action_domain, ActionDomain),
 	effector_name(State, EffectorName),
-	bagof(predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:boolean, by:Name}, member(Action, ActionDomain), ExperienceDomain).
+	bagof(predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:Name}, member(Action, ActionDomain), ExperienceDomain).
 
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
@@ -172,7 +172,7 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, confidence:Confidence, by: CA, for:CAs}
+% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Count, confidence:Confidence, by: CA, for:CAs}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
 	static_ca:prediction_handled(Prediction, Parent, State, NewState).
 
@@ -269,14 +269,27 @@ experiences_from_observations(State, Experiences) :-
 	log(debug, effector_ca, "~@ is getting experiences from observations in ~p", [self, State]),
 	get_state(State, observations, Observations),
 	effector_name(State, EffectorName),
-	experiences_from_executions(Observations, EffectorName, Experiences),
+	experiences_from_executions(Observations, EffectorName, counts{}, Experiences),
 	log(debug, effector_ca, "~@ experiences ~p from observations ~p", [self, Experiences, Observations]).
 
-experiences_from_executions([], _, []).
-experiences_from_executions([executed(Action) | Rest], EffectorName, [Experience | OtherExperiences]) :-
+% Counts is #{Action:Count, ...}
+experiences_from_executions([], EffectorName, Counts, Experiences) :-
 	self(EffectorCA),
-	Experience = experience{origin:object{type:effector, id:EffectorName}, kind:Action, value:true, confidence: 1.0, by:EffectorCA},
-	experiences_from_executions(Rest, EffectorName, OtherExperiences).
+	findall(Experience, 
+		    (dict_keys(Counts, Actions), 
+			 member(Action, Actions), 
+			 Experience = experience{origin:object{type:effector, id:EffectorName}, kind:Action, value:Counts.Action, confidence: 1.0, by:EffectorCA}
+			),
+			Experiences).
+
+experiences_from_executions([executed(Action) | Rest], EffectorName, Counts, Experiences) :-
+	(get_dict(Action, Counts, Count) ->
+		Count1 is Count + 1,
+		Counts1 = Counts.put(Action, Count1)
+		;
+		Counts1 = Counts.put(Action, 1)
+	),
+	experiences_from_executions(Rest, EffectorName, Counts1, Experiences).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.
