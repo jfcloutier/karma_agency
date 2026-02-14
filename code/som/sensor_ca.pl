@@ -25,7 +25,7 @@ Messages:
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by: CA, for:CAs}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, priority:Priority, confidence:Confidence, by: CA}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -66,7 +66,6 @@ Lifecycle:
 :- use_module(actors(worker)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
-:- use_module(agency(som/static_ca)).
 :- use_module(agency(som/wellbeing)).
 
 %! name_from_sensor(+Sensor, -Name) is det
@@ -133,11 +132,12 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([prediction - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA, for:CAs}
+% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
+    % A prediction causes a sensor read which updates experiences
     experiences_updated(Prediction, State, State1),
- 	static_ca : prediction_handled(Prediction, Parent, State1, NewState).
+ 	prediction_handled(Prediction, State1, NewState).
 
 handled(message(Message, Source), State, NewState) :-
    ca_support: handled(message(Message, Source), State, NewState).
@@ -179,7 +179,7 @@ sense_url(State, SenseURL) :-
 % Read the sensor value, update wellbeing, update experience in latest reading.
 experiences_updated(Prediction, State, NewState) :-
     log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
-    prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName} :< Prediction,
+    prediction_is_meaningful(Prediction, State),
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     % Ignore tolerance and timestamp in reading for now
@@ -193,6 +193,14 @@ experiences_updated(Prediction, State, NewState) :-
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
     put_state(State1, wellbeing, UpdatedWellbeing, NewState),
     log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).
+
+prediction_is_meaningful(Prediction, _) :-
+    is_empty_prediction(Prediction).
+
+prediction_is_meaningful(Prediction, State) :-
+    prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName} :< Prediction,
+    sense_name(State, SenseName),
+    sensor_name(State, SensorName).
 
 sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     sense_url(State, Url),

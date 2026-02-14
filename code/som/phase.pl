@@ -58,7 +58,7 @@ next_phase(assess, bind).
 % None consumed or produced
 phase_consumes_produces(initiating, [], []).
 % Out predictions are produced from consumed prior observations
-phase_consumes_produces(predict, [observation], [predictions_out]).
+phase_consumes_produces(predict, [observations], [predictions_out]).
 % Observations produced from the predictions sent and prediction errors received
 phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
 % Experiences are replaced by new experiences given prior experiences

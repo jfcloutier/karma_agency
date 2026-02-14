@@ -39,7 +39,7 @@ Messages:
 * In from a parent
 	* `ready_actuation(Goal)` - a parent communicates an actuation it wants the effector CA to execute
 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
-* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, confidence:Confidence, by: CA, for:CAs]}
+* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, priority:Priority, confidence:Confidence, by: CA]}
 
 * Out to a parent	
 	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
@@ -107,7 +107,6 @@ effector CA recomputes its observations and experiences.
 :- use_module(utils(logger)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
-:- use_module(agency(som/static_ca)).
 
 name_from_effector(Effector, Name) :-
 	atomic_list_concat([effector, Effector.id], ':', Name).
@@ -172,9 +171,9 @@ handled(message(adopted, Parent), State, NewState) :-
     all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
 
-% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Count, confidence:Confidence, by: CA, for:CAs}
-handled(message(prediction(Prediction), Parent), State, NewState) :-
-	static_ca:prediction_handled(Prediction, Parent, State, NewState).
+% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Count, confidence:Confidence, by: CA}
+handled(message(prediction(Prediction), _), State, NewState) :-
+	prediction_handled(Prediction, State, NewState).
 
 handled(message(ready_actuation(Goal), Parent), State, NewState) :-
 	goal_action(Goal, State, Action),

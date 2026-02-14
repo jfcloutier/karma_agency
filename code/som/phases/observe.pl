@@ -1,5 +1,5 @@
 /*
-Merge predictions and prediction errors into new observations.
+Merge correct predictions and effective prediction errors into new observations.
 */
 
 :- module(observe, []).
@@ -30,84 +30,107 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
 
 observed(CA, State, Observations) :-
+    aggregate_prediction_errors(State, Pairs),
+    umwelt_size(State, UmweltSize),
+    correct_predictions(Pairs, UmweltSize,CorrectPredictions),
+    effective_prediction_errors(Pairs, CorrectPredictions, EffectivePredictionErrors),
+    predictions_to_observations(CorrectPredictions, CA, Observations1),
+    prediction_errors_to_observations(EffectivePredictionErrors, CA, Observations2),
+    append(Observations1, Observations2, Observations),
+    log(info, observe, "(~w) Observed ~p", [CA, Observations]).
+
+umwelt_size(State, Size) :-
+    get_state(State, umwelt, Umwelt),
+    length(Umwelt, Size).
+
+% Pair up predictions and their associated prediction errors if any
+% Ignore an empty prediction, using predictions in prediction errors instead to replace it
+aggregate_prediction_errors(State, Pairs) :-
+    get_state(State, prediction_errors, PredictionErrors),
+    effective_predictions(State, EffectivePredictions),
+    pair_up(EffectivePredictions, PredictionErrors, [], Pairs).
+
+% Find all non-empty prediction made and the implied predictions made via an empty prediction
+effective_predictions(State, EffectivePredictions) :-
     get_state(State, predictions_out, Predictions),
     get_state(State, prediction_errors, PredictionErrors),
-    high_confidence_prediction_errors(PredictionErrors, [], TopPredictionErrors),
-    log(info, observe, "~w got high confidence prediction errors ~p to predictions ~p", [CA, TopPredictionErrors, Predictions]),
-    observations_from_predictions(Predictions, TopPredictionErrors, CA, Observations).
+    findall(Prediction, (member(Prediction, Predictions), \+ is_empty_prediction(Prediction)), FullPredictions),
+    findall(ImpliedPrediction, 
+        (member(PredictionError, PredictionErrors), ImpliedPrediction = PredictionError.prediction, ImpliedPrediction.value == unknown), 
+        ImpliedPredictions),
+    sort(ImpliedPredictions, UniqueImpliedPredictions),
+    append(FullPredictions, UniqueImpliedPredictions, EffectivePredictions).
 
-% Resolve conflicting prediction errors by keeping the most confident one.
-high_confidence_prediction_errors([], PredictionErrors, PredictionErrors).
+pair_up([], _, Pairs, Pairs).
 
-high_confidence_prediction_errors([PredictionError | Rest], Acc, TopPredictionErrors) :-
-    findall(OtherPredictionError, 
-        (member(OtherPredictionError, Rest), conflicting_prediction_errors(PredictionError, OtherPredictionError)), 
-        ConflictingPredictionErrors),
-    % No need to randomize since order in which prediction errors are received and accumulated is non-deterministic
-    highest_confidence_prediction_error([PredictionError | ConflictingPredictionErrors], Resolution),
-    subtract(Rest, ConflictingPredictionErrors, Others),
-    high_confidence_prediction_errors(Others, [Resolution | Acc], TopPredictionErrors).
+pair_up([Prediction | Rest], PredictionErrors, Acc, Pairs) :-
+    findall(PredictionError,
+        (member(PredictionError, PredictionErrors), Prediction = PredictionError.prediction),
+    RelatedPredictionErrors),
+    pair_up(Rest, PredictionErrors, [Prediction - RelatedPredictionErrors | Acc], Pairs).
 
-% Prediction errors conflict if they are about possibly conflicting predictions
-conflicting_prediction_errors(PredictionError, OtherPredictionError) :-
-    prediction{origin:Origin, kind:Kind} :< PredictionError.prediction,
-    prediction{origin:Origin, kind:Kind} :< OtherPredictionError.prediction.
+correct_predictions(Pairs, UmweltSize,CorrectPredictions) :-
+    findall(CorrectPrediction, 
+        (member(Prediction-PredictionErrors, Pairs), correct_prediction(Prediction, PredictionErrors, UmweltSize, CorrectPrediction)), 
+        CorrectPredictions).
 
-% Find the most confident prediction error among a conflicting list
-highest_confidence_prediction_error([PredictionError1 | Rest], PredictionError) :-
-    highest_confidence_prediction_error(Rest, PredictionError1, PredictionError).
-
-highest_confidence_prediction_error([], PredictionError, PredictionError).
-
-highest_confidence_prediction_error([Candidate | Rest], BestSoFar, PredictionError) :-
-    Candidate.confidence > BestSoFar.confidence ->
-        highest_confidence_prediction_error(Rest, Candidate, PredictionError) 
-        ;
-        highest_confidence_prediction_error(Rest, BestSoFar, PredictionError).
-
-observations_from_predictions(Predictions, PredictionErrors, CA, Observations) :-
-    observations_from_predictions(Predictions, PredictionErrors, CA, [], Observations).
-
-observations_from_predictions([], _, _, Observations, Observations).
-
-observations_from_predictions([Prediction | Rest], PredictionErrors, CA, Acc, Observations) :-
-    observation_from_prediction(Prediction, PredictionErrors, CA, Observation),
-    observations_from_predictions(Rest, PredictionErrors, CA, [Observation | Acc], Observations).
-
-observation_from_prediction(Prediction, PredictionErrors, CA, Observation) :-
-    member(PredictionError, PredictionErrors),
-    contradicted_by(Prediction, PredictionError),
+% A prediction is correct if 
+%   it is not an empty prediction
+%   it did not receive prediction errors
+%   it did NOT receive unknown-valued error from its entire umwelt
+%   it received only valued prediction errors of lower confidence (confidence reduced to the most confident one)
+correct_prediction(Prediction, _, _, _) :-
+    Prediction.value == unknown,
     !,
-    contradiction_to_observation(Prediction, PredictionError, CA, Observation).
+    fail.
 
-observation_from_prediction(Prediction, _, CA, Observation) :-
-    prediction_to_observation(Prediction, CA, Observation).
+correct_prediction(Prediction, [], _, Prediction).
 
-% A prediction error more or equally confident than the contradicted prediction overrides the prediction and keeps the prediction error's confidence.
-% A prediction error less confident than the prediction erodes the confidence in the contradicted prediction.
-contradiction_to_observation(Prediction, PredictionError, CA, Observation) :-
-    PredictionError.confidence >= Prediction.confidence ->
-        prediction_error_to_observation(PredictionError, CA, Observation1),
-        Observation = Observation1.put([of=Prediction.for])
-    ;
-        Confidence is Prediction.confidence - PredictionError.confidence,
-        prediction_to_observation(Prediction, CA, Observation1),
-        Observation = Observation1.put([confidence=Confidence]).
- 
-contradicted_by(Prediction, PredictionError) :-
-    WrongPrediction = PredictionError.prediction,
-    prediction{origin:Origin, kind:Kind} :< WrongPrediction,
-    prediction{origin:Origin, kind:Kind} :< Prediction.
+correct_prediction(_, PredictionErrors, UmweltSize, _) :-
+    findall(PredictionError, (member(PredictionError, PredictionErrors), PredictionError.actual_value == unknown), Unknowns),
+    length(Unknowns, UmweltSize),
+    !,
+    fail.
+
+correct_prediction(Prediction, PredictionErrors, _, CorrectPrediction) :-
+    findall(PredictionError, (member(PredictionError, PredictionErrors), PredictionError.actual_value \= unknown), ValuedPredictionErrors),
+    (length(ValuedPredictionErrors, 0) ->
+        CorrectPrediction = Prediction
+        ;
+        sort(confidence, @>, ValuedPredictionErrors, [TopPredictionError | _]),
+        Prediction.confidence > TopPredictionError.confidence,
+        CorrectPrediction = Prediction.put(confidence, TopPredictionError.confidence)
+    ).
+
+% A prediction error is effective if
+%   it is valued and contests a prediction with higher (and the highest) confidence)
+effective_prediction_errors(Pairs, CorrectPredictions, EffectivePredictionErrors) :-
+    findall(PredictionErrors,
+        (member(Prediction-PredictionErrors, Pairs), \+ member(Prediction, CorrectPredictions)),
+     PredictionErrorGroups),
+     findall(SurvivingPredictionError,
+        (member(PredictionErrorGroup, PredictionErrorGroups), sort(confidence, @>, PredictionErrorGroup, [SurvivingPredictionError | _])),
+        EffectivePredictionErrors).
+
+predictions_to_observations(Predictions, CA, Observations) :-
+    findall(Observation, 
+        (member(Prediction, Predictions), prediction_to_observation(Prediction, CA, Observation)), 
+        Observations).
+
+prediction_errors_to_observations(PredictionErrors, CA, Observations) :-
+    findall(Observation, 
+        (member(PredictionError, PredictionErrors), prediction_error_to_observation(PredictionError, CA, Observation)), 
+        Observations).
 
 prediction_to_observation(Prediction, CA, Observation) :-
-    prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, for:UmweltCAs} :< Prediction,
-    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs},
+    prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA} :< Prediction,
+    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA},
     observation_id(ObservationWithoutId, Id),
     Observation = ObservationWithoutId.put(id, Id).
 
 prediction_error_to_observation(PredictionError, CA, Observation) :-
-    prediction{origin:Origin, kind:Kind, for:UmweltCAs} :< PredictionError.prediction,
-    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA, of:UmweltCAs},
+    prediction{origin:Origin, kind:Kind} :< PredictionError.prediction,
+    ObservationWithoutId = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA},
     observation_id(ObservationWithoutId, Id),
     Observation = ObservationWithoutId.put(id, Id).
 

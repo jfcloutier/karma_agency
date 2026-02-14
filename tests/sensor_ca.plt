@@ -17,6 +17,7 @@ run_tests(sensor_ca).
 :- use_module(actors(pubsub)).
 :- use_module(agency(agent)).
 :- use_module(agency(som)).
+:- use_module(agency(som/ca_support)).
 
 :- set_log_level(info).
 
@@ -51,9 +52,20 @@ test(inaccurate_prediction) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:contact, value:pressed, confidence:1.0, by: Self, for:[SensorCA]},
+	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:contact, value:pressed, confidence:1.0, by: Self},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
+	assertion(ActualValue == released).
+
+test(empty_prediction) :-
+	SensorCA = 'sensor:touch-in1:contact',
+	message_sent(SensorCA, adopted),
+	query_answered(SensorCA, parents, Parents),
+	thread_self(Self),
+	assertion(member(Self, Parents)),
+	empty_prediction(Self, Prediction),
+	message_sent(SensorCA, prediction(Prediction)),
+	get_matching_message(prediction_error{actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue == released).
 
 test(experience_acquired) :-
@@ -63,7 +75,7 @@ test(experience_acquired) :-
 	query_answered(SensorCA, parents, Parents),
 	thread_self(Self),
 	assertion(member(Self, Parents)),
-	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:color, value:red, confidence:1.0, by: Self, for:[SensorCA]},
+	Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:color, value:red, confidence:1.0, by: Self},
 	message_sent(SensorCA, prediction(Prediction)),
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue \== red),

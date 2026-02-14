@@ -64,7 +64,7 @@ Messages:
 	* `can_actuate(Goals)` - responding to intent events - the dynamic CA commits (until intent completed) to realizing each of these goals (can be empty) 
 	                       - a goal is an experience the dynamic CA is requested to initiate, persist or terminate
 	* `actuation_ready(Goal)` responding to ready_actuation message - the dynamic CA has successfully and transitively primed the body for execution of the goal
-	* `prediction(Prediction)` - Prediction = prediction{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by: CA, for:CAs} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
+	* `prediction(Prediction)` - Prediction = prediction{origin:object{type:Type, id:ID}, kind:Kind, value:Value, priority:Priority, confidence:Confidence, by: CA} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 		
 * In from a parent
@@ -253,8 +253,8 @@ handled(message(phase_done(PhaseState, WellbeingDeltas), _), State, NewState) :-
 	).
 
 handled(message(prediction(Prediction), _), State, NewState) :-
-	% TODO - Maybe reply with a prediction error
-	acc_state(State, predictions_in, Prediction, NewState).
+	prediction_handled(Prediction, State, State1),
+	acc_state(State1, predictions_in, Prediction, NewState).
 
 handled(message(prediction_error(PredictionError), _), State, NewState) :-
 	acc_state(State, prediction_errors, PredictionError, NewState).

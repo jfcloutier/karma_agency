@@ -1,8 +1,21 @@
 /*
-Make predictions about future observations from current observations given a causal theory.
+Make predictions about future observations.
 
-If there is no causal theory (yet), predict the previous observations.
-If there are no previous observations, copy all experiences in the umwelt as initial observations.
+The CA collects all the predictions it could make and drops those that fall too far below the average confidence of the lot (e.g. below half average).
+
+The sources of predictions, in decreasing order of priority, are:
+
+* Inferring predictions by applying the causal theory to prior observations
+* Extrapolating from prior experiences
+* Predicting unchanged prior observations
+* Making an empty prediction (only if no other prediction can be made)
+
+When uncontested predictions conflict (different values are predicted), the one from the highest priority source will be made.
+When conflicting predictions have equal priority, the one with highest confidence is the one that will be made.
+
+The CA collects all the predictions it could make and drops the "minor" ones, those that fall too far below the average confidence of the lot (e.g. below half average).
+
+prediction{origin:Origin, kind:Kind, value:Value, priority:Priority, confidence:Confidence, by: CA}
 */
 
 :- module(predict, []).
@@ -10,8 +23,8 @@ If there are no previous observations, copy all experiences in the umwelt as ini
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/phase)).
-:- use_module(agency(som/domain)).
 :- use_module(agency(som/wellbeing)).
+:- use_module(agency(som/ca_support)).
 
 % No work done before units of work
 before_work(_, State, State).
@@ -26,78 +39,111 @@ after_work(_, State, State).
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
 unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     log(info, predict, "Predicting for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]),
-    predictions(CA, State, Predictions),
-    resolve_conflicting_predictions(Predictions, [], Predictions1),
-    log(info, predict, "~w made predictions ~p", [CA, Predictions1]),
-    predictions_sent_to_umwelt(CA, Predictions1),
-    StateDeltas = [predictions_out-Predictions1],
+    potential_predictions(CA, State, AllPredictions),
+    resolve_conflicting_predictions(AllPredictions, [], Predictions1),
+    major_predictions(Predictions1, Predictions),
+    log(info, predict, "~w made major predictions ~p", [CA, Predictions]),
+    predictions_sent_to_umwelt(CA, State.umwelt, Predictions),
+    StateDeltas = [predictions_out-Predictions],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w", [CA]).
 
-predictions(CA, State, Predictions) :-
-    get_state(State, umwelt, Umwelt),
-    get_state(State, observations, Observations),
+% Find all potential predictions
+potential_predictions(CA, State, Predictions) :-
+    predictions_from_causal_theory(CA, State, Predictions1),
+    predictions_from_experiences(CA, State, Predictions2),
+    predictions_from_observations(CA, State, Predictions3),
+    flatten([Predictions1, Predictions2, Predictions3], AllPredictions),
+    (length(AllPredictions, 0) ->
+        empty_prediction(CA, EmptyPrediction),
+        Predictions = [EmptyPrediction]
+        ;
+        Predictions = AllPredictions
+    ),
+    log(info, predict, "~w could predict ~p", [CA, Predictions]).
+
+% Apply causal theory to prior observations to infer expected observations (priority 3))
+predictions_from_causal_theory(CA, State, Predictions) :-
     get_state(State, causal_theory, CausalTheory),
-    predictions_from_observations(CA, CausalTheory, Observations, Umwelt, Predictions),
-    log(info, predict, "~w predicts ~p", [CA, Predictions]).
-
-% No observations yet. Guess randomly from experience domains.
-predictions_from_observations(CA, _, [], Umwelt, Predictions) :-
-    !,
-    umwelt_random_predictions(CA, Umwelt, [], Predictions).
-
-% No causal theory yet; predicting current observations.
-predictions_from_observations(CA, none, Observations, _, Predictions) :-
-    observations_as_predictions(CA, Observations, Predictions).
-
-% Apply causal theory to predict the next observations.
-predictions_from_observations(CA, CausalTheory, Observations, _, Predictions) :-
+    get_state(State, observations, Observations),
     apply_causal_theory(CA, CausalTheory, Observations, NextObservations),
-    observations_as_predictions(CA, NextObservations, Predictions).
+    observations_as_predictions(CA, NextObservations, 3, Predictions).
 
-umwelt_random_predictions(_, [], Acc, Acc).
+% TODO
+apply_causal_theory(_, _, _, []).
 
-umwelt_random_predictions(CA, [UnweltCA | Rest], Acc, UmweltPredictions) :-
-    log(info, predict, "Making random predictions for ~w", [UnweltCA]),
-    ca_random_predictions(CA, UnweltCA, Predictions),
-    append(Acc, Predictions, Acc1),
-    umwelt_random_predictions(CA, Rest, Acc1, UmweltPredictions).
+% Make predictions from prior experiences (priority 2)
+predictions_from_experiences(CA, State, Predictions) :-
+    get_state(State, experiences, Experiences),
+    findall(PredictionsFromExperience, 
+        (member(Experience, Experiences), predictions_from_experience(CA, State, Experience, PredictionsFromExperience)), 
+        Predictions1),
+    flatten(Predictions1, Predictions).
 
-ca_random_predictions(CA, UmweltCA, Predictions) :-
-    query_answered(UmweltCA, experience_domain, Predictables),
-    random_predictions_from_predictables(CA, Predictables, Predictions).
+% Predictions given a prior count or more experience
+predictions_from_experience(CA, State, Experience, Predictions) :-
+    member(Experience.kind, [count, more]),
+    object{support: ObservationIds} :< Experience.origin,
+    observations_with_ids(State, ObservationIds, Observations),
+    observations_as_predictions(CA, Observations, 2, Predictions).
 
-% TODO - Applying a causal theory to current observations produces expected observations (caused and retained) to be converted into predictions
-apply_causal_theory(_, _, Observations, Observations).
+% Predictions given a prior trend experience
+predictions_from_experience(CA, State, Experience, [Prediction]) :-
+    Experience.kind == trend,
+    expected_trending_observation(State, Experience, Observation),
+    observation_as_prediction(CA, Observation, 2, Prediction).
 
-% sensor experience domain = [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:SensorCA}]
-% effector experience domain = [predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:EffectorCA), ...]
-% Make a prediction for each predictable
-random_predictions_from_predictables(CA, Predictables, Predictions) :-
-    log(info, predict, "Making random predictions from domain ~p", [Predictables]),    
-    setof(Prediction,
-          (member(Predictable, Predictables),
-          predictable{origin:Origin, kind:Kind, by:UmweltCA} :< Predictable,
-          % The value of a predictable
-          random_domain_value(Predictable.domain, Value),
-          % A random prediction is done with full, blind confidence because no evidence exists to attenuate it
-          Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:1.0, by: CA, for:[UmweltCA]}
-          ),
-          Predictions).
+expected_trending_observation(State, Experience, Observation) :-
+    member(Experience.value, [up_stopped, down_stopped]),
+    % The second support observation is the latest
+    object{support:[_,ObservationId]} :< Experience,
+    observation_with_id(State, ObservationId, Observation).
+
+expected_trending_observation(State, Experience, ExpectedObservation) :-
+    member(Experience.value, [up, down]),
+    object{support:[PriorObservationId, ObservationId]} :< Experience,
+    observation_with_id(State, ObservationId, Observation),
+    observation_with_id(State, PriorObservationId, PriorObservation),
+    Delta is Observation.value - PriorObservation.value,
+    ExpectedValue is Observation.value + Delta,
+    ExpectedObservation = Observation.put(value, ExpectedValue).
+
+% Predict prior observations (priority 1)
+predictions_from_observations(CA, State, Predictions) :-
+    get_state(State, observations, Observations),
+    observations_as_predictions(CA, Observations, 1, Predictions).
 
 % Translate expected observations into predictions.
-observations_as_predictions(CA, Observations, Predictions) :-
-    findall(Prediction, (member(Observation, Observations), observation_as_prediction(CA, Observation, Prediction)), Predictions).
+observations_as_predictions(CA, Observations, Priority, Predictions) :-
+    findall(Prediction, (member(Observation, Observations), observation_as_prediction(CA, Observation, Priority, Prediction)), Predictions).
         
 % Turn an observation into a prediction
-observation_as_prediction(CA, Observation, Prediction) :-
-    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA, of:UmweltCAs} :< Observation,
-    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by: CA, for:UmweltCAs}.
+observation_as_prediction(CA, Observation, Priority, Prediction) :-
+    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence} :< Observation,
+    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, priority:Priority, by: CA}.
+
+observations_with_ids(_, [], []).
+
+observations_with_ids(State, [Id | OtherIds], Observations) :-
+    observation_with_id(State, Id, Observation) ->
+        observations_with_ids(State, OtherIds, OtherObservations),
+        Observations = [Observation | OtherObservations]
+        ;
+        observations_with_ids(State, OtherIds, Observations).
+
+observation_with_id(State, Id, Observation) :-
+    get_state(State, observations, Observations),
+    member(Observation, Observations),
+    Id == Observation.id, !.
+
+observation_with_id(State, Id, Observation) :-
+    member(Timeframe, State.timeframes),
+    member(Observation, Timeframe.observations),
+    Id == Observation.id, !.
 
 % Resolve conflicting predictions.
 % Two predictions conflict if they have the same name and are about the same object
-% The one with greater confidence wins, else pick one randomly.
-% When resolving conflicting predictions into one, combine who they are for.
+% The one with greater priority and then confidence wins, else pick one randomly.
 resolve_conflicting_predictions([], Predictions, Predictions).
 resolve_conflicting_predictions([Prediction | Rest], Acc, ResolvedPredictions) :-
     findall(OtherPrediction, (member(OtherPrediction, Rest), conflicting_predictions(Prediction, OtherPrediction)), ConflictingPredictions),
@@ -107,10 +153,10 @@ resolve_conflicting_predictions([Prediction | Rest], Acc, ResolvedPredictions) :
 
 resolve_conflicts([Prediction], Prediction).
 
-resolve_conflicts(ConflictingPredictions, Resolution) :-
-    high_confidence_prediction(ConflictingPredictions, Prediction),
-    setof(For, (member(P, ConflictingPredictions), For = P.for), AllFor),
-    Resolution = Prediction.put([for = AllFor]).
+% Select randomly a prediction with the highest priority else confidence
+resolve_conflicts(ConflictingPredictions, Prediction) :-
+    random_permutation(ConflictingPredictions, Permutation),
+    top_prediction(Permutation, Prediction).
 
 % Predictions conflict if they have the same name (the name of the predicted experience)
 % and object (what the prediction is about e.g. color, distance, luminance, count, more, trend)
@@ -118,28 +164,29 @@ conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{origin:Origin, kind:Kind} :< Prediction,
     prediction{origin:Origin, kind:Kind} :< OtherPrediction.
 
-% Select randomly a prediction with the highest confidence
-high_confidence_prediction(Predictions, Prediction) :-
-    random_permutation(Predictions, Permutation),
-    highest_confidence_prediction(Permutation, Prediction).
+top_prediction(ConflictingPredictions, TopPrediction) :-
+   max_priority(ConflictingPredictions, MaxPriority),
+   findall(Prediction, (member(Prediction, ConflictingPredictions), Prediction.priority == MaxPriority), PriorityPredictions),
+   sort(confidence, @>, PriorityPredictions, [TopPrediction | _]).
 
-highest_confidence_prediction([Candidate | Rest], Prediction) :-
-   highest_confidence_prediction(Rest, Candidate, Prediction). 
+max_priority(ConflictingPredictions, MaxPriority) :-
+    setof(Priority, (member(Prediction, ConflictingPredictions), Priority = Prediction.priority), Priorities),
+    max_list(Priorities, MaxPriority).
 
-highest_confidence_prediction([], Prediction, Prediction).
+% Drop predictions with significantly below-average confidence (less than half the average confidence)
+major_predictions(Predictions, MajorPredictions) :-
+    findall(Confidence, (member(Prediction, Predictions), Confidence = Prediction.confidence), Confidences),
+    sum_list(Confidences, Sum),
+    length(Confidences, N),
+    Average is Sum / N,
+    Cutoff is Average / 2,
+    findall(Prediction, (member(Prediction, Predictions), Prediction.confidence >= Cutoff), MajorPredictions).
 
-highest_confidence_prediction([Candidate | Rest], BestSoFar, Prediction) :-
-    Candidate.confidence > BestSoFar.confidence ->
-        highest_confidence_prediction(Rest, Candidate, Prediction) 
-        ;
-        highest_confidence_prediction(Rest, BestSoFar, Prediction).
-  
-predictions_sent_to_umwelt(CA, [Prediction | Rest]) :-
-    For = Prediction.for, 
-    forall(member(UmweltCA, For), prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA)),
-    predictions_sent_to_umwelt(CA, Rest).
+predictions_sent_to_umwelt(_, _, []).
 
-predictions_sent_to_umwelt(_, []).
+predictions_sent_to_umwelt(CA, Umwelt, [Prediction | Rest]) :-
+    forall(member(UmweltCA, Umwelt), prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA)),
+    predictions_sent_to_umwelt(CA, Umwelt, Rest).
 
 prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA) :-
     message_sent(UmweltCA, prediction(Prediction), CA),

@@ -17,6 +17,7 @@ run_tests(effector_ca).
 :- use_module(actors(pubsub)).
 :- use_module(agency(agent)).
 :- use_module(agency(som)).
+:- use_module(agency(som/ca_support)).
 
 :- set_log_level(info).
 
@@ -87,13 +88,19 @@ test(intent_executed) :-
     query_answered(EffectorCA, wellbeing, FinalWellbeing),
     assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
     % Incorrectly predict the experience that spin was not executed
-    Prediction1 = prediction{origin:object{type:effector, id:EffectorName}, kind:spin, value:0, confidence:1.0, by: Self, for:[EffectorCA]},
+    Prediction1 = prediction{origin:object{type:effector, id:EffectorName}, kind:spin, value:0, confidence:1.0, by: Self},
 	message_sent(EffectorCA, prediction(Prediction1)),
     % Get a prediction error message
 	get_matching_message(prediction_error{prediction:Prediction1, actual_value:1, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
     % Correctly predict the experience that reverse_spin was executed
-    Prediction2 = prediction{origin:object{type:effector, id:EffectorName}, kind:reverse_spin, value:1, confidence:1.0, by: Self, for:[EffectorCA]},
+    Prediction2 = prediction{origin:object{type:effector, id:EffectorName}, kind:reverse_spin, value:1, confidence:1.0, by: Self},
 	message_sent(EffectorCA, prediction(Prediction2)),
     % Don't get an error prediction message
-	\+ get_matching_message(prediction_error{prediction:Prediction2, value:_, by:_}, message(prediction_error(_), EffectorCA), 1),
+	\+ get_matching_message(prediction_error{prediction:Prediction2, actual_value:_, by:_}, message(prediction_error(_), EffectorCA), 1),
+    % Send an empty prediction
+    empty_prediction(Self, EmptyPrediction),
+	message_sent(EffectorCA, prediction(EmptyPrediction)),
+    % Get two prediction error messages
+	get_matching_message(prediction_error{prediction: prediction{origin:_, confidence:0, priority:0, kind:spin, value:unknown, by:_}, actual_value:1, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
+    get_matching_message(prediction_error{prediction: prediction{origin:_, confidence:0, priority:0, kind:reverse_spin, value:unknown, by:_}, actual_value:1, by:EffectorCA}, message(prediction_error(_), EffectorCA)),
     published(intent_completed, [id = Id, executed = true]).

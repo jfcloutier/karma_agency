@@ -2,7 +2,7 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_wellbeing/3]).
+:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
@@ -36,9 +36,6 @@ from_parent(Source, State) :-
     get_state(State, parents, Parents),
     member(Source, Parents).
 
-same_experience_value(Value, Value) :-
-    Value \== unknown.
-
 wellbeing_transfered(State, WellbeingTransfer, NewState) :-
     get_state(State, wellbeing, Wellbeing),
 	option(fullness(Fullness), Wellbeing),
@@ -66,7 +63,8 @@ object_hash(Object, Hash) :-
     object{type:Type, id:Id} :< Object,
     atomic_list_concat([Type, Id], ":", Data),
     sha_hash(Data, Sha, []),
-    hash_atom(Sha, Hash).
+    hash_atom(Sha, Hash),
+    !.
 
 object_hash(Object, _) :-
     log(error, ca_support, "@@@ object_hash of ~p", [Object]),
@@ -107,6 +105,75 @@ apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
 	Integrity is max(Wellbeing.integrity + WellbeingDeltas.integrity, 0),
 	Engagement is max(Wellbeing.engagement + WellbeingDeltas.engagement, 0),
 	NewWellbeing = wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}.
+
+empty_prediction(CA, Prediction) :-
+    Prediction = prediction{origin:unknown, kind:unknown, value:unknown, confidence:0, priority:0, by:CA}.
+
+% Whether this is an empty prediction
+is_empty_prediction(Prediction) :-
+	prediction{origin:unknown, kind:unknown, value:unknown} :< Prediction.
+
+prediction_about_experience(Prediction, State, Experience) :-
+    prediction{origin:Origin, kind:Kind} :< Prediction,
+    get_state(State, experiences, Experiences),
+    member(Experience, Experiences),
+    experience{origin:Origin, kind:Kind} :< Experience.
+
+% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, priority:Priority, confidence:Confidence, by: CA} - Confidence is between 0.0 and 1.0
+% Experience = experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
+% PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
+% No state change for the moment
+prediction_handled(Prediction, State, State) :-
+	is_empty_prediction(Prediction),
+    log(info, ca_support, "~@ is handling empty prediction", [self]),
+	!,
+	get_state(State, experiences, Experiences),
+	findall(PredictionError, 
+		    (member(Experience, Experiences), prediction_error_from_experience(Experience, Prediction, PredictionError)), 
+		    PredictionErrors),
+	prediction_errors_sent(PredictionErrors, Prediction.by).
+
+prediction_handled(Prediction, State, State) :-
+    log(info, ca_support, "~@ is handling prediction ~p", [self, Prediction]),
+	self(CA),
+	prediction_about_experience(Prediction, State, Experience),
+    log(info, ca_support, "Prediction ~p is about experience ~p of ~@", [Prediction, Experience, self]),
+	!,
+	(same_experience_value(Experience.value, Prediction.value) ->
+		true
+		;
+		PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Experience.confidence, by:CA},
+		prediction_error_sent(PredictionError, Prediction.by)
+	).
+
+prediction_handled(Prediction, State, State) :-
+    self(CA),
+    % Can't confirm or invalidate a prediction. Confidence is 0.
+    PredictionError = prediction_error{prediction:Prediction, actual_value:unknown, confidence:0.0, by:CA},
+	prediction_error_sent(PredictionError, Prediction.by).
+
+same_experience_value(Value, Value) :-
+    Value \== unknown.
+
+prediction_error_from_experience(Experience, Prediction, PredictionError) :-
+	self(CA),
+	experience{origin:Origin, kind:Kind, value: Value, confidence:Confidence} :< Experience,
+	% fill in prediction in case it is empty
+	FilledPrediction = Prediction.put([origin=Origin, kind=Kind]),
+	PredictionError = prediction_error{prediction:FilledPrediction, actual_value:Value, confidence:Confidence, by: CA}.
+
+prediction_errors_sent([], _).
+
+% Best effort at sending prediction errors back to the CA where the predictions came from.
+prediction_errors_sent([PredictionError | Rest], Parent) :-
+	prediction_error_sent(PredictionError, Parent),
+	prediction_errors_sent(Rest, Parent).
+
+prediction_error_sent(PredictionError, Parent) :-
+	log(info, ca_support, "~@ is sending prediction error ~p to ~w", [self, PredictionError, Parent]),
+	message_sent(Parent, prediction_error(PredictionError)).
+
+prediction_error_sent(_, _).
 
 
 
