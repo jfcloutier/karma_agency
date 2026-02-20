@@ -27,9 +27,6 @@ Synthesizing experiences:
         * or a trend may take value `ended`
 * In each unit of work
     * find a novel experience and assign a confidence
-* After work
-    * Select all observations from static CAs not composing objects in current experiences
-    * Add them as experiences with unchanged confidence
 
 Finding a novel experience (non-deterministic):
 
@@ -71,21 +68,16 @@ Assigning confidence to an experience:
 :- use_module(agency(som/ca_support)).
 
 % Update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
-before_work(CA, State, NewState) :-
+before_work(_, State, [experiences=UpdatedExperiences], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas),
     [Timeframe | _] = State.timeframes,
     !,
     PriorExperiences = Timeframe.experiences,
     updated_experiences(CA, State, PriorExperiences, [], UpdatedExperiences),
-    put_state(State, experiences, UpdatedExperiences, NewState),
     log(info, experience, "Phase experience (before) for CA ~w updated experiences ~p", [CA, UpdatedExperiences]).
 
-before_work(_, State, State).
-
-% Elevate all unexperienced observations from static CAs
-after_work(CA, State, NewState) :-
-    elevated_static_ca_observations(State, ElevatedExperiences),
-    acc_state(State, experiences, ElevatedExperiences, NewState),
-    log(info, experience, "Phase experience (after) for CA ~w elevated experiences ~p", [CA, ElevatedExperiences]).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
@@ -93,7 +85,7 @@ after_work(CA, State, NewState) :-
 % Add one experience at a time, most relevant first.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
     novel_experience(CA, State, Experience),
-    StateDeltas = [experiences-[Experience]],
+    StateDeltas = [experiences=[Experience]],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, experience, "Phase experience (more) for CA ~w added ~p", [CA, Experience]).
 
@@ -367,34 +359,3 @@ comparable_observations(Observation1, Observation2) :-
     is_dict(Observation2, observation),
     Observation1.kind == Observation2.kind,
     same_object(Observation1.origin, Observation2.origin).
-
-% Select all observations by the dCA from static CAs not composing objects in current experiences
-% and add them, without duplicates, as experiences with unchanged confidence (the support of observed objects are always empty because observations are converted predictions)
-elevated_static_ca_observations(State, Experiences) :-
-    findall(Observation, 
-        (member(Observation, State.observations), is_static_ca_observation(Observation), \+ in_experiences(Observation, State)), 
-        Observations),
-    findall(Experience, (member(Observation, Observations), observation_as_experience(Observation, Experience)), Experiences).
-
-elevated_static_ca_observations(_, []).
-
-is_static_ca_observation(Observation) :-
-   memberchk(Observation.origin.type, [sensor, effector]).
-
-in_experiences(Observation, State) :-
-    member(Experience, State.experiences), 
-    in_experience(Observation.id, Experience).
-
-in_experience(ObservationId, Experience) :-
-    ObservationIds = Experience.origin.support,
-    member(ObservationId, ObservationIds).
-
-in_experience(ObservationId, Experience) :-
-    experience{kind:trend, value:Object} :< Experience,
-    is_dict(Object, object),
-    ObservationIds = Object.support,
-    member(ObservationId, ObservationIds).
-
-observation_as_experience(Observation, Experience) :-
-    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA} :< Observation,
-    Experience = experience{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA}.

@@ -11,16 +11,15 @@ Grant past plans affordance status if goals achieved
 :- use_module(agency(som/wellbeing)).
 
 % No work done before units of work
-before_work(_, State, State).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
-% No work done after last unit of work
-after_work(_, State, State).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     staying_alive(State, Alive),
-    StateDeltas = [alive-Alive],
+    StateDeltas = [alive=Alive],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, assess, "Phase assess ended for CA ~w", [CA]).
 

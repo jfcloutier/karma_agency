@@ -17,10 +17,8 @@ The CA sends to a relative D(measure) - wellbeing(measure, Relative) if > 0
 :- use_module(agency(som/wellbeing)).
 
 % No work done before units of work
-before_work(_, State, State).
-
-% No work done after last unit of work
-after_work(_, State, State).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 

@@ -12,10 +12,8 @@ Merge correct predictions and effective prediction errors into new observations.
 :- use_module(agency(som/ca_support)).
 
 % No work done before units of work
-before_work(_, State, State).
-
-% No work done after last unit of work
-after_work(_, State, State).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
@@ -25,7 +23,7 @@ after_work(_, State, State).
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
 unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     observed(CA, State, Observations),
-    StateDeltas = [observations-Observations],
+    StateDeltas = [observations=Observations],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
 

@@ -2,7 +2,8 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3]).
+:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/6, 
+                       merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
@@ -93,6 +94,29 @@ average_confidence(DictsWithConfidence, AverageConfidence) :-
     findall(Confidence, (member(WithConfidence, DictsWithConfidence), get_dict(confidence, WithConfidence, Confidence)), Confidences),
     sum_list(Confidences,Sum),
     AverageConfidence is Sum / N.
+
+% Merge wellbeing deltas and properties changed by the phase
+merge_phase_deltas(Phase, StateDeltas, WellbeingDeltas, ProducedProperties, State, NewState) :-
+    log(info, dynamic_ca, "@@@ Ending phase ~w merging ~p given produced properties ~p", [Phase, StateDeltas, ProducedProperties]),
+	merge_phase_state_properties(ProducedProperties, StateDeltas, State, State1),
+	merge_wellbeing(State1, WellbeingDeltas, NewState).
+	
+merge_phase_state_properties([], _, State, State).
+
+merge_phase_state_properties([Property | Rest], StateDeltas, State, NewState) :-
+	Option =.. [Property, PropertyValue],
+	(option(Option, StateDeltas) ->
+	    (is_list(PropertyValue) ->
+			% Duplicates are removed
+			acc_state(State, Property, PropertyValue, State1)
+			;
+			put_state(State, Property, PropertyValue, State1)
+	    )
+		;
+		log(warn, dynamic_ca, "@@@ State delta ~w in ~p was not produced", [Property, StateDeltas]),
+		State1 = State),
+	merge_phase_state_properties(Rest, StateDeltas, State1, NewState).
+
 
 merge_wellbeing(State, WellbeingDeltas, NewState) :-
 	log(debug, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDeltas]),

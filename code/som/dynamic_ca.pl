@@ -56,7 +56,7 @@ Messages:
 
 * In
 	* `adopted(Parent)` - when added to the umwelt of a dynamic CA one level up
-	* `phase_done(PhaseEndState, WellbeingDeltas)` - sent from itself when a phase is done
+	* `phase_done(Phase, StateDeltas, WellbeingDeltas)` - sent from itself when a phase is done
 	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the dynamic CA
 	* `die` - when the dynamic CA has reached end-of-life
 	
@@ -87,7 +87,7 @@ Events:
 
 * Out
     * topic: ca_started, payload: [level = Level]
-	* topic: end_of_phase, payload: [phase=Phase, state=State],
+	* topic: end_of_phase, payload: [phase=Phase, state_deltas=State, wellbeing_deltas=WellbeingDeltas],
 	* topic: end_of_timeframe, payload: [level=Level]
 	* topic: end_of_life, payload: [level=Level]
 	* topic: causal_theory_wanted, payload: [pinned_predicates = PinnedPredicated, pinned_objects = PinnedObjects]
@@ -238,10 +238,10 @@ handled(message(adopted, Parent), State, NewState) :-
 	get_state(State, parents, Parents),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(phase_done(PhaseState, WellbeingDeltas), _), State, NewState) :-
-	Phase = PhaseState.phase,
+handled(message(phase_done(Phase, StateDeltas, WellbeingDeltas), _), State, NewState) :-
 	log(info, dynamic_ca, "Phase ~w done for ~@", [Phase, self]),
-	merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, State1),
+	phase_consumes_produces(Phase, _, ProducedProperties),
+	merge_phase_deltas(Phase, StateDeltas, WellbeingDeltas, ProducedProperties, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
 		; 
@@ -252,6 +252,7 @@ handled(message(phase_done(PhaseState, WellbeingDeltas), _), State, NewState) :-
 		new_timeframe(State1, NewState)
 	).
 
+% Handle a received prediction upon receipt
 handled(message(prediction(Prediction), _), State, NewState) :-
 	prediction_handled(Prediction, State, State1),
 	acc_state(State1, predictions_in, Prediction, NewState).
@@ -311,22 +312,6 @@ initial_wellbeing(Wellbeing) :-
 	Wellbeing = wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}.
 
 overall_wellbeing(_, 1).
-
-% Merge wellbeing deltas and properties changed by the phase
-merge_phase_state(Phase, PhaseState, WellbeingDeltas, State, NewState) :-
-	phase_consumes_produces(Phase, _, ProducedProperties),
-	merge_phase_state_properties(ProducedProperties, PhaseState, State, State1),
-	merge_wellbeing(State1, WellbeingDeltas, NewState).
-	
-merge_phase_state_properties([], _, State, State).
-
-merge_phase_state_properties([Property | Rest], PhaseState, State, NewState) :-
-	get_state(PhaseState, Property, PropertyValue),
-	% Duplicates are removed
-	put_state(State, Property, PropertyValue, State1),
-	Phase = PhaseState.phase,
-	log(info, dynamic_ca, "Merged state property ~w produced by phase ~w:  ~p", [Property, Phase, PropertyValue]),
-	merge_phase_state_properties(Rest, PhaseState, State1, NewState).
 
 % Not at end of timeframe (there's a next phase)
 timeframe_continues(State) :-

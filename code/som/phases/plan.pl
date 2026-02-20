@@ -9,10 +9,8 @@ Formulate and prioritize goals (formulated and received), select a goal, constru
 :- use_module(agency(som/wellbeing)).
 
 % No work done before units of work
-before_work(_, State, State).
-
-% No work done after last unit of work
-after_work(_, State, State).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 

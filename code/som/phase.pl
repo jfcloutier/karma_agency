@@ -54,20 +54,24 @@ next_phase(act, assess).
 next_phase(assess, bind).
 
 % The state properties consumed and produced by each phase
+% TODO - if a property is consumed then it is available to the phase but emptied from the CA state
+% TODO - if a property is produced by a phase then it is accumulated into CA state from work by the phase
+% TODO - a property that is both consumed and produced has the phase build entirely new content for the CA state
 
 % None consumed or produced
 phase_consumes_produces(initiating, [], []).
-% Out predictions are produced from consumed prior observations
-phase_consumes_produces(predict, [observations], [predictions_out]).
-% Observations produced from the predictions sent and prediction errors received
-phase_consumes_produces(observe, [predictions_out, prediction_errors], [observations]).
-% Experiences are replaced by new experiences given prior experiences
+% Out predictions replace prior ones
+phase_consumes_produces(predict, [predictions_out], [predictions_out]).
+% New observations produced from the (consumed) predictions sent and prediction errors received
+phase_consumes_produces(observe, [observations], [observations]).
+% New experiences are produced from observations
 phase_consumes_produces(experience, [experiences], [experiences]).
 % An overall feeling is computed and experiences are replaced by felt experiences
 phase_consumes_produces(feel, [experiences], [feeling, experiences]).
 phase_consumes_produces(plan, [], []). % TODO
 phase_consumes_produces(act, [], []).  % TODO
-phase_consumes_produces(assess, [], [alive]).
+% Predictions in/out and prediction errors received are consumed by assessing
+phase_consumes_produces(assess, [predictions_in, predictions_out, prediction_errors], [alive]).
 phase_consumes_produces(bind, [], []).
 
 
@@ -97,9 +101,10 @@ transition_states(CA, State, PhaseState, NewCAState) :-
     next_phase(EndedPhase, Phase),
     put_state(State, phase, Phase, PhaseState),
     get_state(State, timeframe_count, TimeframeCount),
-    log(info, phase, "Phase transition of CA ~w from ~w to ~w (~w)", [CA, EndedPhase, Phase, TimeframeCount]),
     phase_consumes_produces(Phase, Consumes, _),
-    consume_state_properties(PhaseState, Consumes, NewCAState).
+    % The new CA state has the current phase set and the consumed properties emptied
+    consume_state_properties(PhaseState, Consumes, NewCAState),
+    log(info, phase, "Phase transition of CA ~w from ~w to ~w with new CA state ~p (~w)", [CA, EndedPhase, Phase, NewCAState, TimeframeCount]).
 
 % Note - This assumes that a consumed property is being reset to an empty list
 consume_state_properties(State, [], State).
@@ -130,72 +135,78 @@ timebox_phase(Phase, Latency) :-
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
 % resolving WorkStatus to more(IntermediatePhaseState, WellbeingDeltas), or it can be done(EndPhaseState, WellbeingDeltas) as the last or only solution.
 work(CA, State, Phase) :-
-    Phase:before_work(CA, State, InitialPhaseState),
+    Phase:before_work(CA, State, StateDeltas, WellbeingDeltas),
+    phase_consumes_produces(Phase, _, ProducedProperties),
+    merge_phase_deltas(Phase, StateDeltas, WellbeingDeltas, ProducedProperties, State, InitialPhaseState),
     Goal =.. [:, Phase, unit_of_work(CA, InitialPhaseState, WorkStatus)],
     engine_create(WorkStatus, Goal, WorkEngine),
     get_state(State, timeframe_count, TimeframeCount),
-    run_phase(CA, Phase, TimeframeCount, WorkEngine, InitialPhaseState).
+    wellbeing:empty_wellbeing(WellbeingDeltas),
+    % Run the phase starting with empty state and wellbeing deltas
+    run_phase(CA, Phase, TimeframeCount, WorkEngine, StateDeltas, WellbeingDeltas).
     
-run_phase(CA, Phase, TimeframeCount, WorkEngine, AccState) :-
-    log(info, phase, "Doing unit of work in phase ~w of CA ~p (~w)", [Phase, CA, TimeframeCount]),
+run_phase(CA, Phase, TimeframeCount, WorkEngine, AccStateDeltas, AccWellbeingDeltas) :-
+    log(info, phase, "(~w) Running phase ~w with state deltas ~p (~w)", [CA, Phase, AccStateDeltas, TimeframeCount]),
     work_engine_cranked(WorkEngine, WorkStatus),
-    log(info, phase, "Unit of work in phase ~w of CA ~w completed (~w)", [Phase, CA, TimeframeCount]),
-    work_status_handled(WorkStatus, WorkEngine, CA, Phase, AccState).
+    log(info, phase, "(~w) Unit of work in phase ~w completed with status ~p (~w)", [CA, Phase, WorkStatus, TimeframeCount]),
+    work_status_handled(WorkStatus, WorkEngine, CA, Phase, TimeframeCount, AccStateDeltas, AccWellbeingDeltas).
 
 work_engine_cranked(WorkEngine, WorkStatus) :-
     engine_next_reified(WorkEngine, Next),
     interpret_unit_of_work(Next, WorkStatus).
 
 interpret_unit_of_work(the(WorkStatus), WorkStatus).
+
 interpret_unit_of_work(no, _) :-
     log(warn, phase, "No work status from engine"),
     throw("No engine answer").
+
 interpret_unit_of_work(exception(Error), _) :-
     log(warn, phase, "Exception from engine. Got ~p", [Error]),
     throw(Error).
 
-work_status_handled(done(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, AccState) :-
-    updated_state_from_work(AccState, StateDeltas, WellbeingDeltas, UpdatedState),
-    phase_done(CA, Phase, UpdatedState, WellbeingDeltas, WorkEngine).
+work_status_handled(done(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, TimeframeCount, AccStateDeltas, AccWellbeingDeltas) :-
+    updated_state_deltas(StateDeltas, AccStateDeltas, UpdatedStateDeltas),
+    updated_wellbeing_deltas(WellbeingDeltas, AccWellbeingDeltas, UpdatedWellbeingDeltas),
+    phase_done(CA, Phase, TimeframeCount, UpdatedStateDeltas, UpdatedWellbeingDeltas, WorkEngine).
 
-work_status_handled(more(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, AccState) :-
-    phase_timeout() -> 
-        phase_done(CA, Phase, AccState, WellbeingDeltas, WorkEngine)
+work_status_handled(more(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, TimeframeCount, AccStateDeltas, AccWellbeingDeltas) :-
+    updated_state_deltas(StateDeltas, AccStateDeltas, UpdatedStateDeltas),
+    updated_wellbeing_deltas(WellbeingDeltas, AccWellbeingDeltas, UpdatedWellbeingDeltas),
+    (phase_timeout() -> 
+        phase_done(CA, Phase, TimeframeCount, UpdatedStateDeltas, UpdatedWellbeingDeltas, WorkEngine)
         ;
-        get_state(AccState, timeframe_count, TimeframeCount),
-        updated_state_from_work(AccState, StateDeltas, WellbeingDeltas, UpdatedState),
-        run_phase(CA, Phase, TimeframeCount, WorkEngine, UpdatedState).
+        run_phase(CA, Phase, TimeframeCount, WorkEngine, UpdatedStateDeltas, UpdatedWellbeingDeltas)).
 
-work_status_handled(WorkStatus, _, _, _, _) :-
+work_status_handled(WorkStatus, _, _, _, _, _, _) :-
     log(info, phase, "@@@ Not handling work status of ~@: ~p", [self, WorkStatus]),
     fail.
 
-updated_state_from_work(State, StateDeltas, WellbeingDeltas, UpdatedState) :-
-    update_from_state_deltas(State, StateDeltas, State1),
-    merge_wellbeing(State1, WellbeingDeltas, UpdatedState).
+updated_state_deltas([], UpdatedStateDeltas, UpdatedStateDeltas).
 
-update_from_state_deltas(State, [], State).
-
-update_from_state_deltas(State, [Delta | Rest], UpdatedState) :-
-    Property-Value = Delta,
-    (is_list(Value) ->
-        acc_state(State, Property, Value, State1)
+updated_state_deltas([StateProperty=StateValue | Rest], AccStateDeltas, UpdatedStateDeltas) :-
+    Option =.. [StateProperty, AccValue],
+    ((option(Option, AccStateDeltas), is_list(StateValue)) ->
+        append(StateValue, AccValue, AccValue1)
         ;
-        put_state(State, Property, Value, State1)
-    ),
-    update_from_state_deltas(State1, Rest, UpdatedState).
+        AccValue1 = StateValue),
+    merge_options([StateProperty=AccValue1], AccStateDeltas, AccStateDeltas1),
+    updated_state_deltas(Rest, AccStateDeltas1, UpdatedStateDeltas).
+
+updated_wellbeing_deltas(WellbeingDeltas, AccWellbeingDeltas, wellbeing{fullness:FullnessDelta, integrity:IntegrityDelta, engagement:EngagementDelta}) :-
+    FullnessDelta is AccWellbeingDeltas.fullness + WellbeingDeltas.fullness,
+    IntegrityDelta is AccWellbeingDeltas.integrity + WellbeingDeltas.integrity,
+    EngagementDelta is AccWellbeingDeltas.engagement + WellbeingDeltas.engagement.
 
 % Last unit of work is done. Perhaps do some after-work, run the clock, and let the dynamic CA (and others) know.
-phase_done(CA, Phase, PhaseDoneState, WellbeingDeltas, WorkEngine) :-
-    engine_destroy(WorkEngine),
-    Phase:after_work(CA, PhaseDoneState, FinalPhaseState),
-    get_state(PhaseDoneState, timeframe_count, TimeframeCount),    
-    log(info, phase, "Phase ~w for CA ~p done with wellbeing deltas ~p (~w)", [Phase, CA, WellbeingDeltas, TimeframeCount]),
+phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine) :-
+    engine_destroy(WorkEngine),  
+    log(info, phase, "Phase ~w for CA ~p done with deltas ~p and ~p (~w)", [Phase, CA, StateDeltas, WellbeingDeltas, TimeframeCount]),
     run_the_clock(Phase),
     % The engine sends the CA that started it a message that the phase is done
-    message_sent(CA, phase_done(FinalPhaseState, WellbeingDeltas)),
+    message_sent(CA, phase_done(Phase, StateDeltas, WellbeingDeltas)),
     % This event is currently only used in tests
-    published(end_of_phase, [phase=Phase, state=FinalPhaseState], CA).
+    published(end_of_phase, [phase=Phase, state_deltas=StateDeltas, wellbeing_deltas=WellbeingDeltas], CA).
 
 run_the_clock(Phase) :-
     get_time(Now),

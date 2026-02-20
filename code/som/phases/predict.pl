@@ -27,10 +27,8 @@ prediction{origin:Origin, kind:Kind, value:Value, priority:Priority, confidence:
 :- use_module(agency(som/ca_support)).
 
 % No work done before units of work
-before_work(_, State, State).
-
-% No work done after last unit of work
-after_work(_, State, State).
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
@@ -44,7 +42,7 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     major_predictions(Predictions1, Predictions),
     log(info, predict, "~w made major predictions ~p", [CA, Predictions]),
     predictions_sent_to_umwelt(CA, State.umwelt, Predictions),
-    StateDeltas = [predictions_out-Predictions],
+    StateDeltas = [predictions_out=Predictions],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, predict, "Phase predict done for CA ~w", [CA]).
 
@@ -52,11 +50,14 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
 potential_predictions(CA, State, Predictions) :-
     predictions_from_causal_theory(CA, State, Predictions1),
     predictions_from_experiences(CA, State, Predictions2),
+    % log(info, predict, "@@@ Predictions from experience ~p", [Predictions2]),
     predictions_from_observations(CA, State, Predictions3),
+    log(info, predict, "@@@ Predictions from observations ~p", [Predictions3]),
     flatten([Predictions1, Predictions2, Predictions3], AllPredictions),
     (length(AllPredictions, 0) ->
         empty_prediction(CA, EmptyPrediction),
-        Predictions = [EmptyPrediction]
+        Predictions = [EmptyPrediction],
+        log(info, predict, "@@@ Predictions from ignorance ~p", [Predictions])
         ;
         Predictions = AllPredictions
     ),
@@ -85,13 +86,15 @@ predictions_from_experience(CA, State, Experience, Predictions) :-
     member(Experience.kind, [count, more]),
     object{support: ObservationIds} :< Experience.origin,
     observations_with_ids(State, ObservationIds, Observations),
-    observations_as_predictions(CA, Observations, 2, Predictions).
+    observations_as_predictions(CA, Observations, 2, Predictions),
+    log(info, predict, "@@@ Predictions ~p from ~w experience ~p", [Predictions, Experience.kind, Experience]).
 
 % Predictions given a prior trend experience
 predictions_from_experience(CA, State, Experience, [Prediction]) :-
     Experience.kind == trend,
     expected_trending_observation(State, Experience, Observation),
-    observation_as_prediction(CA, Observation, 2, Prediction).
+    observation_as_prediction(CA, Observation, 2, Prediction),
+    log(info, predict, "@@@ Prediction ~p from trending experience ~p", [Prediction, Experience]).
 
 expected_trending_observation(State, Experience, Observation) :-
     member(Experience.value, [up_stopped, down_stopped]),
