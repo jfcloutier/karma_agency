@@ -3,9 +3,8 @@ The dynamic cognition actor tracks changes in prior experiences and uncovers new
 
 Experiences are instantiated by:
 
-1- tracking changes to prior experiences
-2- synthesizing as many novel `count`, `more` and `trend` experiences as time allows 
-3- elevating all "unexperienced" observations (observations of umwelt experiences not integrated into new experiences) as experiences of the dynamic cognition actor
+1- updating prior experiences
+2- synthesizing as many novel `count`, `more` and `trend` experiences as time allows
 
 An experience, like an observation, is a property or relation to which a confidence and other meta-data is associated.
 A property or relation applies to one object (its origin) and it has one value.
@@ -19,39 +18,30 @@ Value domains of synthetic experiences:
 * trend: `up`, `down`, `ended`
 * more: an object
 
-Synthesizing experiences:
+Synthesizing experiences (and assigning confidence):
 
 * Before work
-    * Update prior experiences and assign their confidences
+    * Update prior experiences
         * A prior experience may no longer exist,
         * or a trend may take value `ended`
 * In each unit of work
-    * find a novel experience and assign a confidence
+    * find a novel experience
 
 Finding a novel experience (non-deterministic):
 
 * Choose a kind of experience from [count, more, trend]
 * Find a non-empty, maximal (can not be grown further) set of observations to which the kind applies
 
-Finding a maximal set of observations (or two if a relation) for a kind of experience:
+Detecting and updating an experience of a kind:
 
-* A maximal set of observations defines a synthetic object as 
-    * the origin of any property/relation
-    * the value of a `more` relation
-* A meaningful set per kind:
-    * `count`: 1 or more countables: 
-        * Identical properties (same origin, kind and value)
-        * Properties with same kind and value
-        * Relations with same kind and value object
-        * Relations with same kind and origin
-    * `more`: 2 non-equal comparables (each a different maximal set of observations, one as origin, the other as value)
-        * Properties with same kind and value X 2 (more * --P-> value A than * --Q-> value B)
-        * Relations with same kind and value object X 2 (more * --X-> object A than * --Y-> object B - there are more objects with relations X to object A than there are objects with relation Y to object B)
-        * Relations with same kind and origin X 2 (more object A --X-> * than object B --Y-> * - object A has more relations X than object B has relations Y)
-    * `trend`: 2 or more trendables over the last N > 1 time frames
-        * Trendables are number-valued properties with the same origin and kind
-            * A trend's value can be `up` or `down`
-            * Otherwise, the trend value can be `ended` if a trend from the prior timeframe is being updated
+* `count`: Observations form a group with cardinality > 1 to be first detected, or a `count` may be reduced to 1 when updated. Groups:
+    * Relations or properties with same kind and value (number of objects with the same description)
+    * Relations with same origin and kind (number of a kind of relation for a given object)
+* `more`: A count of observations is greater than another count, where both counts must be > 1 to be first detected, or a count can be 1 when a `more` experience is updated
+* `trend`: An object's property changed up or down over the last timeframes when first detected, or may have stopped changing when the `trend` is updated
+    * Trending are number-valued properties with the same origin and kind 
+        * A trend's value can be `up` or `down`
+        * Otherwise, the trend value can be `ended` when a trend from the prior timeframe is neither reversed nor found
 
 Assigning confidence to an experience:
 
@@ -193,13 +183,9 @@ countable_with_all(Observation, OtherObservations) :-
 
 /*
 Countable if:
-    * Same origin, kind and value - counting identically described objects, or
     * Same kind and value - counting objects with same description, or
-    * Same origin and kind - counting alternate relations of a kind for an object
+    * Same origin and kind - counting alternate relations of a kind for one object
 */
-countable_with(Observation, OtherObservation) :-
-    equivalent_observation(Observation, OtherObservation).
-
 countable_with(Observation, OtherObservation) :-
     observation{kind:Kind, value:Value1} :< Observation,
     observation{kind:Kind, value:Value2} :< OtherObservation,
@@ -311,7 +297,7 @@ grossly_more_than(Count1, Count2) :-
 % experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 novel_experience(CA, State, Experience) :-
     member(Kind, [count, more, trend]),
-    % Observations are sorted most confident first
+    % Observations are sorted best "informed" first
     predsort(priority, State.observations, SortedObservations),
     new_experience(CA, State, Kind, SortedObservations, Experience),
     \+ member(Experience, State.experiences).
@@ -331,7 +317,7 @@ new_experience(CA, _, count, Observations, Experience) :-
     Count > 1,
     count_experience(CA, Count, CountedObservations, Experience).
 
-% A new `more` experience is of interest if comparing to a value
+% A novel `more` experience is of interest one count is greater than another and both counts are greater than 1
 new_experience(CA, _, more, Observations, Experience) :-
     select(Observation1, Observations, OtherObservations1),
     select(Observation2, Observations, OtherObservations2),

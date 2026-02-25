@@ -22,7 +22,7 @@ run_tests(dynamic_ca).
 % The SOM is initialized and starts growing.
 % Succeed once a dynamic CA was created and has completed a first timeframe and all of its phases.
 test(timeframe) :-
-	MaxTimeframes = 2, 
+	MaxTimeframes = 3, 
 	all_subscribed([end_of_phase, end_of_timeframe, end_of_life, ca_started]),
 	som : growing([max_timeframes=MaxTimeframes]),
 	get_message(event(ca_started, [level(1)], _)),
