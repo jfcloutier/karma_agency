@@ -16,7 +16,6 @@ set_log_level(debug).
 agent:started('localhost:4000').
 threads.
 query_answered(som, children, SOMChildren).
-query_answered('sensor:ultrasonic-in4:distance', experience_domain, Answer).
 
 message_sent('effector:tacho_motor-outA', actuated(spin)).
 message_sent('effector:tacho_motor-outA', actuated(reverse_spin)).

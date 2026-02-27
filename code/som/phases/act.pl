@@ -1,5 +1,5 @@
 /**
-Confirm plan feasibility, execute, remember goal and plan for later assessment
+Confirm plan feasibility, execute it, remember goal and plan for later assessment
 **/
 
 :- module(act, []).

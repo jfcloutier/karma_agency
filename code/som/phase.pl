@@ -62,7 +62,7 @@ next_phase(assess, bind).
 phase_consumes_produces(initiating, [], []).
 % Out predictions replace prior ones
 phase_consumes_produces(predict, [predictions_out], [predictions_out]).
-% New observations produced from the (consumed) predictions sent and prediction errors received
+% Activation observations are preserved and new observations are produced from the (consumed) predictions sent and prediction errors received
 phase_consumes_produces(observe, [observations], [observations]).
 % New experiences are produced from observations
 phase_consumes_produces(experience, [experiences], [experiences]).

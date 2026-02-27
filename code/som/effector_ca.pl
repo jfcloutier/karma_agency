@@ -28,8 +28,7 @@ changes to its wellbeing and effects transfers to and from its parents.
 
 An effector's actions are "atomic" affordances (i.e. not involving other CAs's affordances); their names are actuations the body can execute.
 
-An effector CA experiences or not in the body having last executed a certain number of the effector CA's actions/atomic affordances.
-Its experiences are not normative (neither pleasant or unpleasant). 
+An effector CA neither observes nor experiences. 
 
 Messages:
 
@@ -39,12 +38,10 @@ Messages:
 * In from a parent
 	* `ready_actuation(Goal)` - a parent communicates an actuation it wants the effector CA to execute
 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
-* `prediction(Prediction)` - a parent makes a prediction about how many of a given action the effector CA experiences were executed-  - Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Boolean, priority:Priority, confidence:Confidence, by: CA]}
 
 * Out to a parent	
 	* `can_actuate(Goals)` - responding to intent event - it can actuate these directives (can be empty)
 	* `actuation_ready(Goal)` responding to actuation message - the effector CA has primed the body for execution
-	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 	
 Events:
 
@@ -57,6 +54,7 @@ Events:
 	
 * Out
     * topic: ca_started, payload: [level = Level]
+	* topic: activation, payload: [directive = action],
 
 Queries:
 
@@ -64,8 +62,6 @@ Queries:
     * level - 0
 	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> always responds with [predictable{ origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:CA}, ...] 
-		- Action is an action the effector can execute
 	* action_domain -> the actions the effector_ca can take
 	* wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
 
@@ -73,8 +69,6 @@ Queries:
 State:
 	* parents - parent CAs
 	* effectors - the body effectors (1 action per body effector) the CA is responsible for
-	* observations - actions last executed - [executed(Action), ...]
-	* experiences - experiences from last execution - [experience{origin:EffectorObject, kind:Action, value:Boolean, confidence: 1.0, by:EffectorCA), ...]
 	* action_domain - actions the effector can execute - [Action, ...]
 	* actuations - actions ready for execution - [Action, ...]
 	* wellbeing - wellbeing values - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.0}
@@ -87,16 +81,15 @@ Lifecycle
     * Handles intent events - sends can_actuate/2 message in response
 	* Handles ready_actuation messages - tells the body to prepare to actuate, records the actuations
 	* Handles executed event (the body has aggregated and executed actuations) - updates experiences and informs all of wellbeing changes
-	* Handles predictions events from parents about the last executed actions - sends prediction_error events
 	* Handles wellbeing _tranfer messages from parents
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
 
 An effector CA has no fixed latency; its unique timeframe is updated after notice of 
 execution by the body of its accumulated actuations, but only if some originated from the effector CA.
 
-It does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations and its experiences about the latest
-execution. Upon receiving an intent event, an effector CA resets its list of activations. Upon receiving an execution event, an
-effector CA recomputes its observations and experiences.
+It does not have a memory of past timeframes; it only remembers its yet-to-be executed actuations.
+Upon receiving an intent event, an effector CA resets its list of activations.
+
 */
 
 :- module(effector_ca, []).
@@ -150,12 +143,6 @@ handled(query(latency), _, unknown).
 handled(query(wellbeing), State, Wellbeing) :-
     get_state(State, wellbeing, Wellbeing).
 
-handled(query(experience_domain), State, ExperienceDomain) :-
-	self(Name),
-	get_state(State, action_domain, ActionDomain),
-	effector_name(State, EffectorName),
-	bagof(predictable{origin:object{type:effector, id:EffectorName}, kind:Action, domain:count, by:Name}, member(Action, ActionDomain), ExperienceDomain).
-
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
 
@@ -168,12 +155,8 @@ handled(query(Query), State, Answer) :-
 handled(message(adopted, Parent), State, NewState) :-
 	% Ignore if adopter is already a parent
 	\+ from_parent(Parent, State),
-    all_subscribed([ca_terminated - Parent, prediction - Parent, intent - Parent]),
+    all_subscribed([ca_terminated - Parent, intent - Parent]),
     acc_state(State, parents, Parent, NewState).
-
-% Prediction = prediction{origin:object{type:effector, id:EffectorName}, kind:Action, value:Count, confidence:Confidence, by: CA}
-handled(message(prediction(Prediction), _), State, NewState) :-
-	prediction_handled(Prediction, State, NewState).
 
 handled(message(ready_actuation(Goal), Parent), State, NewState) :-
 	goal_action(Goal, State, Action),
@@ -206,16 +189,13 @@ handled(event(intent, Intent, Parent), State, NewState) :-
 	actuations_reset(State, NewState).		
 
 handled(event(executed, _, _), State, NewState) :-
-	observations_from_actuations(State, Observations),
-	put_state(State, observations, Observations, State1),
-	experiences_from_observations(State1, Experiences),
-	put_state(State1, experiences, Experiences, State2),
-	(wellbeing_changed(State2, UpdatedWellbeing) ->
-		put_state(State2, wellbeing, UpdatedWellbeing, State3)
+	(wellbeing_changed(State, UpdatedWellbeing) ->
+		put_state(State, wellbeing, UpdatedWellbeing, State1)
 		;
-		State3 = State2
+		State1 = State
 		),
-	actuations_reset(State3, NewState).		
+	activations_published(State1),
+	actuations_reset(State1, NewState).		
 
 handled(event(Topic, Payload, Parent), State, NewState) :-
 	ca_support : handled(event(Topic, Payload, Parent), State, NewState).
@@ -251,44 +231,17 @@ can_do_goal(Goal, State) :-
 % Fails if wellbeing was not changed.
 wellbeing_changed(State, UpdatedWellbeing) :-
 	get_state(State, wellbeing, Wellbeing),
-	get_state(State, observations, Observations),
-	length(Observations, Count),
+	get_state(State, actuations, Actuations),
+	length(Actuations, Count),
     Delta is Count * 0.1,
 	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness: -Delta, integrity: -Delta, engagement: Delta}).
 
+activations_published(State) :-
+	get_state(State, actuations, Actions),
+	forall(member(Action, Actions), published(activation, [directive(Action)])).
+
 actuations_reset(State, NewState) :-
 	put_state(State, actuations, [], NewState).
-
-observations_from_actuations(State, Observations) :-
-	get_state(State, actuations, Actuations),
-	bagof(executed(Action), member(Action, Actuations), Observations),
-	log(effector_ca, debug, "~@ observed ~p from actuations ~p", [self, Observations, Actuations]).
-
-experiences_from_observations(State, Experiences) :-
-	log(debug, effector_ca, "~@ is getting experiences from observations in ~p", [self, State]),
-	get_state(State, observations, Observations),
-	effector_name(State, EffectorName),
-	experiences_from_executions(Observations, EffectorName, counts{}, Experiences),
-	log(debug, effector_ca, "~@ experiences ~p from observations ~p", [self, Experiences, Observations]).
-
-% Counts is #{Action:Count, ...}
-experiences_from_executions([], EffectorName, Counts, Experiences) :-
-	self(EffectorCA),
-	findall(Experience, 
-		    (dict_keys(Counts, Actions), 
-			 member(Action, Actions), 
-			 Experience = experience{origin:object{type:effector, id:EffectorName}, kind:Action, value:Counts.Action, confidence: 1.0, by:EffectorCA}
-			),
-			Experiences).
-
-experiences_from_executions([executed(Action) | Rest], EffectorName, Counts, Experiences) :-
-	(get_dict(Action, Counts, Count) ->
-		Count1 is Count + 1,
-		Counts1 = Counts.put(Action, Count1)
-		;
-		Counts1 = Counts.put(Action, 1)
-	),
-	experiences_from_executions(Rest, EffectorName, Counts1, Experiences).
 
 action_url(State, Action, ActionUrl) :-
 	member(Effector, State.effectors), Action == Effector.capabilities.action, ActionUrl = Effector.url.

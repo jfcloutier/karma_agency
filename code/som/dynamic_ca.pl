@@ -84,6 +84,7 @@ Events:
 	* topic: intent_completed, payload: [id = IntentID, status =  SuccessOrFailure]
 													 - a parent CA has completed preparations to realize its intent, or has failed to
 	                                                 - the dynamic CA's timeframe can now terminate, propagating the readied actuations awaiting execution into the next timeframe if intent was successful
+	* topic: activation, payload: [directive=ActionOrDirectiveId] - an umwelt CA executed an action (if effector CA) or a plan directive it received (if dynamic CA)
 
 * Out
     * topic: ca_started, payload: [level = Level]
@@ -99,7 +100,6 @@ Events:
   * type -> dynamic_ca
   * latency -> Integer (secs)
   * umwelt -> CA names
-  * experience_domain -> [Predictable, ...]
   * wellbeing -> Wellbeing
   * experiences -> [Experience, ...]
 
@@ -157,6 +157,7 @@ Data:
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/phase)).
 :- use_module(agency(som/wellbeing)).
+:- use_module(agency(som/observation)).
 
 % Thread state
 :- thread_local level/1, timer/1.
@@ -219,7 +220,7 @@ announce_adoptions(Umwelt) :-
 	concurrent_forall(member(Child, Umwelt), message_sent(Child, adopted)).
 
 subscribed_to_events :-
-	forall(member(Topic, [ca_started, ca_terminated]),
+	forall(member(Topic, [ca_started, ca_terminated, activation]),
 		subscribed(Topic)).
 
 signal_processed(control(stopped)) :-
@@ -277,10 +278,6 @@ handled(query(type), _, dynamic_ca).
 handled(query(umwelt), State, Umwelt) :-
 	get_state(State, umwelt, Umwelt).
 
-handled(query(experience_domain), State, ExperienceDomain) :-
-	get_state(State, experiences, Experiences),
-	predictables_from_experiences(Experiences, ExperienceDomain).
-
 handled(query(wellbeing), State, Wellbeing) :-
 	get_state(State, wellbeing, Wellbeing).
 
@@ -290,6 +287,13 @@ handled(query(Query), Source, Answer) :-
 % Ignored
 handled(event(ca_started, _, _), State, State).
 % Ignore if the terminated CA is not in the umwelt, else update the umwelt
+
+handled(event(activation, ActivationPayload, Source), State, NewState) :-
+	get_state(State, umwelt, Umwelt),
+	member(Source, Umwelt),
+	activation_observation(Source, ActivationPayload, Observation),
+	acc_state(State, observations, Observation, NewState).
+
 handled(event(ca_terminated, _, Source), State, NewState) :-
 	removed_from_umwelt(Source, State, NewState),
 	log(info, dynamic_ca, "CA ~w was removed from the umwelt of  ~@", [Source, self]).
@@ -344,11 +348,15 @@ inc_timeframe_count(State, NewState) :-
 	log(info, dynamic_ca, "Incremented timeframe count in ~@ to ~w", [self, Inc]),
 	put_state(State, timeframe_count, Inc, NewState).
 
-% TODO - Die gracefully and let others know
+% TODO - Die gracefully before letting others know
 end_of_life(State, State) :-
 	level(Level),
 	published(end_of_life, [level(Level)]).
 
-% TODO
-% predictables_from_experiences(Experiences, []).
-predictables_from_experiences(_, []).
+% observation{origin:object{type:dynamic_ca, id:ID}, kind:activation, value:ActionOrDirectiveID, confidence:Confidence, by:CA, id:Id}
+activation_observation(Source, ActivationPayload, Observation) :-
+	self(CA),
+	option(directive(ActionOrDirectiveID), ActivationPayload),
+	ObservationWithoutId = observation{origin:object{type:dynamic_ca, id:Source}, kind:activation, value:ActionOrDirectiveID, confidence:1.0, by:CA},
+	observation_with_id(ObservationWithoutId, Observation).
+

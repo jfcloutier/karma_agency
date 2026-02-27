@@ -1,12 +1,11 @@
 /*
 A sensor CA is a static (a priori) cognition actor that communicates with a body sensor to obtain its sensed value.
 
-A sensor CA experiences its sensor's latest reading which pairs a value with an error tolerance.
+A sensor CA experiences its sensor's latest reading (a primitive observatio) which pairs a value with an error tolerance (ignored for now).
 
 A sensor CA listens to prediction events about its latest reading.
 
-It may emit a prediction error event if the predicted sensed value diverges from the latest reading
-more than the error tolerance of the sensor.
+It may emit a prediction error event if the predicted sensed value diverges from the latest reading.
 
 Each reading taken affects the CA's wellbeing. It reduces the CA's fullness (energy cost) and integrity (wear and tear) by 1 (they start at 100), and increases
 its engagement by 1 (it starts at 0). A sensor CA can not read its sensor if its fullness or integrity is at 0. The CA publishes
@@ -39,7 +38,6 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * experience_domain -> [predictable{origin:object{type:sensor, id:SensorName}, kind:distance, domain:SenseDomain, by:CA}]
     * wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
 
 State:
@@ -110,12 +108,6 @@ handled(query(type), _, sensor_ca).
 handled(query(level), _, 0).
 
 handled(query(latency), _, unknown).
-
-handled(query(experience_domain), State, [predictable{origin:object{type:sensor, id:SensorName}, kind:SenseName, domain:SenseDomain, by:Name}]) :-
-    self(Name),
-    sense_name(State, SenseName),
-    sensor_name(State, SensorName),
-    sense_domain(State, SenseDomain).
 
 handled(query(reading), State, Reading) :-
     sense_read(State, Reading).

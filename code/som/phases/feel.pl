@@ -9,13 +9,13 @@ About feelings:
 * Feelings are causative: A CA pays attention to the experiences it feels the most and then acts accordingly.
 * Feelings compress wellbeing information (now and remembered) into integers between -10 (worst) and 10 (best).
 * A feeling is associated to each CA timeframe as a whole and, partially, to each experience within that timeframe.
-* An established experience (persisting over multiple timeframes) is felt more strongly than a possibly transient experience.
+* A persisting experience (persisting over consecutive timeframes) is felt more strongly than a more recent experience.
 
 A feeling reflects the current and historical wellbeing of a CA:
 
 * Each wellbeing dimension (fullness, integrity, engagement) is felt separately.
 * It is felt both in the moment (static) and in how it changed or stopped changing (dynamic).
-* A CA feels only the more strongly felt dimension at any time.
+* A CA feels only the more strongly felt wellbeing dimension at any time.
 
 Computing a timeframe's feeling:
 
@@ -44,9 +44,9 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
 
 % Elevate as observations from static CAs?
 % No work done before units of work
-before_work(_, State, [experiences=Experiences], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas),
-    static_ca_observations_to_experiences(State, Experiences).
+% No work done before units of work
+before_work(_, _, [], WellbeingDeltas) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
@@ -58,37 +58,6 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, feel, "Phase feel ended for CA ~w", [CA]).
 
-% Select all observations by the dCA from static CAs not composing objects in current experiences
-% and add them, without duplicates, as experiences with unchanged confidence (the support of observed objects are always empty because observations are converted predictions)
-static_ca_observations_to_experiences(State, Experiences) :-
-    findall(Observation, 
-        (member(Observation, State.observations), is_static_ca_observation(Observation), \+ in_experiences(Observation, State)), 
-        Observations),
-    findall(Experience, (member(Observation, Observations), observation_as_experience(Observation, Experience)), Experiences),
-    !.
-
-static_ca_observations_to_experiences(_, []).
-
-is_static_ca_observation(Observation) :-
-   memberchk(Observation.origin.type, [sensor, effector]).
-
-in_experiences(Observation, State) :-
-    member(Experience, State.experiences), 
-    in_experience(Observation.id, Experience).
-
-in_experience(ObservationId, Experience) :-
-    ObservationIds = Experience.origin.support,
-    member(ObservationId, ObservationIds).
-
-in_experience(ObservationId, Experience) :-
-    experience{kind:trend, value:Object} :< Experience,
-    is_dict(Object, object),
-    ObservationIds = Object.support,
-    member(ObservationId, ObservationIds).
-
-observation_as_experience(Observation, Experience) :-
-    observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA} :< Observation,
-    Experience = experience{origin:Origin, kind:Kind, value:Value, confidence:Confidence, by:CA}.
 
 % Captures as a bounded, scalar integer value the overall feeling of the CA's current timeframe.
 % The weightier contribution by a wellbeing dimension gives the overall feeling value.

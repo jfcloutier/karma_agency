@@ -1,7 +1,8 @@
 /*
-Evaluate goodness of each experience.
+Convert observed plan executions into activation experiences.
+Examining timeframes, grant executed plans affordance status (with confidence) if their goals were achieved.
 Evaluate causal theory and request new one if unsatisfactory.
-Grant past plans affordance status if goals achieved
+Decides what happens next to the dynamic CA (apoptosis?, mitosis?, netiher?)
 */
 
 :- module(assess, []).
