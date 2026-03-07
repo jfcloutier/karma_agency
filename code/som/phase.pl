@@ -64,11 +64,11 @@ phase_consumes_produces(initiating, [], []).
 phase_consumes_produces(predict, [predictions_out], [predictions_out]).
 % Activation observations are preserved and new observations are produced from the (consumed) predictions sent and prediction errors received
 phase_consumes_produces(observe, [observations], [observations]).
-% New experiences are produced from observations
-phase_consumes_produces(experience, [experiences], [experiences]).
+% New experiences are produced from observations. Activation observations are counsumed when converted into activation experiences.
+phase_consumes_produces(experience, [observations, experiences], [observations, experiences]).
 % An overall feeling is computed and experiences are replaced by felt experiences
 phase_consumes_produces(feel, [experiences], [feeling, experiences]).
-phase_consumes_produces(plan, [], []). % TODO
+phase_consumes_produces(plan, [goal], [goal, plan]). % Revise the current goal and the plan to achieve it
 phase_consumes_produces(act, [], []).  % TODO
 % Predictions in/out and prediction errors received are consumed by assessing
 phase_consumes_produces(assess, [predictions_in, predictions_out, prediction_errors], [alive]).

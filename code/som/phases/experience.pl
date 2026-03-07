@@ -65,9 +65,12 @@ Assigning confidence to an experience:
 
 % Convert all activation observations into experiences
 % and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
-before_work(_, State, [experiences=Experiences], WellbeingDeltas) :-
+before_work(_, State, [experiences=Experiences, observations=NonActivationObservations], WellbeingDeltas) :-
     wellbeing:empty_wellbeing(WellbeingDeltas),
     activation_experiences_from_observations(CA, State, ActivationExperiences),
+    % retain non-activation observations
+    get_state(State, observations, Observations),
+    findall(Observation, (member(Observation, Observations), \+ is_activation_observation(Observation)), NonActivationObservations),
     [Timeframe | _] = State.timeframes,
     !,
     PriorExperiences = Timeframe.experiences,
@@ -92,6 +95,9 @@ unit_of_work(CA, _, done([], WellbeingDeltas)) :-
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, experience, "Phase experience done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
 
+is_activation_observation(Observation) :-
+    observation{kind:activation} :< Observation.
+
 activation_experiences_from_observations(CA, State, ActivationExperiences) :-
     get_state(State, observations, Observations),
     activation_experiences(CA, Observations, [], ActivationExperiences).
@@ -99,7 +105,7 @@ activation_experiences_from_observations(CA, State, ActivationExperiences) :-
 activation_experiences(_, [], ActivationExperiences, ActivationExperiences).
 
 activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
-    observation{kind:activation} :< Observation,
+    is_activation_observation(Observation),
     !,
     findall(Other, (member(Other, Rest), equivalent_activation_observations(Observation, Other)), EquivalentActivationObservations),
     append(EquivalentActivationObservations, Remaining, Rest),

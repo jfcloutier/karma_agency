@@ -1,5 +1,6 @@
 /*
 Convert observed plan executions into activation experiences.
+Cancel intent if unresolved for too long (let umwelt know so they can cancel received directives)
 Examining timeframes, grant executed plans affordance status (with confidence) if their goals were achieved.
 Evaluate causal theory and request new one if unsatisfactory.
 Decides what happens next to the dynamic CA (apoptosis?, mitosis?, netiher?)

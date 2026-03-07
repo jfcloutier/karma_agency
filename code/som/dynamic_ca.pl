@@ -139,11 +139,10 @@ Data:
 	* prediction_errors - prediction errors received
 	* observations - current observations
 	* experiences - current experiences
-	* directives_in - received directives
-	* goal - selected goal {experience:Experience, impact:Impact, priority:Priority}
-	* plan - plan to achieve the goal [directive, ...]
+	* plans_in - received plans - [Plan, ...]
+	* goal - current goal to be realized - goal{id: ID, target: Target, impact: Impact, priority: Priority, status: Status, plan: Plan, of: CA}
+	* plan - plan to achieve the current goal - plan{id: ID, for_goal: GoalId, directives: [Goal, ...], source: Source, status: Status, score: Score, of: CA}
 	* causal_theory - current causal theory or `none`
-	* affordances - [goal-directives, ...]
 	* wellbeing - wellbeing metrics {fullness:Percent, integrity:Percent, engagement:Percent}
     * timeframes - [Timeframe, ...] - Latest first. A Timeframe remembers only observations, goals and plans
 */
@@ -208,8 +207,8 @@ initial_state(Latency, Umwelt, Settings, Wellbeing, State) :-
 		[settings - Settings, alive - true, latency - Latency, parents - [], umwelt - Umwelt,
 		 causal_theory - none, wellbeing - Wellbeing, phase - initiating,
 		 predictions_in - [], predictions_out - [], prediction_errors - [],
-		 observations - [], experiences - [], affordances - [],
-		 goal - none, plan - [],
+		 observations - [], experiences - [],
+		 goal - none, plan - none, plans_in - [],
 		 timeframes - [], timeframe_count - 1, feeling - none], State).
 
 remember_level(Options, Level) :-
