@@ -32,7 +32,7 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
 
 * Before work
     * Select all observations from static CAs not composing objects in current experiences
-    * Add them as experiences with unchanged confidence
+    * Add them as experiences with the same confidence
 
 */
 
@@ -55,8 +55,7 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     felt_experiences(CA, State, TimeframeFeeling, FeltExperiences),
     StateDeltas = [feeling=TimeframeFeeling, experiences=FeltExperiences],
     % Computing and assigning feelings does not alter the current wellbeing
-    wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, feel, "Phase feel ended for CA ~w", [CA]).
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 
 % Captures as a bounded, scalar integer value the overall feeling of the CA's current timeframe.

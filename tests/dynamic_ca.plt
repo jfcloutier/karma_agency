@@ -40,12 +40,11 @@ test(timeframe) :-
 	get_matching_message(option(phase, observe), event(end_of_phase, ObservePayload, CA), 1),
 	assertion(ObservePayload.state_deltas.observations \== []),
 	get_matching_message(option(phase, experience), event(end_of_phase, ExperiencePayload, CA), 1),
-	assertion(ExperiencePayload.state_deltas.experiences \== []),
+	% Because pahse ends with empty deltas after progress
+	assertion(ExperiencePayload.state_deltas == []),
 	get_matching_message(option(phase, feel), event(end_of_phase,_, CA), 1),
-	get_matching_message(option(phase, plan), event(end_of_phase,_, CA), 1),
 	get_matching_message(option(phase, act), event(end_of_phase,_, CA), 1),
 	get_matching_message(option(phase, assess), event(end_of_phase,_, CA), 1),
-	get_matching_message(option(phase, bind), event(end_of_phase,_, CA), 1),
 
 	get_message(event(end_of_timeframe, _, _)),
 	get_message(event(end_of_life, _, _)).

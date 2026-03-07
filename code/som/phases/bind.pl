@@ -8,6 +8,9 @@ The CA calculates how much wellbeing it can diffuse:
 It then messages each relative to find their wellbeing(measure, Relative)
 
 The CA sends to a relative D(measure) - wellbeing(measure, Relative) if > 0
+
+TODO - Move bind logic to assess
+
 */
 
 :- module(bind, []).

@@ -3,19 +3,19 @@ Make predictions about future observations.
 
 The CA collects all the predictions it could make and drops those that fall too far below the average confidence of the lot (e.g. below half average).
 
-The sources of predictions, in decreasing order of priority, are:
+The sources of predictions, with their associated weights, are:
 
-* Inferring predictions by applying the causal theory to prior observations
-* Extrapolating from prior experiences
-* Predicting unchanged prior observations
-* Making an empty prediction (only if no other prediction can be made)
+* Inferring predictions by applying the causal theory to prior observations = weight = 3
+* Extrapolating from prior experiences, weight = 2
+* Predicting prior observations, weight = 1
+* Making an empty prediction (only if no other prediction can be made), weight = 0
 
-When uncontested predictions conflict (different values are predicted), the one from the highest priority source will be made.
-When conflicting predictions have equal priority, the one with highest confidence is the one that will be made.
+When uncontested predictions conflict (different values are predicted), the one from the highest weight source will be made.
+When conflicting predictions have equal weight, the one with highest confidence is the one that will be made.
 
 The CA collects all the predictions it could make and drops the "minor" ones, those that fall too far below the average confidence of the lot (e.g. below half average).
 
-prediction{origin:Origin, kind:Kind, value:Value, priority:Priority, confidence:Confidence, by: CA}
+prediction{origin:Origin, kind:Kind, value:Value, weight:Weight, confidence:Confidence, by: CA}
 */
 
 :- module(predict, []).
@@ -73,7 +73,7 @@ predictions_from_causal_theory(CA, State, Predictions) :-
 % TODO
 apply_causal_theory(_, _, _, []).
 
-% Make predictions from prior experiences (priority 2)
+% Make predictions from prior experiences (weight is 2)
 predictions_from_experiences(CA, State, Predictions) :-
     get_state(State, experiences, Experiences),
     findall(PredictionsFromExperience, 
@@ -84,7 +84,7 @@ predictions_from_experiences(CA, State, Predictions) :-
 % Predictions given a prior count or more experience
 predictions_from_experience(CA, State, Experience, Predictions) :-
     member(Experience.kind, [count, more]),
-    object{support: ObservationIds} :< Experience.origin,
+    object{evidence: ObservationIds} :< Experience.origin,
     observations_with_ids(State, ObservationIds, Observations),
     observations_as_predictions(CA, Observations, 2, Predictions),
     log(info, predict, "@@@ Predictions ~p from ~w experience ~p", [Predictions, Experience.kind, Experience]).
@@ -96,15 +96,26 @@ predictions_from_experience(CA, State, Experience, [Prediction]) :-
     observation_as_prediction(CA, Observation, 2, Prediction),
     log(info, predict, "@@@ Prediction ~p from trending experience ~p", [Prediction, Experience]).
 
+% Predictions given a prior unchanged experience
+predictions_from_experience(CA, State, Experience, [Prediction]) :-
+    Experience.kind == unchanged,
+    object{evidence: [ObservationId]} :< Experience.origin,
+    observation_with_id(State, ObservationId, Observation1),
+    % Predicting that the observation will persist one more timeframe
+    Value is Observation.value + 1,
+    Observation = Observation1.put(value, Value),
+    observation_as_prediction(CA, Observation, 2, Prediction),
+    log(info, predict, "@@@ Prediction ~p from unchanged experience ~p", [Prediction, Experience]).
+
 expected_trending_observation(State, Experience, Observation) :-
     member(Experience.value, [up_stopped, down_stopped]),
-    % The second support observation is the latest
-    object{support:[_,ObservationId]} :< Experience,
+    % The second evidence observation is the latest
+    object{evidence:[_,ObservationId]} :< Experience.origin,
     observation_with_id(State, ObservationId, Observation).
 
 expected_trending_observation(State, Experience, ExpectedObservation) :-
     member(Experience.value, [up, down]),
-    object{support:[PriorObservationId, ObservationId]} :< Experience,
+    object{evidence:[PriorObservationId, ObservationId]} :< Experience.origin,
     observation_with_id(State, ObservationId, Observation),
     observation_with_id(State, PriorObservationId, PriorObservation),
     Delta is Observation.value - PriorObservation.value,
@@ -117,13 +128,13 @@ predictions_from_observations(CA, State, Predictions) :-
     observations_as_predictions(CA, Observations, 1, Predictions).
 
 % Translate expected observations into predictions.
-observations_as_predictions(CA, Observations, Priority, Predictions) :-
-    findall(Prediction, (member(Observation, Observations), observation_as_prediction(CA, Observation, Priority, Prediction)), Predictions).
+observations_as_predictions(CA, Observations, Weight, Predictions) :-
+    findall(Prediction, (member(Observation, Observations), observation_as_prediction(CA, Observation, Weight, Prediction)), Predictions).
         
 % Turn an observation into a prediction
-observation_as_prediction(CA, Observation, Priority, Prediction) :-
+observation_as_prediction(CA, Observation, Weight, Prediction) :-
     observation{origin:Origin, kind:Kind, value:Value, confidence:Confidence} :< Observation,
-    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, priority:Priority, by: CA}.
+    Prediction = prediction{origin:Origin, kind:Kind, value:Value, confidence:Confidence, weight:Weight, by: CA}.
 
 observations_with_ids(_, [], []).
 
@@ -156,25 +167,25 @@ resolve_conflicting_predictions([Prediction | Rest], Acc, ResolvedPredictions) :
 
 resolve_conflicts([Prediction], Prediction).
 
-% Select randomly a prediction with the highest priority else confidence
+% Select randomly a prediction with the highest weight else confidence
 resolve_conflicts(ConflictingPredictions, Prediction) :-
     random_permutation(ConflictingPredictions, Permutation),
     top_prediction(Permutation, Prediction).
 
 % Predictions conflict if they have the same name (the name of the predicted experience)
-% and object (what the prediction is about e.g. color, distance, luminance, count, more, trend)
+% and object (what the prediction is about e.g. color, distance, luminance, count, more, unchanged, trend)
 conflicting_predictions(Prediction, OtherPrediction) :-
     prediction{origin:Origin, kind:Kind} :< Prediction,
     prediction{origin:Origin, kind:Kind} :< OtherPrediction.
 
 top_prediction(ConflictingPredictions, TopPrediction) :-
-   max_priority(ConflictingPredictions, MaxPriority),
-   findall(Prediction, (member(Prediction, ConflictingPredictions), Prediction.priority == MaxPriority), PriorityPredictions),
-   sort(confidence, @>, PriorityPredictions, [TopPrediction | _]).
+   max_weight(ConflictingPredictions, MaxWeight),
+   findall(Prediction, (member(Prediction, ConflictingPredictions), Prediction.weight == MaxWeight), WeightedPredictions),
+   sort(confidence, @>, WeightedPredictions, [TopPrediction | _]).
 
-max_priority(ConflictingPredictions, MaxPriority) :-
-    setof(Priority, (member(Prediction, ConflictingPredictions), Priority = Prediction.priority), Priorities),
-    max_list(Priorities, MaxPriority).
+max_weight(ConflictingPredictions, MaxWeight) :-
+    setof(Weight, (member(Prediction, ConflictingPredictions), Weight = Prediction.weight), Weights),
+    max_list(Weights, MaxWeight).
 
 % Drop predictions with significantly below-average confidence (less than half the average confidence)
 major_predictions(Predictions, MajorPredictions) :-

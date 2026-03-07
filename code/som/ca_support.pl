@@ -2,14 +2,53 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/6, 
-                       merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3]).
+:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/5, 
+                       merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3, simple_count/2, inc_simple_count/2, dec_simple_count/2,
+					   is_effector/1, is_sensor/1]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
 :- use_module(utils(logger)).
 :- use_module(library(sha)).
 :- use_module(library(apply)).
+
+% Used to remove semantically identical state property values from a sorted list
+agency_state_sorter(=, GoalState1, GoalState2) :-
+	is_dict(GoalState1, goal_state),
+	is_dict(GoalState2, goal_state),
+	GoalState1.goal.id == GoalState2.goal.id, !.
+
+% Two goals are equal if they have the same id (i.e. same target) and serve the same intent
+agency_state_sorter(=, Goal1, Goal2) :-
+	is_dict(Goal1, goal),
+	is_dict(Goal2, goal),
+	same_goals(Goal1, Goal2), !.
+
+% For a CA, two plans are the same if they have the same directives in whatever order
+agency_state_sorter(=, Plan1, Plan2) :-
+	is_dict(Plan1, plan),
+	is_dict(Plan2, plan),
+	same_length(Plan1.directives, Plan2.directives), 
+	predsort(agency_state_sorter, Plan1.directives, Directives1),
+	predsort(agency_state_sorter, Plan2.directives, Directives2),
+	all_same_goals(Directives1, Directives2), !.
+
+agency_state_sorter(=, Observation1, Observation2) :-
+	is_dict(Observation1, observation),
+	is_dict(Observation2, observation),
+	Observation1.id == Observation2.id, !.
+
+agency_state_sorter(Delta, E1, E2) :-
+	compare(Delta, E1, E2).
+
+same_goals(Goal1, Goal2) :-
+	Goal1.id == Goal2.id,
+	Goal1.intent_id == Goal2.intent_id.
+
+all_same_goals([], []).
+all_same_goals([Goal1 | Rest1], [Goal2 | Rest2]) :-
+	same_goals(Goal1, Goal2),
+	all_same_goals(Rest1, Rest2).
 
 handled(message(Message, Source), State, State) :-
 	log(debug, ca_support, "~@ is NOT handling message ~p from ~w", [self, Message, Source]).
@@ -96,8 +135,7 @@ average_confidence(DictsWithConfidence, AverageConfidence) :-
     AverageConfidence is Sum / N.
 
 % Merge wellbeing deltas and properties changed by the phase
-merge_phase_deltas(Phase, StateDeltas, WellbeingDeltas, ProducedProperties, State, NewState) :-
-    log(info, dynamic_ca, "@@@ Ending phase ~w merging ~p given produced properties ~p", [Phase, StateDeltas, ProducedProperties]),
+merge_phase_deltas(StateDeltas, WellbeingDeltas, ProducedProperties, State, NewState) :-
 	merge_phase_state_properties(ProducedProperties, StateDeltas, State, State1),
 	merge_wellbeing(State1, WellbeingDeltas, NewState).
 	
@@ -108,12 +146,11 @@ merge_phase_state_properties([Property | Rest], StateDeltas, State, NewState) :-
 	(option(Option, StateDeltas) ->
 	    (is_list(PropertyValue) ->
 			% Duplicates are removed
-			acc_state(State, Property, PropertyValue, State1)
+			acc_state(State, Property, PropertyValue, ca_support:agency_state_sorter, State1)
 			;
 			put_state(State, Property, PropertyValue, State1)
 	    )
 		;
-		log(warn, dynamic_ca, "@@@ State delta ~w in ~p was not produced", [Property, StateDeltas]),
 		State1 = State),
 	merge_phase_state_properties(Rest, StateDeltas, State1, NewState).
 
@@ -131,7 +168,7 @@ apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
 	NewWellbeing = wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}.
 
 empty_prediction(CA, Prediction) :-
-    Prediction = prediction{origin:unknown, kind:unknown, value:unknown, confidence:0, priority:0, by:CA}.
+    Prediction = prediction{origin:unknown, kind:unknown, value:unknown, confidence:0, weight:0, by:CA}.
 
 % Whether this is an empty prediction
 is_empty_prediction(Prediction) :-
@@ -143,7 +180,7 @@ prediction_about_experience(Prediction, State, Experience) :-
     member(Experience, Experiences),
     experience{origin:Origin, kind:Kind} :< Experience.
 
-% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, priority:Priority, confidence:Confidence, by: CA} - Confidence is between 0.0 and 1.0
+% Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, weight:Weight, confidence:Confidence, by: CA} - Confidence is between 0.0 and 1.0
 % Experience = experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
@@ -198,6 +235,29 @@ prediction_error_sent(PredictionError, Parent) :-
 	message_sent(Parent, prediction_error(PredictionError)).
 
 prediction_error_sent(_, _).
+
+% Count from 1 to 3 and then many. Else counting fails.
+simple_count(N, Count) :-
+    N > 0,
+    (N > 3 -> Count = many ; Count = N).
+
+inc_simple_count(many, many).
+inc_simple_count(SimpleCount, Count) :-
+    number(SimpleCount),
+    Count1 is SimpleCount + 1,
+    simple_count(Count1, Count).
+
+dec_simple_count(0, 0).
+dec_simple_count(many, 3).
+dec_simple_count(SimpleCount, Count) :-
+    number(SimpleCount),
+    Count is SimpleCount - 1.
+
+is_effector(CA) :-
+	atomic_list_concat([effector | _], ':', CA).
+
+is_sensor(CA) :-
+	atomic_list_concat([sensor | _], ':', CA).
 
 
 

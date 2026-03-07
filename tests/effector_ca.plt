@@ -37,42 +37,54 @@ test(all_effector_cas_are_at_level_0) :-
 	assertion(forall(member(EffectorCA, EffectorCAs),
 			query_answered(EffectorCA, level, 0))).
 
-test(intent_executed) :-
+test(plan_executed) :-
     EffectorCA = 'effector:tacho_motor-outA',
-    EffectorName = 'tacho_motor-outA',
-    all_subscribed([activation - EffectorCA]),
+    % EffectorName = 'tacho_motor-outA',
     query_answered(EffectorCA, state, InitialState),
-    get_state(InitialState, wellbeing, InitialWellbeing),
    % adopt
     message_sent(EffectorCA, adopted),
-	query_answered(EffectorCA, parents, Parents),
-	thread_self(Self),
-	assertion(member(Self, Parents)),
-    % intent - the CA informs of the subset of intended directives that can be actuated
-    Id = 'abc',
-    IntentPayload = [id = Id, goals = [spin(EffectorName, true), reverse_spin(EffectorName, true), jump(EffectorName, true)], priority = 1],
-    published(intent, IntentPayload),
-    get_message(message(can_actuate(Goals), EffectorCA)),
-    assertion(member(spin(EffectorName, true), Goals)),
-    assertion(member(reverse_spin(EffectorName, true), Goals)),
-    assertion(\+ member(jump(EffectorName, true), Goals)),
-    % actuate - prepare to carry out executable actions that (partially) realize intent
-    message_sent(EffectorCA, ready_actuation(spin(EffectorName, true))),
-    message_sent(EffectorCA, ready_actuation(reverse_spin(EffectorName, true))),
-    get_message(message(actuation_ready(spin(EffectorName, true)), EffectorCA)),
-    get_message(message(actuation_ready(reverse_spin(EffectorName, true)), EffectorCA)),
-    % execute
+    sleep(1),
+	  query_answered(EffectorCA, parents, Parents),
+	  thread_self(Self),
+	  assertion(member(Self, Parents)),
+    % Executing actions in the context of an intent
+    IntentId = 'some intent',
+    PlanId = 'some plan',
+    published(planned_actions, [intent_id=IntentId, plan_id=PlanId, actions=[spin, spin, reverse_spin, jump]]),
+    get_message(message(actions_received(PlanId), EffectorCA), 1),
+    published(ready_actuations, [plan_id=PlanId, intent_id=IntentId]),
+    get_message(message(actuations_ready(PlanId), EffectorCA), 1),
     query_answered(agency, option(body_host), Host),
   	body : actions_executed(Host),
-    % executed 
-    published(executed),
+    % Allow time for the wellbeing to update
+    sleep(1),
+    published(plan_executed, [plan_id=PlanId]),
+    sleep(1),
+    % wellbeing updated
+    query_answered(EffectorCA, wellbeing, FinalWellbeing),
+    assert_wellbeing_changed(InitialState.wellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = =]),
+    published(intent_completed, [intent_id=IntentId]).
+
+  test(intent_abandoned) :-
+    EffectorCA = 'effector:tacho_motor-outA',
+    % EffectorName = 'tacho_motor-outA',
+    query_answered(EffectorCA, state, InitialState),
+   % adopt
+    message_sent(EffectorCA, adopted),
+	  query_answered(EffectorCA, parents, Parents),
+	  thread_self(Self),
+	  assertion(member(Self, Parents)),
+    % Executing actions in the context of an intent
+    IntentId = 'some intent',
+    PlanId = 'some plan',
+    published(planned_actions, [plan_id=PlanId, intent_id=IntentId, actions=[spin, spin, reverse_spin, jump]]),
+    get_message(message(actions_received(PlanId), EffectorCA), 1),
+    published(abandoned, [intent_id=IntentId]),
+    sleep(1),
+    query_answered(EffectorCA, state, CurrentState),
+    assertion(length(CurrentState.actuations, 0)),
     % Allow time for the wellbeing to update
     sleep(1),
     % wellbeing updated
     query_answered(EffectorCA, wellbeing, FinalWellbeing),
-    assert_wellbeing_changed(InitialWellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = >]),
-    % intent completed
-    published(intent_completed, [id = Id, executed = true]),
-    % activation events received
-    get_matching_message(option(directive, spin), event(activation, _, EffectorCA), 1),
-    get_matching_message(option(directive, reverse_spin), event(activation, _, EffectorCA), 1).
+    assert_wellbeing_changed(InitialState.wellbeing, FinalWellbeing, [fullness = = , integrity = =, engagement = =]).

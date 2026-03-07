@@ -1,32 +1,35 @@
 /*
 The dynamic cognition actor tracks changes in prior experiences and uncovers new ones by integrating current and past observations.
 
-Experiences, `activation`, `count`, `more` (more than) and `trend`, are added to the current timeframe by:
+Experiences, `activation` (repetitions), `count` (how many), `more` (of what), unchanged (for how long) and `trend` (what kind), are added to the current timeframe by:
 
 * Converting all activation observations accumulated in the current timeframe into activation experiences
-* updating prior synthetic experiences (count, more and trend) if they are still extant
+* updating prior synthetic experiences (count, more, unchanged and trend) if they are still extant
 * detecting as many novel synthetic experiences as time allows
 
 An experience, like an observation, is a property or relation to which a confidence and other meta-data is associated.
 A property or relation applies to one object (its origin) and it has one value.
 The value of a relation is another object.
-The value of a property is a number or a label (e.g. true, false, red, green, up, down etc.)
+The value of a property is a number or a label (e.g. true, false, red, green, up, down, 2, etc.)
 The kind of property/relation determines the domain of permissible values.
 
 Value domains of experiences: 
 
-* activation: a number (of repeated actions/directives executed)
-* count: 1, 2, 3, `many`
+* activation: 1, 2, 3, `many` - a count of repeated actions/directives recently executed
+* count: 1, 2, 3, `many` 
+* unchanged: 2, 3, `many` (a value of 1 is nonsensical)
 * trend: `up`, `down`, `ended`
 * more: an object
+* unchanged: 1 ,2 ,3 , `many`
 
 Before work:
 
-* Convert accumulated activation observations into experiences
+* Convert recent activation observations into experiences
 * Update prior synthetic experiences
-    * A prior experience may persist unchanged or may no longer exist
+    * A prior experience may persist or may no longer exist
     * A prior count may now take a different value, including 1
-    * A prior with value up or down may now take value `ended`
+    * A prior trend with value up or down may now take value `ended`
+    * A prior unchanged may now take a different value, including 1
 
 In each unit of work:
 
@@ -34,7 +37,7 @@ In each unit of work:
 
 Finding a novel synthetic experience (non-deterministic):
 
-* Choose a kind of experience from [count, more, trend]
+* Choose a kind of experience from [count, more, trend, unchanged]
 * Find a non-empty, maximal (can not be grown further) set of observations to which the kind applies
 
 Detecting and updating a synthetic experience:
@@ -44,6 +47,7 @@ Detecting and updating a synthetic experience:
     * Relations or properties with same kind and value (number of objects with the same description)
     * Relations with same origin and kind (number of relations of a kind for a given object)
 * `more`: A count of observations is greater than another count, where both counts must be > 1 to be first detected, or a count can be 1 when a `more` experience is updated
+* `unchanged` : A count (> 1 to be detected or updated) of the latest, consecutive timeframes where an observation is the same as in the current timeframe (the count includes the current timeframe)
 * `trend`: An object's property changed up or down over the last timeframes when first detected, or stopped changing when updated
     * Trending are number-valued properties with the same origin and kind 
         * A trend's value can be `up` or `down`
@@ -51,9 +55,9 @@ Detecting and updating a synthetic experience:
 
 Assigning confidence to an experience:
 
-* Take the average confidence in the observed set(s) composing the synthetic object(s) of the experience (don't multiply individual confidences)
-* If a `trend`, confidence is boosted when the trend's value is maintained across timeframes (an up trend over 5 timeframes is more confident than one over only 2)
-
+* Take the average confidence in the observed set(s) composing the synthetic object(s) of the experience
+* If a `trend` experience, confidence is boosted when the trend's value is maintained across timeframes (an up trend over 5 timeframes is more confident than one over only 2)
+* If an `unchanged` experience, confidence is boosted by the number of timeframes where the observation stays the same
 */
 
 :- module(experience, []).
@@ -62,18 +66,22 @@ Assigning confidence to an experience:
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/observations)).
 
-% Convert all activation observations into experiences
+% TODO - observe phase ought to drop stale activation observation, not the experience phase
+% TODO - have entering experience phase only consume experiences to replace them with updates from observations, and with novel experiences
+% When entering the experience phase, the CA drops all from its state after passing them to the experience phase
+% TODO - do this in observe phase - Drop stale activation observations
+% Convert all (necessarily recent) activation observations into experiences
 % and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
 before_work(_, State, [experiences=Experiences], WellbeingDeltas) :-
     wellbeing:empty_wellbeing(WellbeingDeltas),
-    activation_experiences_from_observations(CA, State, ActivationExperiences),
+    activation_experiences_from_observations(CA, State.observations, ActivationExperiences),
     [Timeframe | _] = State.timeframes,
     !,
     PriorExperiences = Timeframe.experiences,
     updated_experiences(CA, State, PriorExperiences, [], UpdatedExperiences),
-    append(UpdatedExperiences, ActivationExperiences, Experiences),
-    log(info, experience, "Phase experience (before) for CA ~w updated and activation experiences ~p", [CA, Experiences]).
+    append(UpdatedExperiences, ActivationExperiences, Experiences).
 
 before_work(_, _, [], WellbeingDeltas) :-
     wellbeing:empty_wellbeing(WellbeingDeltas).
@@ -85,21 +93,18 @@ before_work(_, _, [], WellbeingDeltas) :-
 unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
     novel_experience(CA, State, Experience),
     StateDeltas = [experiences=[Experience]],
-    wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, experience, "Phase experience (more) for CA ~w added ~p", [CA, Experience]).
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
-unit_of_work(CA, _, done([], WellbeingDeltas)) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, experience, "Phase experience done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
+unit_of_work(_, _, done([], WellbeingDeltas)) :-
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
-activation_experiences_from_observations(CA, State, ActivationExperiences) :-
-    get_state(State, observations, Observations),
+activation_experiences_from_observations(CA, Observations, ActivationExperiences) :-
     activation_experiences(CA, Observations, [], ActivationExperiences).
 
 activation_experiences(_, [], ActivationExperiences, ActivationExperiences).
 
 activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
-    observation{kind:activation} :< Observation,
+    is_activation_observation(Observation),
     !,
     findall(Other, (member(Other, Rest), equivalent_activation_observations(Observation, Other)), EquivalentActivationObservations),
     append(EquivalentActivationObservations, Remaining, Rest),
@@ -109,9 +114,10 @@ activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
 activation_experiences([_ | Rest], Acc, ActivationExperiences) :-
     activation_experiences(Rest, Acc, ActivationExperiences).
 
+% Equivalent if same goal activation observed
 equivalent_activation_observations(Observation, Other) :-
-    observation{kind:activation, value:ActionNameOrDirectiveId} :< Observation,
-    observation{kind:activation, value:ActionNameOrDirectiveId} :< Other.
+    observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Observation,
+    observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Other.
 
 activation_observations_to_experience(CA, EquivalentActivationObservations, ActivationExperience) :-
     length(EquivalentActivationObservations, Count),
@@ -128,8 +134,8 @@ updated_experiences(CA, State, [PriorExperience | Rest], Acc, UpdatedExperiences
         ;
         updated_experiences(CA, State, Rest, Acc, UpdatedExperiences).
 
-% A prior `count` experience is updated by keeping current observations that have survived from the prior experience's set of support
-% then, if not empty, attempting to extend this support from the surviving observations, and, finally, counting the maximal set.
+% A prior `count` experience is updated by keeping current observations that have survived from the prior experience's evidence/base of support
+% then, if not empty, attempting to extend this evidential support from the surviving observations, and, finally, counting the maximal set.
 updated_experience(CA, State, count, PriorExperience, UpdatedExperience) :-
     % Update the set of countable objects given the observations supporting the prior experience's origin object
     count_from_prior_object(State, PriorExperience.origin, Count, CountedObservations),
@@ -149,7 +155,7 @@ updated_experience(CA, State, more, PriorExperience, UpdatedExperience) :-
 updated_experience(CA, State, trend, PriorExperience, UpdatedExperience) :-
     [Timeframe | _] = State.timeframes,
     member(PriorObservation, Timeframe.observations),
-    member(PriorObservation.id, PriorExperience.origin.support),
+    member(PriorObservation.id, PriorExperience.origin.evidence),
     member(Observation, State.observations),
     comparable_observations(PriorObservation, Observation),
     trend_experience(CA, State, PriorObservation, Observation, UpdatedExperience),
@@ -159,13 +165,24 @@ updated_experience(CA, State, trend, PriorExperience, UpdatedExperience) :-
 updated_experience(_, _, trend, PriorExperience, UpdatedExperience) :-
     UpdatedExperience = PriorExperience.put(value, ended).
 
+% See if the prior experience is still a unchanged one, if so update its count of timeframes
+% Fail if no longer unchanged
+% Observations share the same ID if they are semantically identical
+updated_experience(CA, State, unchanged, PriorExperience, UpdatedExperience) :-
+    [PriorObservationId] = PriorExperience.origin.evidence,
+    % The observation persists
+    member(CurrentObservation, State.observations),
+    CurrentObservation.id == PriorObservationId,
+    inc_simple_count(PriorExperience.value, Count),
+    unchanged_experience(CA, State, CurrentObservation, Count, UpdatedExperience).
+
 count_from_prior_object(State, Object, Count, CountedObservations) :-
-    PriorObservationIds = Object.support,
+    PriorObservationIds = Object.evidence,
     surviving_observations(State, PriorObservationIds, [], Observations),
     % Find maximal set of countable observations starting from surviving observation. Fails if nothing to count.
     countable_observations(State.observations, Observations, CountedObservations),
-    length(CountedObservations, Count).
-
+    length(CountedObservations, Length),
+    simple_count(Length, Count).
 
 % Observations from prior timeframe that are still current
 surviving_observations(_, [], Acc, Acc).
@@ -265,8 +282,7 @@ more_experience(CA, Count1, CountedObservations1, Count2, CountedObservations2, 
 trend_experience(CA, State, PriorObservation, Observation, Experience) :-
     PriorValue = PriorObservation.value,
     CurrentValue = Observation.value,
-    sorted_ids([PriorObservation, Observation], ObservationIds),
-    synthetic_object(ObservationIds, Object),
+    synthetic_object([PriorObservation.id, Observation.id], Object),
     (CurrentValue \= PriorValue ->
         CurrentValue > PriorValue ->
         TrendExperience = experience{origin:Object, kind:trend, value:up, by:CA}
@@ -277,6 +293,34 @@ trend_experience(CA, State, PriorObservation, Observation, Experience) :-
     average_confidence([PriorObservation, Observation], CurrentConfidence),
     trend_confidence(State, TrendExperience, CurrentConfidence, Confidence),
     Experience = TrendExperience.put(confidence, Confidence).
+
+unchanged_experience(CA, _, Observation, Count, Experience) :-
+    synthetic_object([Observation.id], Object),
+    confidence_in_unchanged(Count, Confidence),
+    Experience = experience{origin:Object, kind:unchanged, value:Count, confidence: Confidence, by:CA}.
+ 
+unchanged_experience(CA, State, Observation, Experience) :-
+    persisted_observation_count(Observation.id, State, TimeframeCount),
+    TimeframeCount > 1,
+    simple_count(TimeframeCount, Count),
+    unchanged_experience(CA, State, Observation, Count, Experience).
+
+persisted_observation_count(ObservationId, State, Count) :-
+    persisted_observation_count(State.timeframes, ObservationId, 1, Count). % Start count at 1 to include the current timeframe
+
+persisted_observation_count([Timeframe | Rest], ObservationId, Acc, Count) :-
+    member(Obs, Timeframe.observations),
+    Obs.id == ObservationId,
+    Acc1 is Acc + 1,
+    !,
+    persisted_observation_count(Rest, ObservationId, Acc1, Count).
+
+persisted_observation_count(_, _, Count, Count).
+
+confidence_in_unchanged(many, 1.0).
+confidence_in_unchanged(SimpleCount, Confidence) :-
+    number(SimpleCount),
+    Confidence is SimpleCount * 0.25.
 
 % Confidence in a trend is altered by its history 
 trend_confidence(State, TrendExperience, CurrentConfidence, Confidence) :-
@@ -291,7 +335,7 @@ previous_trend_experience(State, TrendExperience, PriorTrendExperience) :-
     member(PriorTrendExperience, Timeframe.experiences),
     trend == PriorTrendExperience.kind,
     % The origin of a prior trend experience shares exactly one supporting observation.
-    intersection(PriorTrendExperience.origin.support, TrendExperience.origin.support, [_]).
+    intersection(PriorTrendExperience.origin.evidence, TrendExperience.origin.evidence, [_]).
 
 adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence, Confidence) :-
     (PriorTrendExperience.value == TrendExperience.value ->
@@ -300,11 +344,11 @@ adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence
         Confidence == CurrentConfidence
      ).
 
-% object{type:synthetic, id:Id, support: [ObservationId, ...]} - support is the private set of Observations by the dCA from which the synthetic object was created by the dCA.
+% object{type:synthetic, id:Id, evidence: [ObservationId, ...]} - evidence is the private set of Observations by the dCA from which the synthetic object was created by the dCA.
 % Note: Two objects of the same type about the same "thing" must have identical ids, irrespective of the CA that created the object.
 synthetic_object(ObservationIds, Object) :-
     atomic_list_hash(ObservationIds, ObjectId),
-    Object = object{type:synthetic, id:ObjectId, support:ObservationIds}.
+    Object = object{type:synthetic, id:ObjectId, evidence:ObservationIds}.
 
 sorted_ids(Items, Ids) :-
     all_ids(Items, [], AllIds),
@@ -314,11 +358,6 @@ all_ids([], Acc, Acc).
 all_ids([Item | Rest], Acc, AllIds) :-
     Id = Item.id,
     all_ids(Rest, [Id | Acc], AllIds).
-
-% Count from 1 to 3 and then many. Else counting fails.
-simple_count(N, Count) :-
-    N > 0,
-    (N > 3 -> Count = many ; Count = N).
 
 % Is a count perceivable as greater than another?
 % Comparing rounded log2 for numbers greater than 3.
@@ -375,6 +414,16 @@ new_experience(CA, State, trend, _, Experience) :-
     member(Observation, State.observations),
     comparable_observations(PriorObservation, Observation),
     trend_experience(CA, State, PriorObservation, Observation, Experience).
+
+% A novel unchanged experience looks at the a continuous observation over contiguous timeframe including the current one.
+new_experience(CA, State, unchanged, Observations, Experience) :-
+    [Timeframe | _] = State.timeframes,
+    predsort(priority, Timeframe.observations, PriorObservations),
+    member(PriorObservation, PriorObservations),
+    number(PriorObservation.value),
+    member(Observation, Observations),
+    PriorObservation.id == Observation.id,
+    unchanged_experience(CA, State, Observation, Experience).
 
 comparable_observations(Observation1, Observation2) :-
     is_dict(Observation1, observation),

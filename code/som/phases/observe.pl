@@ -1,41 +1,47 @@
 /*
-Keep activation observations and merge correct predictions and effective prediction errors into new observations.
+* Drop stale activation observations.
+* Merge correct predictions and effective prediction errors into new observations.
 */
 
 :- module(observe, []).
 
-:- use_module(library(uuid)).
 :- use_module(utils(logger)).
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
-:- use_module(agency(som/observation)).
+:- use_module(agency(som/observations)).
 :- use_module(agency(som/dynamic_ca)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/observations)).
 
-% Keep the current activation observations, to which new observations from predictions will be added
+% All prior observations are consumed in the CA state upon entering the observe phase.
+% During work, some may be be recreated and new ones made from predicting.
+% Except for activation observations which are not predicted but come out of acting.
+% Before work, reinstate the prior activation observations, unless they have become stale.
 before_work(_, State, [observations=ActivationObservations], WellbeingDeltas) :-
-    activation_observations(State, ActivationObservations),
-    wellbeing:empty_wellbeing(WellbeingDeltas).
-
-activation_observations(State, ActivationObservations) :-
-    get_state(State, observations, Observations),
+    PriorObservations = State.observations, 
     findall(Observation, 
-        (member(Observation, Observations),
-        observation{kind:activation} :< Observation),
-        ActivationObservations
-    ).
+        (member(Observation, PriorObservations), is_activation_observation(Observation), \+ is_activation_observation_stale(Observation, State)),
+        ActivationObservations),
+    wellbeing:empty_wellbeing(WellbeingDeltas).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
 
 % observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA, id:Id}
-% The object in an observation omits its "support set" (what was integrated in its synthesis as part of an umwelt experience) 
+% The object in an observation omits its "evidence set" (what was integrated in its synthesis as part of an umwelt experience) 
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
 unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
     observed(CA, State, Observations),
     StateDeltas = [observations=Observations],
     wellbeing:empty_wellbeing(WellbeingDeltas),
     log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
+
+% The activation was observed too long ago to persist
+is_activation_observation_stale(ActivationObservation, State) :-
+    _-TimeframeIndex = ActivationObservation.value,
+    Age is State.timeframe_count - TimeframeIndex,
+    simple_count(Age, SimpleAge),
+    SimpleAge \= many.
 
 observed(CA, State, Observations) :-
     aggregate_prediction_errors(State, Pairs),
@@ -45,7 +51,7 @@ observed(CA, State, Observations) :-
     predictions_to_observations(CorrectPredictions, CA, Observations1),
     prediction_errors_to_observations(EffectivePredictionErrors, CA, Observations2),
     append(Observations1, Observations2, Observations),
-    log(info, observe, "(~w) Observed ~p", [CA, Observations]).
+    log(debug, observe, "(~w) Observed ~p", [CA, Observations]).
 
 umwelt_size(State, Size) :-
     get_state(State, umwelt, Umwelt),

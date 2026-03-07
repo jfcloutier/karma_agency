@@ -24,7 +24,7 @@ Messages:
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 
 * In from a parent
-    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, priority:Priority, confidence:Confidence, by: CA}
+    * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, weight:Weight, confidence:Confidence, by: CA}
  	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
 
 Events:
@@ -122,7 +122,7 @@ handled(query(Query), State, Answer) :-
 handled(message(adopted, Parent), State, NewState) :-
     \+ from_parent(Parent, State),
     all_subscribed([prediction - Parent]),
-    acc_state(State, parents, Parent, NewState).
+    acc_state(State, parents, Parent, ca_support:agency_state_sorter, NewState).
 
 % Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
@@ -172,6 +172,7 @@ sense_url(State, SenseURL) :-
 experiences_updated(Prediction, State, NewState) :-
     log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
     prediction_is_meaningful(Prediction, State),
+    log(info, sensor_ca, "~@ - Prediction ~p is meaningful", [self, Prediction]),
     sense_name(State, SenseName),
     sensor_name(State, SensorName),
     % Ignore tolerance and timestamp in reading for now
