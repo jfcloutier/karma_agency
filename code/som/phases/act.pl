@@ -35,6 +35,7 @@ Plan creation involves:
 :- use_module(agency(som/dynamic_ca)).
 :- use_module(agency(som/ca_support)).
 
+:- thread_local phase_done/0.
 
 % Computing umwelt actions before individual units of work
 before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDeltas) :-
@@ -45,17 +46,26 @@ before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDeltas) :-
 % The work is done if there is no goal state left to advance.
 % The unit of work must always be carried out on the latest goal states, which may have changed prior to entering this phase or before each unit of work.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
-    member(N, [1,2,3]),
+    repeat_unless_done,
     % query_answered/3 is deterministic
     query_answered(CA, goal_states, GoalStates),
     query_answered(CA, plans, Plans),
     % Are we sure the CA has updated its goal states from the last unit of work?
     % - Yes since the query always follows the work_progressed message sent after the previous unit of work.
-    log(info, act, "~w is acting on goal states ~p and plans ~p (~w)", [CA, GoalStates, Plans, N]),
+    log(info, act, "~w is acting on goal states ~p and plans ~p", [CA, GoalStates, Plans]),
     acted(CA, State, GoalStates, Plans, StateDeltas, WellbeingDeltas).
 
 unit_of_work(_, _, done([], WellbeingDeltas)) :-
     wellbeing:empty_wellbeing(WellbeingDeltas).
+
+repeat_unless_done() :-
+    phase_done(),
+    !,
+    log(info, act, "Phase act is DONE"),
+    fail.
+
+repeat_unless_done() :-
+    repeat.
 
 % Find all actions supported by effector CAs currently in the CA's umwelt
 umwelt_actions(Umwelt, Actions) :-

@@ -36,7 +36,8 @@ The sequence of phases is
 :- use_module(agency(som/phases/assess)).
 
 % phase_time_limit(Time) - Time limit before a phase is stopped
-:- thread_local phase_time_limit/1.
+% Asserting phase_done() is how a repeating phase signals itself it is done (see act.pl)
+:- thread_local phase_time_limit/1, phase_done/0.
 
 % Phase transitions
 % Timeframe started (goes right to begin)
@@ -117,6 +118,7 @@ started(CA, State) :-
     get_state(State, latency, Latency),
     Phase = State.phase,
     timebox_phase(Phase, Latency),
+    retractall(phase_done/0),
     work(CA, State, Phase).
 
 % Timebox a phase but only if it is meant to be
@@ -221,7 +223,8 @@ run_the_clock(_).
 phase_timeout() :-
     get_time(Now),
     phase_time_limit(TimeLimit),
-    Now > TimeLimit.
+    Now > TimeLimit,
+    log(info, phase, "Phase TIMED OUT (~w exceeded ~w)", [Now, TimeLimit]).
 
 phase_max_time(Phase, Latency, Delay) :-
     phase_timebox(Phase, Fraction),
