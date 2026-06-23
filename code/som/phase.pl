@@ -36,8 +36,7 @@ The sequence of phases is
 :- use_module(agency(som/phases/assess)).
 
 % phase_time_limit(Time) - Time limit before a phase is stopped
-% Asserting phase_done() is how a repeating phase signals itself it is done (see act.pl)
-:- thread_local phase_time_limit/1, phase_done/0.
+:- thread_local phase_time_limit/1.
 
 % Phase transitions
 % Timeframe started (goes right to begin)
@@ -118,7 +117,6 @@ started(CA, State) :-
     get_state(State, latency, Latency),
     Phase = State.phase,
     timebox_phase(Phase, Latency),
-    retractall(phase_done/0),
     work(CA, State, Phase).
 
 % Timebox a phase but only if it is meant to be
@@ -126,8 +124,8 @@ timebox_phase(Phase, Latency) :-
     phase_max_time(Phase, Latency, Delay),
     get_time(Now),
     Deadline is Now + Delay,
-    log(info, phase, "Setting end of phase ~w of ~w seconds from now", [Phase, Delay]),
-    remember_one(phase_time_limit(Deadline)).
+    remember_one(phase_time_limit(Deadline)),
+    log(info, phase, "Setting end of phase ~w with latency ~w to ~w seconds from now ~w to deadline ~w", [Phase, Latency, Delay, Now, Deadline]).
 
 % Maybe do something before engaging into units of work
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
@@ -171,7 +169,7 @@ work_status_handled(done(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, T
     phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine).
 
 work_status_handled(more(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, TimeframeCount) :-
-    (phase_timeout() -> 
+    (phase_timeout(Phase) -> 
         phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine)
         ;
         work_reported(CA, Phase, StateDeltas, WellbeingDeltas),
@@ -220,11 +218,11 @@ run_the_clock(Phase) :-
 
 run_the_clock(_).
 
-phase_timeout() :-
+phase_timeout(Phase) :-
     get_time(Now),
     phase_time_limit(TimeLimit),
     Now > TimeLimit,
-    log(info, phase, "Phase TIMED OUT (~w exceeded ~w)", [Now, TimeLimit]).
+    log(info, phase, "Phase ~w TIMED OUT (now ~w exceeded time limit ~w)", [Phase, Now, TimeLimit]).
 
 phase_max_time(Phase, Latency, Delay) :-
     phase_timebox(Phase, Fraction),

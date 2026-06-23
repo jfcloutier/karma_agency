@@ -122,7 +122,8 @@ ca_name(Options, Name) :-
 %! latency(+Level, -Latency) is det
 % The time in seconds allocated to a cognition actor to complete a time frame given its level in the SOM
 latency(Level, Latency) :-
-	Latency is max(0.1, 2 ** (Level - 1) / 2).
+	% Latency is max(0.1, 2 ** (Level - 1) / 2).
+	Latency is max(0.2, 4 ** (Level - 1) / 2).
 
 %! level_from_name(+Name, -Level) is det
 % Get the level of a named CA
