@@ -1,9 +1,10 @@
 /*
+
 Dynamic cognition actor
 
 A dynamic cognition actor is a transient component of the agent's society of mind (SOM). It is a cognition actor (CA) that is born and dies during the lifetime of the SOM.
 This is in contrast to the static CAs that exist a priori and in perpetuity (as an interface to the body's permanent sensors and effectors).
-Unlike static CAs, a dynamic CA has other CAs  as its umwelt.
+Unlike static CAs, a dynamic CA has other CAs as its umwelt.
 
 See [design notes](https://github.com/jfcloutier/karma_system/tree/main/design_notes)
 
@@ -16,9 +17,6 @@ Messages:
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 	* `wellbeing_transfer(Wellbeing)` - Wellbeing is wellbeing{fullness: Delta1, integrity:Delta2, engagement:Delta3} - a transfer in either direction of wellbeing
 	* `causal_theory(Theory)` - when the Apperception Engine has found a causal theory for the dynamic CA
-	From effectors
-	* `actions_received(PlanId)` - from effector CAs
-	* `actuations_ready(PlanId)` - from effector CAs
 	
 	Events:
 	
@@ -28,17 +26,15 @@ Messages:
 	* `end_of_life([level=Level])`
 	* `todo([directives=[Directive, ...]])` - A parent tentatively emits directives to its umwelt
 	* `abandoned([intent_id=IntentId])` - A CA emits an intent it is abandoning (relevant if ancestor)
+	* `intent_completed([intent_id=IntentId])` - A CA emits that its intent's execution has completed
 	* `can_seek([directive=Directive])` - An umwelt CA confirms a directive is meaningful to it
 	* `cannot_seek([directive=Directive])`  - An umwelt CA confirms a directive is meaningless to it
-	* `find_plan([directive_id=DirectiveId])` - The umwelt CAs are told to each find a plan to realize a directive they had received, if it is meaningful to them
+	* `find_plan([directive=Directive])` - The umwelt CAs are told to each find a plan to realize a directive they had received, if it is meaningful to them
 	* `can_execute([directive=Directive, plan_id=PlanId])` - An umwelt CA confirms that it has an executable plan for a directive it received from a parent
 	* `cannot_execute([directive=Directive])` - An umwelt CA confirms that it did not find an executable plan for a directive it had received from a parent
-	* `execute([directive_id=DirectiveId])` - A CA tells its umwelt to execute any plan they have to realize a directive they had received
-	* `executed([directive_id=DirectiveId])` - An umwelt CA confirms that it executed a plan to realize a directive it had received
-	For effectors
-	* `planned_actions([actions=[Action, ...], plan_id:PlanId, intent_id=IntentId])` - Umwelt effectors are told of planned actions to realize an intent
-	* `ready_actuations([plan_id=PlanId, intentid:IntentId])` - Umwelt effectors are told to ready the actuations from the CA's plan to realize an intent
-  
+	* `execute([directive=Directive])` - A CA tells its umwelt to execute any plan they have to realize a directive they had received
+	* `executed([directive=Directive])` - An umwelt CA confirms that it executed a plan to realize a directive it had received
+ 
 Queries:
 
 * level -> Integer > 0
@@ -66,7 +62,7 @@ Executing a lifecycle phase:
 4. Empty out the CA state properties consumed by the phase
 4. A phase task may emit events and messages to its and other CAs
 5. On completing a unit of work or on ending (b/c its done or time has expired), the current phase task sends a message to the CA with the modifications to the state and wellbeing.
-6. On ending a phase, complete the current lifecyle (if this was the last phase in a timeframe's lifecylce) else goto 2
+6. On ending a phase, complete the current lifecyle (if this was the last phase in a timeframe's lifecycle) else goto 2
 
 When all phases of a timeframe have completed:
 
@@ -79,7 +75,7 @@ State
 Data:
     * parents - parent CAs
     * umwelt - child CAs
-	* umwelt_actions - actions available to the umwelt
+	* umwelt_actions - actions available from the umwelt (empy except for level 1 CAs)
     * phase - the name of the current time frame phase
 	* predictions_out - predictions made
 	* predictions_in - predictions received
@@ -198,7 +194,7 @@ terminated :-
 		[level(Level)]),
 	log(warn, dynamic_ca, "Terminated ~@", [self]).
 
-% Ignore since the umwelt is constituted "birth"
+% Ignore since the umwelt is constituted at "birth"
 handled(event(ca_started, _, _), State, State).
 
 % `todo([directives=[Directive, ...]])`
@@ -210,23 +206,22 @@ handled(event(todo, Payload, Source), State, NewState) :-
 	maybe_goals_advanced(Directives, todo, Source, State, NewState).
 
 % From ancestor (if the intent is known)
-% `abandoned([intent_id=IntentId])`
+% `abandoned([intent_id=IntentId])` or `intent_completed([intent_id=IntentId])`
 % Get rid of goal states associated with the intent and all plans for these goals
-handled(event(abandoned, Payload, Source), State, NewState) :-
-	log(info, dynamic_ca, "~@ received event -abandoned- with ~p from ~w", [self, Payload, Source]),
+handled(event(Topic, Payload, Source), State, NewState) :-
+	memberchk(Topic, [intent_completed, abandoned]),
+	log(info, dynamic_ca, "~@ received event ~w with ~p from ~w", [self, Topic, Payload, Source]),
 	option(intent_id(IntentId), Payload),
-	findall(GoalState, (member(GoalState, State.goals_states), GoalState.goal.intent_id == IntentId), AbandonedGoalStates),
-	findall(Plan, (member(Plan, State.plans), member(GoalState, AbandonedGoalStates), Plan.goal_id == GoalState.goal.id), AbandonedPlans),
-	dec_state(State, goal_states, AbandonedGoalStates, NewState1),
-	dec_state(NewState1, plans, AbandonedPlans, NewState).
+	findall(GoalState, (member(GoalState, State.goals_states), GoalState.goal.intent_id == IntentId), ObsoleteGoalStates ),
+	findall(Plan, (member(Plan, State.plans), member(GoalState, ObsoleteGoalStates), Plan.goal_id == GoalState.goal.id), ObsoletePlans),
+	dec_state(State, goal_states, ObsoleteGoalStates, NewState1),
+	dec_state(NewState1, plans, ObsoletePlans, NewState).
 
 % Received from an umwelt CA confirming that a directive received is relevant.
 % If all directives in a plan are can_seek, then the CA publishes to its umwelt the request to find_plan for each directive in the plan.
 handled(event(can_seek, Payload, Source), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -can_seek- with ~p from ~w", [self, Payload, Source]),
-	option(directive_id(DirectiveId), Payload),
-	% Assuming this is a directive previously sent to the umwelt as part of todo directives
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
 	% Record the advancement of the sent directive's state
 	maybe_goal_advanced(Directive, can_seek, Source, State, NewState1),
 	% Update existing plans with status unknown to status possible when now possible
@@ -243,9 +238,7 @@ handled(event(can_seek, Payload, Source), State, NewState) :-
 handled(event(DirectiveStatus, Payload, Source), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -~w- with ~p from ~w", [self, DirectiveStatus, Payload, Source]),
 	member(DirectiveStatus, [cannot_seek, cannot_execute]),
-	option(directive_id(DirectiveId), Payload),
-	% Assuming this is a directive previously sent to the umwelt as part of todo directives
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
 	% Record the deadend-ing of the directive if this is what happened
 	maybe_goal_advanced(Directive, DirectiveStatus, Source, State, State1),
 	% If the entire umwelt cannot seek the directive, then forget all plans containing the directive
@@ -258,40 +251,36 @@ handled(event(DirectiveStatus, Payload, Source), State, NewState) :-
 % If the plan is for an intent, then the CA executes the plan immediately.
 handled(event(can_execute, Payload, Source), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -can_execute- with ~p from ~w", [self, Payload, Source]),
-	option(directive_id(DirectiveId), Payload),
-	% Assuming this is a directive previously sent to the umwelt as part of todo directives
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
 	maybe_goal_advanced(Directive, can_execute, Source, State, State1),
     maybe_can_execute_plans_with_directive(Directive, State1, NewState).
 
 % Received from parents
-% find_plan([directive_id=DirectiveId])
+% find_plan([directive=Directive])
 % Move the goal_state for the directive to planning (plan-making happens in the acting phase)
 handled(event(find_plan, Payload, Source), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -find_plan- with ~p from ~w", [self, Payload, Source]),
-	option(directive_id(DirectiveId), Payload),
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
 	maybe_goal_advanced(Directive, planning, Source, State, NewState).
 
 % Received from parents
 % Given a plan for the directive, mark the first non-executed (sub) directive in the plan as executing, if not already
 handled(event(execute, Payload, Parent), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -execute- with ~p from ~w", [self, Payload, Parent]),
-	option(directive_id(DirectiveId), Payload),
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
+	maybe_goal_advanced(Directive, executing, Parent, State, State1),
 	plan_for_directive(Directive, State1, can_execute, Plan),
 	level(Level),
 	maybe_plan_execution_advanced(Plan, Parent, Level, State1, NewState).
 
 % Received from umwelt
-% A directive (identified by its id) sent by the CA or sibling was executed by an umwelt CA
+% A directive sent by the CA or sibling was executed by an umwelt CA
 % Mark the received directive as executed if relevant. If all other directives in the plan it is part of were also executed,
 % then propagate `executed` to parents for the received directive for which plan completed execution.
 % Convert what the CA executed as observations.
 handled(event(executed, Payload, Source), State, NewState) :-
 	log(info, dynamic_ca, "~@ received event -executed- with ~p from ~w", [self, Payload, Source]),
-	option(directive_id(DirectiveId), Payload),
-	known_directive(DirectiveId, State, Directive),
+	option(directive(Directive), Payload),
 	maybe_goal_advanced(Directive, executed, Source, State, State1),
 	activation_observed(Directive, Source, State1, State2),
 	maybe_plans_with_directive_executed(Directive, State2, NewState).
@@ -338,39 +327,6 @@ handled(message(prediction_error(PredictionError), _), State, NewState) :-
 
 handled(message(causal_theory(CausalTheory)), State, NewState) :-
 	put_state(State, causal_theory, CausalTheory, NewState).
-
-% While the plan is executing, add the message to the state of the goal for which actions were planned.
-% When all umwelt effector CAs confirmed receipt of actions, they are told to ready_actuation for the plan in the context of its intent.
-handled(message(actions_received(PlanId), Child), State, NewState) :-
-	get_state(State, goal_states, GoalStates),
-	member(GoalState, GoalStates),
-	goal_state{goal:Goal, plan_id:PlanId, status:executing} :< GoalState,
-	UpdatedGoalState = GoalState.put(messages, [message{about:actions_received, from:Child}]),
-	goal_state_updated(UpdatedGoalState, State, NewState),
-	(received_from_entire_umwelt(actions_received, UpdatedGoalState, State) ->
-		published(ready_actuations, [plan_id(PlanId), intent_id(Goal.intent_id)])
-		;
-		true
-	).
-
-% While the plan is executing, add the message to the goal for which actions were planned.
-% When all umwelt effector CAs confirmed they are ready for actuation, tell the body to execute all planned actions and move the goal to executed.
-% Tell the parents that the received directive for which actions were planned was executed.
-handled(message(actuations_ready(PlanId), Child), State, NewState) :-
-	log(info, dynamic_ca, "~@ received message -actuation_ready- for plan ~p from ~w", [self, PlanId, Child]),
-	get_state(State, goal_states, GoalStates),
-	member(GoalState, GoalStates),
-	goal_state{goal:Directive, plan_id:PlanId, status:executing} :< GoalState,
-	UpdatedGoalState = GoalState.put(messages, [message{about:actuations_ready, from:Child}]),
-	goal_state_updated(UpdatedGoalState, State, State1),
-	(received_from_entire_umwelt(actuations_ready, UpdatedGoalState, State) ->
-		actuations_executed(),
-   		maybe_goal_advanced(Directive, executed, Child, State1, NewState),
-		published(plan_executed, [plan_id(PlanId)]),
-		published(executed, executed([directive_id(Directive.id)]))
-		;
-		true
-	).
 
 handled(message(Message, Source), State, NewState) :-
 	ca_support : handled(message(Message, Source), State, NewState).
@@ -499,12 +455,6 @@ goal_state_updated(GoalState, State, NewState) :-
     ),
 	put_state(State, goal_states, [GoalState | GoalStates1], NewState).
 
-known_directive(directive_id, State, Directive) :-
-	get_state(State, goal_states, GoalStates),
-	member(GoalState, GoalStates),
-	goal_state{goal: Directive} :< GoalState,
-	Directive.id == directive_id.
-
 % A directive sent to the umwelt was executed.
 % It becomes the observation of an activation, the attempted impacting of an umwelt experience.
 activation_observed(Directive, Source, State, NewState) :-
@@ -523,7 +473,8 @@ maybe_plans_with_directive_executed(Directive, State, State) :-
 	findall(Plan, (member(Plan, State.plans), member(Directive, Plan.directives)), Plans),
 	forall(member(Plan, Plans),
 		(is_plan_executed(Plan, State) ->
-			published(executed, [directive_id(Plan.goal_id)])
+			known_directive(Plan.goal_id, State, Directive),
+			published(executed, [directive(Directive)])
 			;
 			true
 		)
@@ -549,18 +500,11 @@ maybe_plan_execution_advanced(Plan, Source, Level, State, NewState) :-
 	acc_state(State, plans, UpdatedPlan, ca_support:agency_state_sorter, State1),
 	maybe_goal_advanced(Directive, executing, Source, State1, NewState).
 
-% Tell effector CAs about the planned actions to engage the process of their joint execution immediately (now and outside of the act phase).
-% Mark the goal the plan is for as executing, implying that the list of actions are waiting execution.
-maybe_plan_execution_advanced(Plan, Source, Level, State, NewState) :-
-	Level == 1,
-	known_directive(Plan.goal_id, State, ReceivedDirective),
-	current_goal_state(ReceivedDirective, State, GoalState),
-	\+ is_step_already_taken(executing, GoalState.status),
-	UpdatedPlan = Plan.put(status, executing),
-	acc_state(State, plans, UpdatedPlan, ca_support:agency_state_sorter, State1),
-	published(planned_actions, [actions(Plan.directives), plan_id(Plan.id), intent_id(Plan.intent_id)]),
-	maybe_goal_advanced(ReceivedDirective, executing, Source, State1, NewState).
-
+% If at level 1, the plan is a sequence of commands.
+% Do nothing now. The plan (for an executing directive) will be executed in the `act` phase.
+% The plan is to be executed at once.
+maybe_plan_execution_advanced(_, _, Level, State, State) :-
+	Level = 1.
 maybe_plan_execution_advanced(_, _, _, State, State).
 
 % Find the first directive in the plan that has not executed
@@ -576,14 +520,8 @@ received_from_entire_umwelt(About, GoalState, State) :-
 	forall(member(Child, Umwelt), (member(Message, GoalState.messages), message{about:About, from:Child } :< Message)),
 	log(info, dynamic_ca, "~@'s ~p has received messages ~w from entire umwelt", [self, GoalState, About]).
 
-% Get the body host from the agency supervisor
-% Tell the body to execute all pending actions
-actuations_executed() :-
-	query_answered(agency, option(body_host), Host),
-  	body : actions_executed(Host).
-
 % Now that we know the umwelt can seek to achieve a directive sent to it,
-% See which plans containing this directive are now possible.
+% See which plans containing this directive are now possible (i.e. might be executable)
 maybe_make_plans_possible(State, CanSeekDirective, NewState) :-
 	findall(Plan, (member(Plan, State.plans), member(CanSeekDirective, Plan.directives), is_plan_now_possible(Plan, State)), PossiblePlans),
 	% Change the status of these plans to `possible`
@@ -697,6 +635,12 @@ can_execute_plan(Plan, State, NewState) :-
 		acc_state(State1, plans, UpdatedPlan, ca_support:agency_state_sorter, NewState),
 		published(can_execute, [directive_id(Plan.goal_id)])
 	).
+
+known_directive(directive_id, State, Directive) :-
+	get_state(State, goal_states, GoalStates),
+	member(GoalState, GoalStates),
+	goal_state{goal: Directive} :< GoalState,
+	Directive.id == directive_id.
 
 % The plan is for the CA's intent
 is_plan_for_intent(Plan, State, Intent) :-

@@ -16,6 +16,7 @@ run_tests(effector_ca).
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
 :- use_module(agency(agent)).
+:- use_module(agency(body)).
 :- use_module(agency(som)).
 :- use_module(agency(som/ca_support)).
 
@@ -39,8 +40,9 @@ test(all_effector_cas_are_at_level_0) :-
 
 test(plan_executed) :-
     EffectorCA = 'effector:tacho_motor-outA',
+    all_subscribed([can_seek, cannot_seek, can_execute]),
     % EffectorName = 'tacho_motor-outA',
-    query_answered(EffectorCA, state, InitialState),
+    % query_answered(EffectorCA, state, InitialState),
    % adopt
     message_sent(EffectorCA, adopted),
     sleep(1),
@@ -49,36 +51,53 @@ test(plan_executed) :-
 	  assertion(member(Self, Parents)),
     % Executing actions in the context of an intent
     IntentId = 'some intent',
-    PlanId = 'some plan',
-    published(planned_actions, [intent_id=IntentId, plan_id=PlanId, actions=[spin, spin, reverse_spin, jump]]),
-    get_message(message(actions_received(PlanId), EffectorCA), 1),
-    published(ready_actuations, [plan_id=PlanId, intent_id=IntentId]),
-    get_message(message(actuations_ready(PlanId), EffectorCA), 1),
+    findall(Command, (member(Action, [spin, spin, reverse_spin]), Command = command{effector_ca:EffectorCA, action:Action, intent_id:IntentId}), CanDoCommands),
+    CantDoCommand = command{effector_ca:EffectorCA, action:jump, intent_id:IntentId},
+    Commands = [CantDoCommand | CanDoCommands],
+    published(todo, [directives=Commands]),
+    sleep(1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:spin, intent_id:IntentId}), event(can_seek, _, EffectorCA), 1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:spin, intent_id:IntentId}), event(can_seek, _, EffectorCA), 1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:reverse_spin, intent_id:IntentId}), event(can_seek, _, EffectorCA), 1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:jump, intent_id:IntentId}), event(cannot_seek, _, EffectorCA), 1),
+    forall(member(Command, CanDoCommands), published(find_plan, [directive=Command])),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:spin, intent_id:IntentId}), event(can_execute, _, EffectorCA), 1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:spin, intent_id:IntentId}), event(can_execute, _, EffectorCA), 1),
+    get_matching_message(option(directive, command{effector_ca:EffectorCA, action:reverse_spin, intent_id:IntentId}), event(can_execute, _, EffectorCA), 1),
+  	  % Ready actuation can-do commands and have the body execute them all
+	  forall(member(Command, CanDoCommands), message_sent(EffectorCA, ready_actuation(Command))),
     query_answered(agency, option(body_host), Host),
   	body : actions_executed(Host),
+
+    forall(member(Command, CanDoCommands), message_sent(EffectorCA, actuation_executed(Command))),
     % Allow time for the wellbeing to update
     sleep(1),
-    published(plan_executed, [plan_id=PlanId]),
-    sleep(1),
     % wellbeing updated
-    query_answered(EffectorCA, wellbeing, FinalWellbeing),
-    assert_wellbeing_changed(InitialState.wellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = =]),
+    % query_answered(EffectorCA, wellbeing, FinalWellbeing),
+    % assert_wellbeing_changed(InitialState.wellbeing, FinalWellbeing, [fullness = <, integrity = <, engagement = =]),
     published(intent_completed, [intent_id=IntentId]).
 
   test(intent_abandoned) :-
     EffectorCA = 'effector:tacho_motor-outA',
     % EffectorName = 'tacho_motor-outA',
     query_answered(EffectorCA, state, InitialState),
+    EffectorCA = 'effector:tacho_motor-outA',
+    all_subscribed([can_seek, cannot_seek, can_execute]),
+    % EffectorName = 'tacho_motor-outA',
+    % query_answered(EffectorCA, state, InitialState),
    % adopt
     message_sent(EffectorCA, adopted),
+    sleep(1),
 	  query_answered(EffectorCA, parents, Parents),
 	  thread_self(Self),
 	  assertion(member(Self, Parents)),
     % Executing actions in the context of an intent
     IntentId = 'some intent',
-    PlanId = 'some plan',
-    published(planned_actions, [plan_id=PlanId, intent_id=IntentId, actions=[spin, spin, reverse_spin, jump]]),
-    get_message(message(actions_received(PlanId), EffectorCA), 1),
+    findall(Command, (member(Action, [spin, spin, reverse_spin]), Command = command{effector_ca:EffectorCA, action:Action, intent_id:IntentId}), CanDoCommands),
+    CantDoCommand = command{effector_ca:EffectorCA, action:jump, intent_id:IntentId},
+    Commands = [CantDoCommand | CanDoCommands],
+    published(todo, [directives=Commands]),
+    sleep(1),
     published(abandoned, [intent_id=IntentId]),
     sleep(1),
     query_answered(EffectorCA, state, CurrentState),

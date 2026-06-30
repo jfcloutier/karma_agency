@@ -12,13 +12,16 @@ Plan creation involves:
 
 % experience{origin:Object, kind:unchanged, value:Count, confidence: Confidence, by:CA}
 % synthetic_object([Observation.id], Object) => Object = object{type:synthetic, id:ObjectId, evidence:ObservationIds}
-% plan{id: ID, goal_id: GoalID, directives: [goal{...} | Action, ...], status:Status, score: Score}
+% plan{id: ID, goal_id: GoalID, directives: [goal{...} | command{...}, ...], status:Status, score: Score}
 % goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id: IntentId, intent_level: Level}
+% command{effector_ca:CA_ID, action:Action, intent_id:IntentId}
 % target{origin: Origin, kind: Kind, value: Value}
 % object{type:synthetic, id:Id, evidence: [ObservationId, ...]}
 % observation{id:Id, origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 
 **/
+
+%%%% TODO - Directives (goals or commands) are always communicated by value, never by their IDs
 
 :- module(act, []).
 
@@ -34,6 +37,7 @@ Plan creation involves:
 :- use_module(agency(som/observations)).
 :- use_module(agency(som/dynamic_ca)).
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(body)).
 
 % Computing umwelt actions before individual units of work
 before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDeltas) :-
@@ -180,12 +184,13 @@ goal_state_advanced_from(todo, GoalState, _, State, _, _, [UpdatedGoalState], []
 %   When found, send a todo to the umwelt with all the directives in the plan.
 
 % The plan is somehow already executed. Advance the goal state status to executed and let parents know if they didn't already.
-goal_state_advanced_from(planning, GoalState, _, _, _, Plans, [UpdatedGoalState], []) :-
+goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], []) :-
     known_plan_for_goal_state(Plans, GoalState, Plan),
     Plan.status == executed,
     !,
     UpdatedGoalState = GoalState.put(status, executed),
-    published(executed, [directive_id(Plan.goal_id)]).
+    known_goal(Plan.goal_id, GoalStates, PlanGoal),
+    published(executed, [directive(PlanGoal)]).
 
 % The plan is ready to execute
 goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], [UpdatedPlan]) :-
@@ -195,7 +200,8 @@ goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedG
     !,
     UpdatedPlan = Plan.put(status, can_execute),
     UpdatedGoalState = GoalState.put(status, can_execute),
-    published(can_execute, [directive_id(Plan.goal_id)]).
+    known_goal(Plan.goal_id, GoalStates, PlanGoal),
+    published(can_execute, [directive(PlanGoal)]).
 
 % A plan thought possible can not be executed in this timeframe
 goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], [UpdatedPlan]) :-
@@ -226,19 +232,48 @@ goal_state_advanced_from(planning, GoalState, _, State, _, Plans, [], [Plan]) :-
     !,
     published(todo, [directives(Plan.directives)]).
 
-% Progress is made in progressing the execution of the goal's plan by having each of its directives executed in turn
+% If level == 1
+% Progress is made by executing at once all commands in the goal's plan, if found
+% Publish `executed` for the plan's goal
+goal_state_advanced_from(executing, GoalState, CA, _, _, Plans, [UpdatedGoalState], []) :-
+    dynamic_ca : level_from_name(CA, Level),
+    Level == 1,
+    !,
+    known_plan_for_goal_state(Plans, GoalState, Plan),
+    forall(Command, (member(Command, Plan.directives), command_actuation_readied(Command))),
+    actuations_executed(),
+    forall(Command, (member(Command, Plan.directives), command_actuation_executed(Command))),
+    published(executed, [directive=GoalState.goal]),
+    UpdatedGoalState = GoalState.put(status, executed).
+
+% If level > 1
+% Progress is made in progressing the execution of the goal's plan by requesting that the first unexecuted directive be executed
 % Find the plan for the goal with goal state
 % Find the first directive that is can_execute and publish `execute` for the directive.
 % Fail otherwise.
 goal_state_advanced_from(executing, GoalState, CA, _, GoalStates, Plans, [UpdatedGoalState], []) :-
     known_plan_for_goal_state(Plans, GoalState, Plan),
     plan_directive_with_goal_state_status(Plan, GoalStates, can_execute, GS, Directive), 
-    published(execute, [directive_id(Directive.id)]),
+    published(execute, [directive(Directive)]),
     UpdatedGoalState = GS.put(messages, [message{about:execute, source:CA} | GS.messages]).
 
+% Get the body host from the agency supervisor
+% Tell the body to execute all pending actions
+actuations_executed() :-
+	query_answered(agency, option(body_host), Host),
+  	body : actions_executed(Host).
+    
 known_plan_for_goal_state(Plans, GoalState, Plan) :-
     member(Plan, Plans),
     Plan.goal_id == GoalState.goal.id.
+
+% Tell an effector CA to ready execution of its action
+command_actuation_readied(Command) :-
+    message_sent(Command.effector_ca, ready_actuation(Command)).
+
+% Tell an effector CA to execute its action (it tells the body to get the action reeady for execution)
+command_actuation_executed(Command) :-
+    message_sent(Command.effector_ca, execute_actuation(Command)).
 
 plan_directive_with_goal_state_status(Plan, GoalStates, Status, GS, Directive) :-
     member(Directive, Plan.directives),
@@ -465,6 +500,11 @@ directives_from_observation(Observation, _, _, State, Actions) :-
     flatten(ActionGroups, Actions1),
     Actions1 \= [],
     random_permutation(Actions1, Actions).   
+
+known_goal(GoalId, GoalStates, Goal) :-
+    member(GoalState, GoalStates),
+    Goal = GoalState.goal,
+    Goal.id == GoalId.
 
 action_groups([], []).
 
