@@ -20,6 +20,8 @@ Plan creation involves:
 
 **/
 
+%%%% TODO - Directives are always communicated by value, never by their IDs
+
 :- module(act, []).
 
 :- use_module(utils(logger)).

@@ -4,12 +4,7 @@ An effector CA is a static (a priori) cognition actor that communicates with a b
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
 Same-device effectors are combined in one effector_ca.
 
-An effector CA receives from its parents intended actions.
-It responds with the actions it is able to actuate and those it can't.
-
-It then may be told, one at a time, to prime body effectors for some/all of these goals.
-
-Eventually, the body is told to actuate all primed affectors by the CA that initiated the cascade of directives.
+An effector CA receives from its parents intended actions as commands in the context of an intent.
 
 The effector CA updates its wellbeing based on its participation and sends an event
 about its change in wellbeing.
@@ -18,19 +13,20 @@ Each action taken affects the CA's wellbeing. It reduces the CA's fullness and i
 its engagement by 1 (it starts at 0). An effector CA can not actuate if its fullness or integrity is at 0. An effector CA publishes
 changes to its wellbeing and effects transfers to and from its parents.
 
-An effector's actions are the IDs of the goals it can achieve.
+An effector CA neither observes nor experiences.
 
-An effector CA neither observes nor experiences. 
+An effector CA can receive commands todo from multiple plans prior to their executions.
+These plans either participate in realizing the same intent or different intents.
+The effector CA groups commanded actions (to actualize) by intent.
+The number of repeated actions to be actualized under an intent can not exceed the maximum number of repeated actions in a plan participating in the intent.
+When a command under an intent is to be executed, all accumulated instances of the commanded action under the instance are readied, if not already.
+When the intent is abandoned, the effector CA forgets about yet-to-be actualized commanded actions under the intent.
 
 Messages:
 
 * In
 	* `adopted(Parent)` - when added to the umwelt of a dynamic CA one level up
 	* `wellbeing_transfer(Wellbeing)` - Wellbeing is wellbeing{fullness: Delta1, integrity:Delta2, engagement:Delta3} - a transfer of wellbeing - an effector only consumes fullness and integrity
-	
-* Out to a parent
-	* `actions_received(PlanId)`
-	* `actuations_ready(PlanId)`
 
 Events:
 
@@ -39,13 +35,16 @@ Events:
 	* `abandoned, [intent_id=IntentId]`
 
 * In from a parent
-	* `planned_actions, [actions=[Action, ...], plan_id=PlanId, intent_id=IntentId]` - Intended actions accumulate ONLY while not their actuation is not ready
-	* `ready_actuations, [plan_id=PlanId, intent_id=IntentId]` - Only the maximum number of identical actions in any plan under the intent gets executed
-	* `plan_executed, [plan_id=PlanId]`
-	* `ca_terminated, [level=Level]`
+	* `todo, [directives=[Command, ...]]` - Intended actions accumulate ONLY while not their actuation is not ready
+	* `find_plan([directive=Command]) - Succeeds immediately if the directive is a command for an action in the effector CA's repertoire
+	* `execute`([directive=Command]) - Ready body for the actuation of the command's action
 
 * Out
-	*`ca_started, [level = Level]`
+	* `ca_started, [level = Level]`
+	* `can_seek([directive=Command])` - The effector CA has the command's action in its repertoire - in response to todo
+	* `cannot_seek([directive=Command])` - The effector CA does not have the command's action in its repertoire - in response to todo
+	* `can_execute([directive=Command])` - The effector CA has the command's action in its repertoire - in response to find_plan
+	* `cannot_execute([directive=Command])` - The effector CA does not have the command's action in its repertoire - in response to find_plan
 
 Queries:
 
@@ -76,6 +75,7 @@ Upon receiving an `intent_completed` event, an effector CA resets its list of ac
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(utils(logger)).
+:- use_module(utils(tools)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
 
@@ -146,15 +146,30 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
     unsubscribed_from(Parent),
     dec_state(State, parents, Parent, NewState).
 
-% Accumulates not-yet-ready actuations by plan in the context of an intent.
-% Tells the parent that actions were received for the intent.
-handled(event(planned_actions, Payload, Parent), State, NewState) :-
-	option(actions(Actions), Payload),
-	option(plan_id(PlanId), Payload),
-	option(intent_id(IntentId), Payload),
-	clumped(Actions, ActionCountPairs),	
-	actuations_accumulated(ActionCountPairs, PlanId, IntentId, State, NewState),
-	message_sent(Parent, actions_received(PlanId)).
+% Accumulates not-yet-ready actuations for actionable commands targeting the effector CA in the context of an intent.
+% Groups identical commands (same action, necessarily same intent)
+% Add them to the waiting list per intent, only incrementing the count of an action by the excess (adding 3 actions for an intent to 2 waiting actions adds only one)
+% Tells the parent whether it can or cannot seek each (possibly repeated) todo command (it should always can).
+handled(event(todo, Payload, _), State, NewState) :-
+	option(directives(Commands), Payload),
+	can_and_cannot_do(Commands, State, CanDoCommands, CantDoCommands),
+	% Can-do commands all have an id
+	actuations_accumulated(CanDoCommands, State, NewState),
+	forall(member(CanDo, CanDoCommands), published(can_seek, [directive=CanDo])),
+	forall(member(CannotDo, CantDoCommands), published(cannot_seek, [directive=CannotDo])).
+
+
+% The effector CA has a plan if there's an actuation for the command.
+handled(event(find_plan, Payload, _), State, NewState) :-
+	option(directive(Command), Payload),
+	(is_actuation(Command, State) ->
+		published(can_execute, [directive=Command])
+		;
+		published(cannot_execute, [directive=Command])
+	).
+
+%%% MORE TODO HERE
+
 
 % Tell the body to ready all actuations for the given intent.
 % Respond back to parent that the intent's actuations are ready to execute.
@@ -193,6 +208,56 @@ action_domain(State, ActionDomain) :-
 	findall(Action, 
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
+
+% command{effector_ca: CA_ID, action: Action, intent_id: IntentId}
+% Ignore commands meant for another effector CA
+% Divide the others into can do and can't do
+can_and_cannot_do(Commands, State, CanDoCommands, CannotDoCommands) :-
+	self(CA),
+	findall(CACommand, (member(CACommand, Commands), CACommand.effector_ca == CA), MyCommands),
+	findall(CanDoCommand, (member(CanDoCommand, MyCommands), can_do(CanDoCommand, State, true)), CanDoCommands),
+	findall(CannotDoCommands, (member(CantDoCommand, MyCommands), can_do(CanDoCommand, State, false)), CannotDoCommands).
+
+% TODO - also check if wellbeing allows taking the in-domain action
+can_do(State, Command, true) :-
+	get_state(State, action_domain, ActionDomain),
+	memberchk(Command.action, ActionDomain),
+	!.
+
+can_do(_, _, false).
+
+% actuations = [actuation{intent_id: IntentId, action: Action, status: none|ready|executed}]
+actuations_accumulated([], State, State).
+
+actuations_accumulated(Commands, State, NewState) :-
+	[Command | _] = Commands,
+	IntentId = Command.intent_id,
+	findall(Action, (member(Cmd, Commands), Action = Cmd.action), Actions),
+	clumped(Actions, ClumpedActions),
+	effects_added(ClumpedActions, IntentId, State, NewState).
+
+effects_added([Action-Count | Rest], IntentId, State, NewState) :-
+	get_state(State, actuations, Actuations),
+	findall(Actuation, (member(Actuation, Actuations), actuation{intent_id: IntentId, action:Action} :< Actuation), Effects),
+	length(Effects, CurrentCount),
+	DeltaCount is Count - CurrentCount,
+	DeltaCount > 0,
+	replicate(actuation{intent_id:IntentId, action:Action, status:none}, DeltaCount, NewActuations),
+	append(Actuations, NewActuations, UpdatedActuations),
+	put_state(State, actuations, UpdatedActuations).
+
+effects_added(_, _, State, State).
+
+is_actuation(Command, State) :-
+	self(Self),
+	Command.effector_ca == Self,
+	command{action:Action, intent_id:IntentId} :< Command,
+	get_state(State, actuations, Actuations),
+	member(Actuation, Actuations),
+	actuation{action:Action, intent_id:IntentId} :< Actuation,
+	!.
+
+% ============================ OLD ==========================
 
 actuations_accumulated([], _, _, State, State).
 

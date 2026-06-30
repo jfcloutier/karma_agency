@@ -1,4 +1,8 @@
 /*
+
+%%%% TODO - Directives are always communicated by value, never by their IDs
+
+
 Dynamic cognition actor
 
 A dynamic cognition actor is a transient component of the agent's society of mind (SOM). It is a cognition actor (CA) that is born and dies during the lifetime of the SOM.
@@ -30,15 +34,12 @@ Messages:
 	* `abandoned([intent_id=IntentId])` - A CA emits an intent it is abandoning (relevant if ancestor)
 	* `can_seek([directive=Directive])` - An umwelt CA confirms a directive is meaningful to it
 	* `cannot_seek([directive=Directive])`  - An umwelt CA confirms a directive is meaningless to it
-	* `find_plan([directive_id=DirectiveId])` - The umwelt CAs are told to each find a plan to realize a directive they had received, if it is meaningful to them
+	* `find_plan([directive=Directive])` - The umwelt CAs are told to each find a plan to realize a directive they had received, if it is meaningful to them
 	* `can_execute([directive=Directive, plan_id=PlanId])` - An umwelt CA confirms that it has an executable plan for a directive it received from a parent
 	* `cannot_execute([directive=Directive])` - An umwelt CA confirms that it did not find an executable plan for a directive it had received from a parent
-	* `execute([directive_id=DirectiveId])` - A CA tells its umwelt to execute any plan they have to realize a directive they had received
-	* `executed([directive_id=DirectiveId])` - An umwelt CA confirms that it executed a plan to realize a directive it had received
-	For effectors
-	* `planned_actions([actions=[Action, ...], plan_id:PlanId, intent_id=IntentId])` - Umwelt effectors are told of planned actions to realize an intent
-	* `ready_actuations([plan_id=PlanId, intentid:IntentId])` - Umwelt effectors are told to ready the actuations from the CA's plan to realize an intent
-  
+	* `execute([directive=Directive])` - A CA tells its umwelt to execute any plan they have to realize a directive they had received
+	* `executed([directive=Directive])` - An umwelt CA confirms that it executed a plan to realize a directive it had received
+ 
 Queries:
 
 * level -> Integer > 0
