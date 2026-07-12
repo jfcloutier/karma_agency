@@ -22,7 +22,7 @@ Messages:
 	
 	* `ca_started([level = Level])`
 	* `end_of_phase([phase=Phase, state_deltas=State, wellbeing_deltas=WellbeingDeltas])`
-	* `end_of_timeframe([level=Level])`
+	* `end_of_timeframe([level=Level, count=Count])`
 	* `end_of_life([level=Level])`
 	* `todo([directives=[Directive, ...]])` - A parent tentatively emits directives to its umwelt
 	* `abandoned([intent_id=IntentId])` - A CA emits an intent it is abandoning (relevant if ancestor)
@@ -310,9 +310,10 @@ handled(message(phase_done(Phase, StateDeltas, WellbeingDeltas), _), State, NewS
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
 		; 
-		log(info, dynamic_ca, "Timeframe ended"),
+		Count = State.timeframe_count,
+		log(info, dynamic_ca, "~@ ended timeframe ~w", [self, Count]),
 		level(Level),
-		published(end_of_timeframe, [level(Level)]),
+		published(end_of_timeframe, [level(Level), count(Count)]),
 		% The next timeframe starts after memorializing the terminated timeframe and with an initial phase
 		new_timeframe(State1, NewState)
 	).

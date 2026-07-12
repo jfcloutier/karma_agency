@@ -10,6 +10,7 @@ run_tests(dynamic_ca).
 :- begin_tests(dynamic_ca, [setup(init_som), cleanup(terminate_som)]).
 
 :- use_module(test_helper).
+:- use_module(ca_test_helper).
 :- use_module(utils(logger)).
 :- use_module(actors(supervisor)).
 :- use_module(actors(actor_utils)).
@@ -17,37 +18,36 @@ run_tests(dynamic_ca).
 :- use_module(agency(agent)).
 :- use_module(agency(som)).
 
+
 :- set_log_level(info).
 
 % The SOM is initialized and starts growing.
-% Succeed once a dynamic CA was created and has completed a first timeframe and all of its phases.
-test(timeframe) :-
-	MaxTimeframes = 2, 
+% Succeed once a dynamic CA was created and has completed a few timeframes and all of their phases.
+test(timeframes) :-
+	MaxTimeframes = 3, 
 	all_subscribed([end_of_phase, end_of_timeframe, end_of_life, ca_started]),
 	som : growing([max_timeframes=MaxTimeframes]),
 	get_message(event(ca_started, [level(1)], _)),
 	query_answered(som, children, SOMChildren),
 	assertion(SOMChildren \== unknown),
 	findnsols(1,
-		CA,
-		(member(child(worker, CA),
-			SOMChildren), query_answered(CA, type, dynamic_ca)),
+		Child,
+		(member(child(worker, Child), SOMChildren), query_answered(Child, type, dynamic_ca)),
 		L),
-	assertion(L \== []),
+	[CA] = L,
 	!,
-	get_matching_message(option(phase, predict), event(end_of_phase, PredictPayload, CA), 1),
-	assertion(PredictPayload.state_deltas.predictions_out \== []),
-	get_matching_message(option(phase, observe), event(end_of_phase, ObservePayload, CA), 1),
-	assertion(ObservePayload.state_deltas.observations \== []),
-	get_matching_message(option(phase, experience), event(end_of_phase, ExperiencePayload, CA), 1),
-	% Because pahse ends with empty deltas after progress
-	assertion(ExperiencePayload.state_deltas == []),
-	get_matching_message(option(phase, feel), event(end_of_phase,_, CA), 1),
-	get_matching_message(option(phase, act), event(end_of_phase,_, CA), 1),
-	get_matching_message(option(phase, assess), event(end_of_phase,_, CA), 1),
-
-	get_message(event(end_of_timeframe, _, _)),
+	test_in_timeframe(CA, 1),
+	% Timeframe 1 ended
+	% get_message(event(end_of_timeframe, _, _)),
+	get_matching_message(option(count, 1), event(end_of_timeframe, _, CA), 5),
+	test_in_timeframe(CA, 2),
+	% Timeframe 2 ended
+	% get_message(event(end_of_timeframe, _, _)),
+	get_matching_message(option(count, 2), event(end_of_timeframe, _, CA), 5),
+	test_in_timeframe(CA, 3),
+	% Wait for CA to die
 	get_message(event(end_of_life, _, _)).
 
 :- end_tests(dynamic_ca).
+
 

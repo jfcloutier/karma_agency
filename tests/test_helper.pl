@@ -1,4 +1,4 @@
-:- module(test_helper, [init_som/0, terminate_som/0, clear_messages/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
+:- module(test_helper, [init_som/0, terminate_som/0, assert_counted/3, clear_messages/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
@@ -10,6 +10,10 @@ init_som :-
 
 terminate_som :-
 	supervisor : stopped(agency, 60).
+
+assert_counted(What, Count, Term) :-
+    atomic_list_concat([What, Count], ' at ', Tag),
+    assertion((ground(Tag), call(Term))).
 
 get_message(Term) :-
     get_message(Term, 5).
