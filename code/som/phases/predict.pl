@@ -27,23 +27,24 @@ prediction{origin:Origin, kind:Kind, value:Value, weight:Weight, confidence:Conf
 :- use_module(agency(som/ca_support)).
 
 % No work done before units of work
-before_work(_, _, [], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+before_work(_, _, [], WellbeingDelta) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 
 % Make predictions and send them to the umwelt.
 % This is always a single unit of work. Where there's indeterminacy, random choices are made.
-unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
-    log(info, predict, "Predicting for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]),
+% Wellbeing: Making prediction increases engagement, otherwise it is free and non-damaging
+unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
+    log(info, predict, "Predicting for CA ~w with wellbeing delta ~p", [CA, WellbeingDelta]),
     potential_predictions(CA, State, AllPredictions),
     resolve_conflicting_predictions(AllPredictions, [], Predictions1),
     major_predictions(Predictions1, Predictions),
     log(info, predict, "~w made major predictions ~p", [CA, Predictions]),
     predictions_sent_to_umwelt(CA, State.umwelt, Predictions),
     StateDeltas = [predictions_out=Predictions],
-    wellbeing:empty_wellbeing(WellbeingDeltas),
+    wellbeing_delta(Predictions, WellbeingDelta),
     log(info, predict, "Phase predict done for CA ~w", [CA]).
 
 % Find all potential predictions
@@ -205,3 +206,12 @@ predictions_sent_to_umwelt(CA, Umwelt, [Prediction | Rest]) :-
 prediction_sent_to_umwelt_ca(Prediction, UmweltCA, CA) :-
     message_sent(UmweltCA, prediction(Prediction), CA),
     log(info, predict, "~w sent prediction ~p to ~w", [CA, Prediction, UmweltCA]).
+
+wellbeing_delta(Predictions, WellbeingDelta) :-
+    wellbeing:empty_wellbeing(EmptyWellbeing),
+    length(Predictions, N),
+    % TODO - Get the engagement value of a prediction made from settings
+    Delta is N * 0.01,
+    WellbeingDelta = EmptyWellbeing.add_engagement(Delta).
+
+

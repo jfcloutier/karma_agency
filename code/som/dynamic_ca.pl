@@ -11,8 +11,8 @@ See [design notes](https://github.com/jfcloutier/karma_system/tree/main/design_n
 Messages:
 
 	* `adopted(Parent)` - when added to the umwelt of a dynamic CA one level up
-	* `phase_progressed(Phase, StateDeltas, WellbeingDeltas)` - sent from itself when a phase has made progress
-	* `phase_done(Phase, StateDeltas, WellbeingDeltas)` - sent from itself when a phase is done
+	* `phase_progressed(Phase, StateDeltas, WellbeingDelta)` - sent from itself when a phase has made progress
+	* `phase_done(Phase, StateDeltas, WellbeingDelta)` - sent from itself when a phase is done
 	* `prediction(Prediction)` - Prediction = prediction{origin:object{type:Type, id:ID}, kind:Kind, value:Value, weight:Weight, confidence:Confidence, by: CA} - Name is a reproducible id of the derivation, Object is what the prediction is about distance, trend...)
 	* `prediction_error(PredictionError)` - responding with the correct value to a prediction event where the prediction is incorrect - PredictionError = prediction_error{prediction:Prediction, actual_value:Value, confidence:Confidence, by: CA}
 	* `wellbeing_transfer(Wellbeing)` - Wellbeing is wellbeing{fullness: Delta1, integrity:Delta2, engagement:Delta3} - a transfer in either direction of wellbeing
@@ -21,7 +21,7 @@ Messages:
 	Events:
 	
 	* `ca_started([level = Level])`
-	* `end_of_phase([phase=Phase, state_deltas=State, wellbeing_deltas=WellbeingDeltas])`
+	* `end_of_phase([phase=Phase, state_deltas=State, wellbeing_delta=WellbeingDelta])`
 	* `end_of_timeframe([level=Level, count=Count])`
 	* `end_of_life([level=Level])`
 	* `todo([directives=[Directive, ...]])` - A parent tentatively emits directives to its umwelt
@@ -34,6 +34,11 @@ Messages:
 	* `cannot_execute([directive=Directive])` - An umwelt CA confirms that it did not find an executable plan for a directive it had received from a parent
 	* `execute([directive=Directive])` - A CA tells its umwelt to execute any plan they have to realize a directive they had received
 	* `executed([directive=Directive])` - An umwelt CA confirms that it executed a plan to realize a directive it had received
+    
+	For testing only:
+	* `phase_before_work([phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta)`
+	* `phase_progressed([phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta)`
+	* `end_of_phase([phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta)`
  
 Queries:
 
@@ -298,15 +303,15 @@ handled(message(adopted, Parent), State, NewState) :-
 	subscribed_to_parent_events(Parent),
     put_state(State, parents, [Parent | Parents], NewState).
 
-handled(message(phase_progressed(Phase, StateDeltas, WellbeingDeltas), _), State, NewState) :-
+handled(message(phase_progressed(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-
 	phase_consumes_produces(Phase, _, ProducedProperties),
 	log(info, dynamic_ca, "(~@) Phase ~w producing ~p PROGRESSED with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
-	merge_phase_deltas(StateDeltas, WellbeingDeltas, ProducedProperties, State, NewState).
+	merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, NewState).
 
-handled(message(phase_done(Phase, StateDeltas, WellbeingDeltas), _), State, NewState) :-
+handled(message(phase_done(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-
 	phase_consumes_produces(Phase, _, ProducedProperties),
 	log(info, dynamic_ca, "(~@) Phase ~w producing ~p DONE with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
-	merge_phase_deltas(StateDeltas, WellbeingDeltas, ProducedProperties, State, State1),
+	merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
 		; 

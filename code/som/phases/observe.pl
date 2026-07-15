@@ -17,24 +17,24 @@
 % During work, some may be be recreated and new ones made from predicting.
 % Except for activation observations which are not predicted but come out of acting.
 % Before work, reinstate the prior activation observations, unless they have become stale.
-before_work(_, State, [observations=ActivationObservations], WellbeingDeltas) :-
+before_work(_, State, [observations=ActivationObservations], WellbeingDelta) :-
     PriorObservations = State.observations, 
     findall(Observation, 
         (member(Observation, PriorObservations), is_activation_observation(Observation), \+ is_activation_observation_stale(Observation, State)),
         ActivationObservations),
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 
 % observation{origin:object{type:Type, id:ID}, kind:Kind, value:Value, confidence:Confidence, by:CA, id:Id}
 % The object in an observation omits its "evidence set" (what was integrated in its synthesis as part of an umwelt experience) 
 % The value observed may not be that experienced by each of the umwelt CAs under observation, just the one with highest confidence
-unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
+unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
     observed(CA, State, Observations),
     StateDeltas = [observations=Observations],
-    wellbeing:empty_wellbeing(WellbeingDeltas),
-    log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
+    wellbeing:empty_wellbeing(WellbeingDelta),
+    log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDelta]).
 
 % The activation was observed too long ago to persist
 is_activation_observation_stale(ActivationObservation, State) :-

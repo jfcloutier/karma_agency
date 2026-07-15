@@ -1,4 +1,4 @@
-:- module(test_helper, [init_som/0, terminate_som/0, assert_indexed/3, clear_messages/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
+:- module(test_helper, [init_som/0, terminate_som/0, succeeds_at/3, clear_messages/0, get_message/1, get_message/2, get_matching_message/2, get_matching_message/3, assert_wellbeing_changed/3]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(supervisor)).
@@ -11,9 +11,12 @@ init_som :-
 terminate_som :-
 	supervisor : stopped(agency, 60).
 
-assert_indexed(What, Count, Term) :-
+succeeds_at(What, Count, Term) :-
     atomic_list_concat([What, Count], ' at ', Tag),
-    assertion((ground(Tag), call(Term))).
+    ((ground(Tag), call(Term)) ->
+        format("~w (~w)~n", [What, Count])
+        ;
+    fail).
 
 get_message(Term) :-
     get_message(Term, 5).
@@ -28,10 +31,11 @@ get_matching_message(Pattern, Term) :-
 get_matching_message(Pattern, Term, Timeout) :-
     freeze_var_in_term(Pattern, Term),
     thread_self(Name),
-    thread_get_message(Name, Term, [timeout(Timeout)]), !.
+    thread_get_message(Name, Term, [timeout(Timeout)]),
+    !.
 
 get_matching_message(Pattern, Term, _) :-
-    log(info, test_helper, "Failed to get message ~p matching ~p", [Term, Pattern]),
+    log(error, test_helper, "Failed to get message ~p matching ~p", [Term, Pattern]),
     fail.
 
 freeze_var_in_term(Pattern, Term) :-

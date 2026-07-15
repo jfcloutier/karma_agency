@@ -135,9 +135,9 @@ average_confidence(DictsWithConfidence, AverageConfidence) :-
     AverageConfidence is Sum / N.
 
 % Merge wellbeing deltas and properties changed by the phase
-merge_phase_deltas(StateDeltas, WellbeingDeltas, ProducedProperties, State, NewState) :-
+merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, NewState) :-
 	merge_phase_state_properties(ProducedProperties, StateDeltas, State, State1),
-	merge_wellbeing(State1, WellbeingDeltas, NewState).
+	merge_wellbeing(State1, WellbeingDelta, NewState).
 	
 merge_phase_state_properties([], _, State, State).
 
@@ -155,16 +155,16 @@ merge_phase_state_properties([Property | Rest], StateDeltas, State, NewState) :-
 	merge_phase_state_properties(Rest, StateDeltas, State1, NewState).
 
 
-merge_wellbeing(State, WellbeingDeltas, NewState) :-
-	log(debug, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDeltas]),
+merge_wellbeing(State, WellbeingDelta, NewState) :-
+	log(debug, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDelta]),
 	get_state(State, wellbeing, Wellbeing),
-	apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, Wellbeing1),
+	apply_wellbeing_delta(Wellbeing, WellbeingDelta, Wellbeing1),
 	put_state(State, wellbeing, Wellbeing1, NewState).
 
-apply_wellbeing_deltas(Wellbeing, WellbeingDeltas, NewWellbeing) :-
-	Fullness is max(Wellbeing.fullness + WellbeingDeltas.fullness, 0),
-	Integrity is max(Wellbeing.integrity + WellbeingDeltas.integrity, 0),
-	Engagement is max(Wellbeing.engagement + WellbeingDeltas.engagement, 0),
+apply_wellbeing_delta(Wellbeing, WellbeingDelta, NewWellbeing) :-
+	Fullness is max(Wellbeing.fullness + WellbeingDelta.fullness, 0),
+	Integrity is max(Wellbeing.integrity + WellbeingDelta.integrity, 0),
+	Engagement is max(Wellbeing.engagement + WellbeingDelta.engagement, 0),
 	NewWellbeing = wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}.
 
 empty_prediction(CA, Prediction) :-

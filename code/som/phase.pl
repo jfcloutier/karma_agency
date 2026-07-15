@@ -129,15 +129,15 @@ timebox_phase(Phase, Latency) :-
 
 % Maybe do something before engaging into units of work
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% resolving WorkStatus to more(IntermediatePhaseState, WellbeingDeltas), or it can be done(EndPhaseState, WellbeingDeltas) as the last or only solution.
+% resolving WorkStatus to more(IntermediatePhaseState, WellbeingDelta), or it can be done(EndPhaseState, WellbeingDelta) as the last or only solution.
 work(CA, State, Phase) :-
-    Phase:before_work(CA, State, StateDeltas, WellbeingDeltas),
+    Phase:before_work(CA, State, StateDeltas, WellbeingDelta),
     % Report the work done before engaging the work engine
-    work_reported(CA, Phase, StateDeltas, WellbeingDeltas),
+    work_reported(CA, Phase, before, StateDeltas, WellbeingDelta),
     % Use the result of the beofre-work to update the state passed to the phase
     phase_consumes_produces(Phase, _, ProducedProperties),
     log(info, phase, "(~@) Phase ~w producing ~p BEFORE WORK with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
-    merge_phase_deltas(StateDeltas, WellbeingDeltas, ProducedProperties, State, InitialPhaseState),
+    merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, InitialPhaseState),
     Goal =.. [:, Phase, unit_of_work(CA, InitialPhaseState, WorkStatus)],
     log(debug, phase, "Creating engine for phase ~p on ~p", [Phase, Goal]),
     engine_create(WorkStatus, Goal, WorkEngine),
@@ -165,14 +165,14 @@ interpret_unit_of_work(exception(Error), _) :-
     log(warn, phase, "Exception from engine. Got ~p", [Error]),
     throw(Error).
 
-work_status_handled(done(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, TimeframeCount) :-
-    phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine).
+work_status_handled(done(StateDeltas, WellbeingDelta), WorkEngine, CA, Phase, TimeframeCount) :-
+    phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDelta, WorkEngine).
 
-work_status_handled(more(StateDeltas, WellbeingDeltas), WorkEngine, CA, Phase, TimeframeCount) :-
+work_status_handled(more(StateDeltas, WellbeingDelta), WorkEngine, CA, Phase, TimeframeCount) :-
     (phase_timeout(Phase) -> 
-        phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine)
+        phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDelta, WorkEngine)
         ;
-        work_reported(CA, Phase, StateDeltas, WellbeingDeltas),
+        work_reported(CA, Phase, more, StateDeltas, WellbeingDelta),
         run_phase(CA, Phase, TimeframeCount, WorkEngine)).
 
 work_status_handled(WorkStatus, _, _, _, _) :-
@@ -190,23 +190,31 @@ work_status_handled(WorkStatus, _, _, _, _) :-
 %     merge_options([StateProperty=AccValue1], AccStateDeltas, AccStateDeltas1),
 %     updated_state_deltas(Rest, AccStateDeltas1, UpdatedStateDeltas).
 
-% updated_wellbeing_deltas(WellbeingDeltas, AccWellbeingDeltas, wellbeing{fullness:FullnessDelta, integrity:IntegrityDelta, engagement:EngagementDelta}) :-
-%     FullnessDelta is AccWellbeingDeltas.fullness + WellbeingDeltas.fullness,
-%     IntegrityDelta is AccWellbeingDeltas.integrity + WellbeingDeltas.integrity,
-%     EngagementDelta is AccWellbeingDeltas.engagement + WellbeingDeltas.engagement.
+% updated_wellbeing_delta(WellbeingDelta, AccWellbeingDeltas, wellbeing{fullness:FullnessDelta, integrity:IntegrityDelta, engagement:EngagementDelta}) :-
+%     FullnessDelta is AccWellbeingDeltas.fullness + WellbeingDelta.fullness,
+%     IntegrityDelta is AccWellbeingDeltas.integrity + WellbeingDelta.integrity,
+%     EngagementDelta is AccWellbeingDeltas.engagement + WellbeingDelta.engagement.
 
 % Last unit of work is done. Perhaps do some after-work, run the clock, and let the dynamic CA (and others) know.
-phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDeltas, WorkEngine) :-
+phase_done(CA, Phase, TimeframeCount, StateDeltas, WellbeingDelta, WorkEngine) :-
     engine_destroy(WorkEngine),  
-    log(info, phase, "Phase ~w for CA ~p done with deltas ~p and ~p (~w)", [Phase, CA, StateDeltas, WellbeingDeltas, TimeframeCount]),
+    log(info, phase, "Phase ~w for CA ~p done with deltas ~p and ~p (~w)", [Phase, CA, StateDeltas, WellbeingDelta, TimeframeCount]),
     run_the_clock(Phase),
     % The engine sends the CA that started it a message that the phase is done
-    message_sent(CA, phase_done(Phase, StateDeltas, WellbeingDeltas)),
+    message_sent(CA, phase_done(Phase, StateDeltas, WellbeingDelta)),
     % This event is currently only used in tests
-    published(end_of_phase, [phase=Phase, state_deltas=StateDeltas, wellbeing_deltas=WellbeingDeltas], CA).
+    published(end_of_phase, [phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta], CA).
 
-work_reported(CA, Phase, StateDeltas, WellbeingDeltas) :-
-    message_sent(CA, phase_progressed(Phase, StateDeltas, WellbeingDeltas)).
+work_reported(CA, Phase, before, StateDeltas, WellbeingDelta) :-
+    message_sent(CA, phase_progressed(Phase, StateDeltas, WellbeingDelta)),
+    % This event is currently only used in tests
+    published(phase_before_work, [phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta], CA).
+
+work_reported(CA, Phase, more, StateDeltas, WellbeingDelta) :-
+    message_sent(CA, phase_progressed(Phase, StateDeltas, WellbeingDelta)),
+    % This event is currently only used in tests
+    published(phase_progressed, [phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta], CA).
+
 
 run_the_clock(Phase) :-
     get_time(Now),

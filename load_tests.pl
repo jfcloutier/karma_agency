@@ -6,6 +6,9 @@
     'tests/test_helper.plt'
 ].
 
+clear :-
+    shell(clear, 0).
+
 init_static_som :-
 	agent : started('localhost:4000', false).
 

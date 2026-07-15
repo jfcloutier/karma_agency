@@ -40,14 +40,14 @@ Plan creation involves:
 :- use_module(agency(body)).
 
 % Computing umwelt actions before individual units of work
-before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDeltas) :-
+before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDelta) :-
     umwelt_actions(State.umwelt, UmweltActions),
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % A unit of work consists in identifying the most important goal state to advance and then advancing it, possibly to a dead end.
 % The work is done if there is no goal state left to advance.
 % The unit of work must always be carried out on the latest goal states, which may have changed prior to entering this phase or before each unit of work.
-unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
+unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
     repeat,
     % query_answered/3 is deterministic
     query_answered(CA, goal_states, GoalStates),
@@ -55,10 +55,10 @@ unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
     % Are we sure the CA has updated its goal states from the last unit of work?
     % - Yes since the query always follows the work_progressed message sent after the previous unit of work.
     log(info, act, "~w is acting on goal states ~p and plans ~p", [CA, GoalStates, Plans]),
-    acted(CA, State, GoalStates, Plans, StateDeltas, WellbeingDeltas).
+    acted(CA, State, GoalStates, Plans, StateDeltas, WellbeingDelta).
 
-unit_of_work(_, _, done([], WellbeingDeltas)) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+unit_of_work(_, _, done([], WellbeingDelta)) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % Find all actions supported by effector CAs currently in the CA's umwelt
 umwelt_actions(Umwelt, Actions) :-
@@ -73,14 +73,14 @@ umwelt_actions(Umwelt, Actions) :-
 
 % The CA acts by creating a missing intent to advance (we only need to check goal states for evidence of an existing and possibly progressing intent)
 % A later work unit would find a plan for it whenever the intent becomes the most urgent goal to advance.
-acted(CA, State, GoalStates, _, [intent=Intent, goal_states=[IntentGoalState]], WellbeingDeltas) :-
+acted(CA, State, GoalStates, _, [intent=Intent, goal_states=[IntentGoalState]], WellbeingDelta) :-
     \+ intent_in_progress(GoalStates, _),
     % TODO - No wellbeing deltas for now
-    wellbeing:empty_wellbeing(WellbeingDeltas),
+    wellbeing:empty_wellbeing(WellbeingDelta),
     intent_created(CA, State, Intent, IntentGoalState).
 
 % Select the most urgent goal that can be advanced and advance it
-acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = NewPlans], WellbeingDeltas) :-
+acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = NewPlans], WellbeingDelta) :-
     intent_in_progress(GoalStates, _),
     % choice point
     urgent_goal_state(GoalStates, GoalState),
@@ -90,12 +90,12 @@ acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = N
     log(info, act, "Advanced goal state ~p to ~p with new plans ~p", [GoalState, AdvancedGoalStates, NewPlans]),
     !,
     % TODO - No wellbeing deltas for now
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
-acted(_, _, _, _, [], WellbeingDeltas) :-
+acted(_, _, _, _, [], WellbeingDelta) :-
     log(info, act, "Nothing to act on"),
     sleep(0.1),
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % goal_state{goal: Goal, status: Status, messages: [GoalMessage, ...]}
 % goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id: IntentId, intent_level: Level}

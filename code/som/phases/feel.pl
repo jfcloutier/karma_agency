@@ -45,17 +45,17 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
 % Elevate as observations from static CAs?
 % No work done before units of work
 % No work done before units of work
-before_work(_, _, [], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+before_work(_, _, [], WellbeingDelta) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
-unit_of_work(CA, State, done(StateDeltas, WellbeingDeltas)) :-
+% to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
+unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
     timeframe_feeling(CA, State, TimeframeFeeling),
     felt_experiences(CA, State, TimeframeFeeling, FeltExperiences),
     StateDeltas = [feeling=TimeframeFeeling, experiences=FeltExperiences],
     % Computing and assigning feelings does not alter the current wellbeing
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 
 % Captures as a bounded, scalar integer value the overall feeling of the CA's current timeframe.

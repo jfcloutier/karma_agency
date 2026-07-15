@@ -74,8 +74,8 @@ Assigning confidence to an experience:
 % TODO - do this in observe phase - Drop stale activation observations
 % Convert all (necessarily recent) activation observations into experiences
 % and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
-before_work(_, State, [experiences=Experiences], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas),
+before_work(_, State, [experiences=Experiences], WellbeingDelta) :-
+    wellbeing:empty_wellbeing(WellbeingDelta),
     activation_experiences_from_observations(CA, State.observations, ActivationExperiences),
     [Timeframe | _] = State.timeframes,
     !,
@@ -83,20 +83,20 @@ before_work(_, State, [experiences=Experiences], WellbeingDeltas) :-
     updated_experiences(CA, State, PriorExperiences, [], UpdatedExperiences),
     append(UpdatedExperiences, ActivationExperiences, Experiences).
 
-before_work(_, _, [], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+before_work(_, _, [], WellbeingDelta) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
-% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 
 % Add one experience at a time, most relevant first.
-unit_of_work(CA, State, more(StateDeltas, WellbeingDeltas)) :-
+unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
     novel_experience(CA, State, Experience),
     StateDeltas = [experiences=[Experience]],
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
-unit_of_work(_, _, done([], WellbeingDeltas)) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+unit_of_work(_, _, done([], WellbeingDelta)) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 activation_experiences_from_observations(CA, Observations, ActivationExperiences) :-
     activation_experiences(CA, Observations, [], ActivationExperiences).

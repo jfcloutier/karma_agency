@@ -34,4 +34,25 @@ test(add_wellbeing) :-
     assertion(Wellbeing1.integrity == 0.5),
     assertion(Wellbeing1.engagement == 1.0).
 
+test(add_to_wellbeing_full_fullness) :-
+    Wellbeing = wellbeing{fullness:1.0, integrity:0.5, engagement:0.0},
+    Wellbeing1 = Wellbeing.add_fullness(0.1),
+    assertion(Wellbeing1.fullness == 1.0),
+    assertion(Wellbeing1.integrity == 0.5),
+    assertion(Wellbeing1.engagement == 0.0).
+
+test(add_to_wellbeing_integrity) :-
+    Wellbeing = wellbeing{fullness:1.0, integrity:0.5, engagement:0.0},
+    Wellbeing1 = Wellbeing.add_integrity(0.1),
+    assertion(Wellbeing1.fullness == 1.0),
+    assertion(Wellbeing1.integrity == 0.6),
+    assertion(Wellbeing1.engagement == 0.0).
+
+test(add_too_much_to_wellbeing_engagement) :-
+    Wellbeing = wellbeing{fullness:1.0, integrity:0.5, engagement:0.2},
+    Wellbeing1 = Wellbeing.add_engagement(0.9),
+    assertion(Wellbeing1.fullness == 1.0),
+    assertion(Wellbeing1.integrity == 0.5),
+    assertion(Wellbeing1.engagement == 1.0).
+
 :-end_tests(wellbeing).

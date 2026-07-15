@@ -27,10 +27,27 @@ W.add(D) := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagem
     Integrity is min(W.integrity + D.integrity, 1.0),
     Engagement is min(W.engagement + D.engagement, 1.0).
 
+W.add_fullness(Amount) := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
+    Fullness is min((W.fullness + Amount), 1.0),
+    Integrity = W.integrity,
+    Engagement = W.engagement.
+
+W.add_integrity(Amount) := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
+    Fullness = W.fullness,
+    Integrity is min((W.integrity + Amount), 1.0),
+    Engagement = W.engagement.
+
+W.add_engagement(Amount) := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
+    Fullness = W.fullness,
+    Integrity = W.integrity,
+    Engagement is min((W.engagement) + Amount, 1.0).
+
 % Negate wellbeing 
 W.neg()  := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
     Fullness is W.fullness * -1,
     Integrity is W.integrity * -1,
     Engagement is W.engagement * -1.
+
+    
 
 empty_wellbeing(wellbeing{fullness:0, integrity:0, engagement:0}).

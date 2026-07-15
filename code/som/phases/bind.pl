@@ -20,22 +20,22 @@ TODO - Move bind logic to assess
 :- use_module(agency(som/wellbeing)).
 
 % No work done before units of work
-before_work(_, _, [], WellbeingDeltas) :-
-    wellbeing:empty_wellbeing(WellbeingDeltas).
+before_work(_, _, [], WellbeingDelta) :-
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % unit_of_work(CA, State, WorkStatus) by a phase can be non-deterministic, 
-% to more(StateDeltas, WellbeingDeltas) or done(StateDeltas, WellbeingDeltas) as last solution. 
+% to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 
 % No state change but wellbeing deltas from diffusion
-unit_of_work(CA, State, done([], WellbeingDeltas)) :-
+unit_of_work(CA, State, done([], WellbeingDelta)) :-
     state{parents:Parents, umwelt:Umwelt, wellbeing:Wellbeing} :< State,
     append(Parents, Umwelt, Relatives),
     length(Relatives, Count),
     % Diffusable to each relative
     Diffusable = Wellbeing.div(Count),
     diffused(CA, Diffusable, Relatives, Diffused),
-    WellbeingDeltas = Diffused.neg(),
-    log(info, bind, "Phase bind done for CA ~w with wellbeing delta ~p", [CA, WellbeingDeltas]).
+    WellbeingDelta = Diffused.neg(),
+    log(info, bind, "Phase bind done for CA ~w with wellbeing delta ~p", [CA, WellbeingDelta]).
 
 diffused(_, DiffusableWellbeing, [], DiffusableWellbeing).
 diffused(CA, DiffusableWellbeing, [Relative | Rest], DiffusedWellbeing) :-
