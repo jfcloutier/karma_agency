@@ -76,8 +76,8 @@ umwelt_actions(Umwelt, Actions) :-
 acted(CA, State, GoalStates, _, [intent=Intent, goal_states=[IntentGoalState]], WellbeingDelta) :-
     \+ intent_in_progress(GoalStates, _),
     % TODO - No wellbeing deltas for now
-    wellbeing:empty_wellbeing(WellbeingDelta),
-    intent_created(CA, State, Intent, IntentGoalState).
+    intent_created(CA, State, Intent, IntentGoalState),
+    wellbeing_delta([], WellbeingDelta).
 
 % Select the most urgent goal that can be advanced and advance it
 acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = NewPlans], WellbeingDelta) :-
@@ -89,8 +89,7 @@ acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = N
     goal_state_advanced_from(GoalState.status, GoalState, CA, State, GoalStates, Plans, AdvancedGoalStates, NewPlans),
     log(info, act, "Advanced goal state ~p to ~p with new plans ~p", [GoalState, AdvancedGoalStates, NewPlans]),
     !,
-    % TODO - No wellbeing deltas for now
-    wellbeing:empty_wellbeing(WellbeingDelta).
+    wellbeing_delta(NewPlans, WellbeingDelta).
 
 acted(_, _, _, _, [], WellbeingDelta) :-
     log(info, act, "Nothing to act on"),
@@ -522,3 +521,15 @@ action_group(Action, ActionGroup) :-
         random_between(1, 3, N),
         replicate(Action, N, ActionGroup)
     ).
+
+wellbeing_delta(NewPlans, WellbeingDelta) :-
+    wellbeing:empty_wellbeing(EmptyWellbeing),
+    length(NewPlans, N),
+    % TODO - Get the fullness cost of a new plan and moving a goal state from settings
+    Delta1 is N * 0.01,
+    % Planning is engaging
+    WellbeingDelta1 = EmptyWellbeing.add_engagement(Delta1),
+    % Add the cost of moving forward a goal state
+    Delta is Delta1 + 0.01,
+    WellbeingDelta = WellbeingDelta1.subtract_fullness(Delta).
+

@@ -33,7 +33,7 @@ before_work(_, State, [observations=ActivationObservations], WellbeingDelta) :-
 unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
     observed(CA, State, Observations),
     StateDeltas = [observations=Observations],
-    wellbeing:empty_wellbeing(WellbeingDelta),
+    wellbeing_delta(Observations, WellbeingDelta),
     log(info, observe, "Phase observe done for CA ~w with wellbeing delta ~p", [CA, WellbeingDelta]).
 
 % The activation was observed too long ago to persist
@@ -146,4 +146,10 @@ prediction_error_to_observation(PredictionError, CA, Observation) :-
     ObservationWithoutId = observation{origin:Origin, kind:Kind, value:PredictionError.actual_value, confidence:PredictionError.confidence, by:CA},
     observation_with_id(ObservationWithoutId, Observation).
 
+wellbeing_delta(Observations, WellbeingDelta) :-
+    wellbeing:empty_wellbeing(EmptyWellbeing),
+    length(Observations, N),
+    % TODO - Get the fullness cost of an observation made from settings
+    Delta is N * 0.01,
+    WellbeingDelta = EmptyWellbeing.subtract_fullness(Delta).
 

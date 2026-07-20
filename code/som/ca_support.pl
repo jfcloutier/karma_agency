@@ -184,7 +184,7 @@ prediction_about_experience(Prediction, State, Experience) :-
 % Experience = experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
-prediction_handled(Prediction, State, State) :-
+prediction_handled(Prediction, State, State1) :-
 	is_empty_prediction(Prediction),
     log(info, ca_support, "~@ is handling empty prediction", [self]),
 	!,
@@ -192,9 +192,10 @@ prediction_handled(Prediction, State, State) :-
 	findall(PredictionError, 
 		    (member(Experience, Experiences), prediction_error_from_experience(Experience, Prediction, PredictionError)), 
 		    PredictionErrors),
+	update_wellbeing(sending_prediction_errors(PredictionErrors), State, State1),
 	prediction_errors_sent(PredictionErrors, Prediction.by).
 
-prediction_handled(Prediction, State, State) :-
+prediction_handled(Prediction, State, State1) :-
     log(info, ca_support, "~@ is handling prediction ~p", [self, Prediction]),
 	self(CA),
 	prediction_about_experience(Prediction, State, Experience),
@@ -204,6 +205,7 @@ prediction_handled(Prediction, State, State) :-
 		true
 		;
 		PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Experience.confidence, by:CA},
+		update_wellbeing(sending_prediction_errors([PredictionError]), State, State1),
 		prediction_error_sent(PredictionError, Prediction.by)
 	).
 
@@ -211,6 +213,7 @@ prediction_handled(Prediction, State, State) :-
     self(CA),
     % Can't confirm or invalidate a prediction. Confidence is 0.
     PredictionError = prediction_error{prediction:Prediction, actual_value:unknown, confidence:0.0, by:CA},
+	% No change to wellbeing since zero-value engagement
 	prediction_error_sent(PredictionError, Prediction.by).
 
 same_experience_value(Value, Value) :-
@@ -259,5 +262,10 @@ is_effector(CA) :-
 is_sensor(CA) :-
 	atomic_list_concat([sensor | _], ':', CA).
 
-
-
+update_wellbeing(sending_prediction_errors(PredictionErrors), State, State1) :-
+	length(PredictionErrors, N),
+	% TODO - Get engagement points from settings
+	Delta is N * 0.01,
+	get_state(State, wellbeing, Wellbeing),
+	UpdatedWellbeing = Wellbeing.add_engagement(Delta),
+	put_state(State, wellbeing, UpdatedWellbeing, State1).

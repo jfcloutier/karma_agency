@@ -34,6 +34,7 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
     * Select all observations from static CAs not composing objects in current experiences
     * Add them as experiences with the same confidence
 
+* There is no wellbeing costs to feeling (for now).
 */
 
 :- module(feel, []).
