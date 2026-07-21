@@ -2,7 +2,8 @@
 An effector CA is a static (a priori) cognition actor that communicates with a body effector to actuate it.
 
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
-Same-device effectors are combined in one effector_ca.
+
+Same-device effectors are combined in one effector CA, i.e. an effector can potentially take different actions (e.g. the left wheel can spin and reverse-spin)
 
 An effector CA receives from its parents intended actions as commands in the context of an intent.
 

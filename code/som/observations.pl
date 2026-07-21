@@ -4,9 +4,10 @@ Utilities for observations
 % observation{id:Id, origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 */
 
-:- module(observations, [observation_with_id/2, is_activation_observation/1, observation_target/2, is_sensory_observation/1]).
+:- module(observations, [observation_with_id/2, is_activation_observation/1, is_activation_observation_of/2, observation_target/2, is_sensory_observation/1]).
 
 :- use_module(agency(som/ca_support)).
+:- use_module(agency(som/goals)).
 
 observation_with_id(ObservationWithoutId, Observation) :-
     observation_id(ObservationWithoutId, Id),
@@ -19,11 +20,19 @@ observation_id(Observation, Id) :-
     value_hash(Value, ValueHash),
     atomic_list_hash([ObjectHash, Kind, ValueHash], Id).
 
+is_activation_observation_of(Observation, Goal) :-
+    is_activation_observation(Observation),
+    goal_id(Goal, GoalId),
+    Origin = object{type:goal, id:GoalId},
+    observation{origin:Origin, kind:activation} :< Observation.
+
 is_activation_observation(Observation) :-
+    is_dict(Observation, observation),
     observation{kind:activation} :< Observation.
 
 observation_target(Observation, Target) :-
     Target = target{origin: Observation.origin, kind: Observation.kind, value: Observation.value}.
 
 is_sensory_observation(Observation) :-
-    object{type: sensor} :< Observation.origin.
+    is_dict(Observation, observation),
+    object{type:sensor} :< Observation.origin.

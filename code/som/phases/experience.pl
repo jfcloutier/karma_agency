@@ -67,11 +67,8 @@ Assigning confidence to an experience:
 :- use_module(agency(som/wellbeing)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/observations)).
+:- use_module(agency(som/objects)).
 
-% TODO - observe phase ought to drop stale activation observation, not the experience phase
-% TODO - have entering experience phase only consume experiences to replace them with updates from observations, and with novel experiences
-% When entering the experience phase, the CA drops all from its state after passing them to the experience phase
-% TODO - do this in observe phase - Drop stale activation observations
 % Convert all (necessarily recent) activation observations into experiences
 % and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
 before_work(_, State, [experiences=Experiences], WellbeingDelta) :-
@@ -103,6 +100,7 @@ activation_experiences_from_observations(CA, Observations, ActivationExperiences
 
 activation_experiences(_, [], ActivationExperiences, ActivationExperiences).
 
+% TODO - FIX THIS TO LATEST SPECS <=====================================================================
 activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
     is_activation_observation(Observation),
     !,
@@ -343,12 +341,6 @@ adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence
         ;
         Confidence == CurrentConfidence
      ).
-
-% object{type:synthetic, id:Id, evidence: [ObservationId, ...]} - evidence is the private set of Observations by the dCA from which the synthetic object was created by the dCA.
-% Note: Two objects of the same type about the same "thing" must have identical ids, irrespective of the CA that created the object.
-synthetic_object(ObservationIds, Object) :-
-    atomic_list_hash(ObservationIds, ObjectId),
-    Object = object{type:synthetic, id:ObjectId, evidence:ObservationIds}.
 
 sorted_ids(Items, Ids) :-
     all_ids(Items, [], AllIds),

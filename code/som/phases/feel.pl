@@ -43,8 +43,6 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 
-% Elevate as observations from static CAs?
-% No work done before units of work
 % No work done before units of work
 before_work(_, _, [], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
