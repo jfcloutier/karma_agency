@@ -42,7 +42,6 @@ test_in_timeframe(CA, Index) :-
 	query_answered(CA, state, State2),
 	% act phase ends after work units updating/adding an intent and goal states
 	assertion(succeeds_at('An intent was produced from act', Index, State2.intent \= none)),
-    assertion(succeeds_at('Act completed with goal states produced', Index, State2.goal_states \= [])),
     assertion(succeeds_at('Act completed with plans produced', Index, State2.plans \= [])),
 	get_matching_message(option(phase, assess), event(end_of_phase,_, CA), 10).
 

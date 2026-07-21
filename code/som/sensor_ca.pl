@@ -31,6 +31,7 @@ Events:
 	
 * Out
     * topic: ca_started, payload: [level = Level]
+    * topic: wellbeing, payload: [current=Wellbeing] - The sensor CA publishes its wellbeing whenever it changes (TODO)
 
 Queries:
 
@@ -38,7 +39,6 @@ Queries:
     * level - 0
     * type - sensor_ca
     * latency - unknown - an effector CA has no set latency
-    * wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
 
 State:
 	* parents - parent CAs
@@ -53,6 +53,7 @@ Lifecycle:
     * Queried for its experience domain (only experiences its latest reading)
     * Handles prediction events by making readings and then maybe emitting prediction errors
       if the readings differ from the predictions more than the error tolerance of the sensor
+    * publishes its wellbeing whenever it changes (TODO)
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
 */
 
@@ -114,9 +115,6 @@ handled(query(reading), State, Reading) :-
 
 handled(query(wellbeing), State, Wellbeing) :-
     get_state(State, wellbeing, Wellbeing).
-
-handled(query(Query), State, Answer) :-
-    ca_support : handled(query(Query), State, Answer).
 
 % The sensor CA is adopted (fail if already adopted by this parent)
 handled(message(adopted, Parent), State, NewState) :-

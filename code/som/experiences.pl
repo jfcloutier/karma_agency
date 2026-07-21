@@ -1,10 +1,12 @@
 /*
 Utilities for experiences
 
-% experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, feeling:Feeling, by:CA}
+experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, feeling:Feeling, by:CA}
 */
 
-:- module(experiences, [experience_intensity/2, experiences_sorted_by_intensity/2, is_experience_impactable/1]).
+:- module(experiences, [experience_intensity/2, experiences_sorted_by_intensity/2, is_experience_impactable/1, activation_experience/4]).
+
+:- use_module(agency(som/ca_support)).
 
 % The intensity of an experience is its absolute feeling experience scaled by the confidence in the experience
 experience_intensity(Experience, Intensity) :-
@@ -21,4 +23,9 @@ experiences_sorted_by_intensity(Experiences, SortedExperiences) :-
 
 % Only synthetic experiences can be impacted. Sensory and executive experiences are not; they are what they are.
 is_experience_impactable(Experience) :-
-     memberchk(Experience.kind, [count, more, trend, unchanged]).
+     memberchk(Experience.kind, [count, more, trend]).
+
+activation_experience(Goal, Status, CA, ActivationExperience) :-
+     goal_id(Goal, GoalId),
+     Origin = object{type:goal, id:GoalId},
+     ActivationExperience = experience{origin:Origin, kind:activation, value:Status, confidence:1.0, by:CA}.

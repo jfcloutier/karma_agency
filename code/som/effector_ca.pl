@@ -2,7 +2,8 @@
 An effector CA is a static (a priori) cognition actor that communicates with a body effector to actuate it.
 
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
-Same-device effectors are combined in one effector_ca.
+
+Same-device effectors are combined in one effector CA, i.e. an effector can potentially take different actions (e.g. the left wheel can spin and reverse-spin)
 
 An effector CA receives from its parents intended actions as commands in the context of an intent.
 
@@ -42,6 +43,8 @@ Events:
 
 * Out
 	* `ca_started, [level = Level]`
+	* `wellbeing, [current=Wellbeing] - The effector CA publishes its wellbeing whenever it changes (TODO)
+	=== OBSOLETE? ==
 	* `can_seek([directive=Command])` - The effector CA has the command's action in its repertoire - in response to todo
 	* `cannot_seek([directive=Command])` - The effector CA does not have the command's action in its repertoire - in response to todo
 	* `can_execute([directive=Command])` - The effector CA has the command's action in its repertoire - in response to find_plan
@@ -54,7 +57,6 @@ Queries:
 	* type - effector_ca
     * latency - unknown - an effector CA has no set latency
 	* action_domain -> the actions the effector_ca can take
-	* wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} - the engagement of an effector CA is fixed at 1.0
 
 State:
 	* parents - parent CAs
@@ -76,7 +78,6 @@ Upon receiving an `intent_completed` event, an effector CA forgets its list of a
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(utils(logger)).
-:- use_module(utils(tools)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
 
@@ -121,9 +122,6 @@ handled(query(latency), _, unknown).
 
 handled(query(action_domain), State, ActionDomain) :-
 	get_state(State, action_domain, ActionDomain).
-
-handled(query(wellbeing), State, Wellbeing) :-
-	get_state(State, wellbeing, Wellbeing).
 
 handled(query(Query), State, Answer) :-
 	ca_support : handled(query(Query), State, Answer).
@@ -198,7 +196,7 @@ action_domain(State, ActionDomain) :-
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
-% command{effector_ca: CA_ID, action: Action, intent_id: IntentId}
+% command{effector_ca: CA_ID, action: Action}
 % Ignore commands meant for another effector CA
 % Divide the others into can do and can't do
 can_and_cannot_do(Commands, State, CanDoCommands, CannotDoCommands) :-
@@ -261,10 +259,10 @@ actuation_executed(_, State, State).
 
 actuation_for(Command, Status, State, Actuation) :-
 	self(Self),
-	command{effector_ca: Self, action:Action, intent_id:IntentId} :< Command,
+	command{effector_ca: Self, action:Action} :< Command,
 	get_state(State, actuations, Actuations),
 	member(Actuation, Actuations),
-	actuation{action:Action, intent_id:IntentId, status: Status} :< Actuation.
+	actuation{action:Action, status: Status} :< Actuation.
 
 % Tell the body to prepare to carry out this actuation (the body accumulates them until told to execute them all)
 body_actuated(State, Action) :-

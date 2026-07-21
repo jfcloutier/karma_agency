@@ -1,7 +1,7 @@
 /*
 Assign a feeling (from worst to best) to each experience.
 
-Compute an overall feeling for the current timeframe then assign a fraction of it to each experience,
+To do so, compute an overall feeling for the current timeframe then assign a fraction of it to each experience,
 based on how persistent the experience is.
 
 About feelings:
@@ -14,15 +14,16 @@ About feelings:
 A feeling reflects the current and historical wellbeing of a CA:
 
 * Each wellbeing dimension (fullness, integrity, engagement) is felt separately.
-* It is felt both in the moment (static) and in how it changed or stopped changing (dynamic).
-* A CA feels only the more strongly felt wellbeing dimension at any time.
+* Wellbeing is felt both in the moment (static) and in how it changed or stopped changing (dynamic).
+* A CA feels as a whole only the more strongly felt wellbeing dimension at any time.
 
 Computing a timeframe's feeling:
 
+* A negative feeling outweighs a positive feeling 2 to 1.
 * Dynamic feelings (feelings from changes), if any, override static feelings.
 * A wellbeing dimension's up gradient and an interrupted down gradient have positive feeling. A down gradient and an interrupted up gradient have negative feeling.
 * The sustained absence of a wellbeing gradient feels like nothing.
-* A gradient is felt more strongly than its interruption.
+* A wellbeing gradient is felt more strongly than its interruption.
 * A long-lived gradient is felt more strongly than a short-lived one.
 * The interruption of a long-lived gradient is felt longer than that of a short-lived one.
 * A gradient or its interruption is felt more strongly whenever the static feeling is low (heightened sensitivity).
@@ -30,11 +31,7 @@ Computing a timeframe's feeling:
 The more sustained an experience is, the more it is felt.
 The current feeling of a long-lived experience approaches asymptotically (as a function of its duration) the feeling of the current timeframe.
 
-* Before work
-    * Select all observations from static CAs not composing objects in current experiences
-    * Add them as experiences with the same confidence
-
-* There is no wellbeing costs to feeling (for now).
+* There is no wellbeing costs to generating feelings (for now).
 */
 
 :- module(feel, []).
@@ -43,8 +40,6 @@ The current feeling of a long-lived experience approaches asymptotically (as a f
 :- use_module(actors(actor_utils)).
 :- use_module(agency(som/wellbeing)).
 
-% Elevate as observations from static CAs?
-% No work done before units of work
 % No work done before units of work
 before_work(_, _, [], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
@@ -62,7 +57,7 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
 % Captures as a bounded, scalar integer value the overall feeling of the CA's current timeframe.
 % The weightier contribution by a wellbeing dimension gives the overall feeling value.
 timeframe_feeling(CA, State, Feeling) :-
-    findall(WellbeingFeeling, (wellbeing:dimension(Dimension), wellbeing_dimension_feeling(CA,State, Dimension, WellbeingFeeling)), WellbeingFeelings),
+    findall(WellbeingFeeling, (wellbeing:dimension(Dimension), wellbeing_dimension_feeling(CA, State, Dimension, WellbeingFeeling)), WellbeingFeelings),
     weighted_abs_max(WellbeingFeelings, Feeling),
     log(info, feel, "The timeframe feeling for ~w is ~w", [CA, Feeling]).
 
@@ -100,6 +95,8 @@ wellbeing_dimension_feeling(CA, State, Dimension, WellbeingDimensionFeeling) :-
     log(info, feel, "(~w) The feeling of dimension ~w is ~w", [CA, Dimension, WellbeingDimensionFeeling]).
 
 % The feeling of a wellbeing value is an integer between -10 (worst) and 10 (best).
+% A wellbeing diension's value ranges from 0.0 to 1.0.
+% This maps 0..1.0 into -10..10
 static_wellbeing_dimension_feeling(StaticValue, Feeling) :-
     Deviation is StaticValue - 0.5,
     Feeling is round(Deviation * 20).
@@ -220,7 +217,8 @@ felt_experience(CA, State, TimeframeFeeling, Experience, FeltExperience) :-
 
 % The experience that has persisted longer is felt more than a more recent experience.
 experienced_feeling(CA, State, TimeframeFeeling, Experience, ExperiencedFeeling) :-
-    experience_duration(State.timeframes, Experience, Duration),
+    get_state(State, timeframes, PriorTimeframes),
+    experience_duration(PriorTimeframes, Experience, Duration),
     % Asymptotically approaches the timeframe feeling as experience duration increases
     asymptotic(TimeframeFeeling, Duration, Y),
     ExperiencedFeeling is round(Y),
@@ -228,7 +226,7 @@ experienced_feeling(CA, State, TimeframeFeeling, Experience, ExperiencedFeeling)
 
 experience_duration([Timeframe | Rest], Experience, Duration) :-
     member(Experience1, Timeframe.experiences),
-    same_experience(Experience, Experience1),
+    same_experience(Experience1, Experience),
     !,
     experience_duration(Rest, Experience, Duration1),
     Duration is Duration1 + 1.
