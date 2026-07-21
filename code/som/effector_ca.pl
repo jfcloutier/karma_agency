@@ -2,7 +2,8 @@
 An effector CA is a static (a priori) cognition actor that communicates with a body effector to actuate it.
 
 The body considers each possible action a given device can take (always sequentially) as defining a separate effector.
-Same-device effectors are combined in one effector_ca.
+
+Same-device effectors are combined in one effector CA, i.e. an effector can potentially take different actions (e.g. the left wheel can spin and reverse-spin)
 
 An effector CA receives from its parents intended actions as commands in the context of an intent.
 
@@ -76,7 +77,6 @@ Upon receiving an `intent_completed` event, an effector CA forgets its list of a
 :- use_module(actors(pubsub)).
 :- use_module(actors(worker)).
 :- use_module(utils(logger)).
-:- use_module(utils(tools)).
 :- use_module(agency(body)).
 :- use_module(agency(som/ca_support)).
 
@@ -198,7 +198,7 @@ action_domain(State, ActionDomain) :-
 		(
 			member(Effector, State.effectors), Action = Effector.capabilities.action), ActionDomain).
 
-% command{effector_ca: CA_ID, action: Action, intent_id: IntentId}
+% command{effector_ca: CA_ID, action: Action}
 % Ignore commands meant for another effector CA
 % Divide the others into can do and can't do
 can_and_cannot_do(Commands, State, CanDoCommands, CannotDoCommands) :-
@@ -261,10 +261,10 @@ actuation_executed(_, State, State).
 
 actuation_for(Command, Status, State, Actuation) :-
 	self(Self),
-	command{effector_ca: Self, action:Action, intent_id:IntentId} :< Command,
+	command{effector_ca: Self, action:Action} :< Command,
 	get_state(State, actuations, Actuations),
 	member(Actuation, Actuations),
-	actuation{action:Action, intent_id:IntentId, status: Status} :< Actuation.
+	actuation{action:Action, status: Status} :< Actuation.
 
 % Tell the body to prepare to carry out this actuation (the body accumulates them until told to execute them all)
 body_actuated(State, Action) :-

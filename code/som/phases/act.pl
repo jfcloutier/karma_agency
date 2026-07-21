@@ -1,148 +1,130 @@
 /**
-Possibly create/replace intent, advance prioritized goal_states,
-find plans for intent and for received directives, progress the execution of plans.
+Execute plans that are predicted as executed, create an intent if missing, find plans for intent and for directives predicted as planned.
+
+* Execute a plan when its goal activation is experienced as `planned`
+ * immediately if the plan's goal is the intent
+ * only if the plan's goal is a directive which activation is predicted as `executed`
+* Create an intent
+  * only if there is currently none
+* Find a plan for the intent and for each directive predicted by a parent CA as `planned`
+  * only if it has none
+  * a plan is found by
+    * selecting a goal-matching affordance
+    * or building the plan from scratch
 
 State properties produced by this phase but not consumed upon entering it:
 
-intent - intent created or replaced
-plans - new plans found
-goal_states - records on the progress of goals
+intent - intent maybe created
+plans - new plans may be found
+experiences - goal activation experiences may be had
 
-Plan creation involves:
+Acting involves:
 
-% experience{origin:Object, kind:unchanged, value:Count, confidence: Confidence, by:CA}
-% synthetic_object([Observation.id], Object) => Object = object{type:synthetic, id:ObjectId, evidence:ObservationIds}
-% plan{id: ID, goal_id: GoalID, directives: [goal{...} | command{...}, ...], status:Status, score: Score}
-% goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id: IntentId, intent_level: Level}
-% command{effector_ca:CA_ID, action:Action, intent_id:IntentId}
-% target{origin: Origin, kind: Kind, value: Value}
-% object{type:synthetic, id:Id, evidence: [ObservationId, ...]}
-% observation{id:Id, origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
+% prediction{origin:Origin, kind:Kind, value:Value, weight:Weight, confidence:Confidence, by: CA, when_received: Age} - predictions received about the activations of received directives
+% observation{id:Id, origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA} - observed activations of directives sent to the umwelt
+% experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, feeling:Feeling, by:CA} - experienced activation status of intent and received directives
+% plan{goal:goal{...}, directives:[goal{...} | command{...}, ...]} - plans found for intent and received directives
+% goal{target: target{...}, impact: Impact, priority: Priority, intent_level: Level} - intent or directive
+%   target{origin: object{...}, kind: Kind, value: Value}
+%       Impact = terminate | persist | create
+%       object{type:ObjectType, id:Id, evidence: [ObservationId, ...]} -- Only synthetic objects have evidence (a list of observation IDs)
+%           ObjectType = sensor | synthetic | goal
+% command{effector_ca:CA_ID, action:Action}
 
 **/
-
-%%%% TODO - Directives (goals or commands) are always communicated by value, never by their IDs
 
 :- module(act, []).
 
 :- use_module(utils(logger)).
-:- use_module(utils(tools)).
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
 :- use_module(agency(som/wellbeing)).
-:- use_module(agency(som/goals)).
-:- use_module(agency(som/goal_states)).
 :- use_module(agency(som/plans)).
 :- use_module(agency(som/experiences)).
 :- use_module(agency(som/observations)).
+:- use_module(agency(som/goals)).
+:- use_module(agency(som/predictions)).
 :- use_module(agency(som/dynamic_ca)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(body)).
 
-% Computing umwelt actions before individual units of work
-before_work(_, State, [umwelt_actions = UmweltActions], WellbeingDelta) :-
-    umwelt_actions(State.umwelt, UmweltActions),
+before_work(_, _, [], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
 
-% A unit of work consists in identifying the most important goal state to advance and then advancing it, possibly to a dead end.
-% The work is done if there is no goal state left to advance.
-% The unit of work must always be carried out on the latest goal states, which may have changed prior to entering this phase or before each unit of work.
+% Execute a plan,
+% or create a missing intent,
+% or find a required plan.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
-    repeat,
-    % query_answered/3 is deterministic
-    query_answered(CA, goal_states, GoalStates),
-    query_answered(CA, plans, Plans),
-    % Are we sure the CA has updated its goal states from the last unit of work?
-    % - Yes since the query always follows the work_progressed message sent after the previous unit of work.
-    log(info, act, "~w is acting on goal states ~p and plans ~p", [CA, GoalStates, Plans]),
-    acted(CA, State, GoalStates, Plans, StateDeltas, WellbeingDelta).
+    plan_executed(CA,State, StateDeltas, WellbeingDelta)
+    ;
+    intent_created(CA,State, StateDeltas, WellbeingDelta)
+    ;
+    plan_found(CA, State, StateDeltas, WellbeingDelta).
 
+% Nothing more to do
 unit_of_work(_, _, done([], WellbeingDelta)) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
 
-% Find all actions supported by effector CAs currently in the CA's umwelt
-umwelt_actions(Umwelt, Actions) :-
-    findall(ActionDomain, (member(UmweltCA, Umwelt), is_effector(UmweltCA), query_answered(UmweltCA, action_domain, ActionDomain)), Actions1),
-    flatten(Actions1, Actions2),
-    sort(Actions2, Actions),
-    log(info, act, "All umwelt actions: ~p", [Actions]).
+% One plan is to be found if there is an intent and it has none, or a directive was predicted as `planned` by a parent CA.
+%! plan_found(++CA, ++State, --StateDeltas, --WellbeingDelta)
+plan_found(CA, State, [plans=[Plan]], WellbeingDelta) :-
+    get_state(State, intent, Intent),
+    Intent \= none,
+    \+ plan_for_goal(Intent, State, _),
+    plan_found_for_goal(Intent, CA, State, Plan, WellbeingDelta).
 
-% Succeeds with creating an intent and/or advancing the top goal (might cause plans to be found), or it fails if no goal state can be advanced.
-% ASSUMPTION: Goals progress monotonically (no backsliding) until they are executed or have reached a deadend.
-% State deltas include intent, plans and goal_states
+plan_found(CA, State, [plans=[Plan]], WellbeingDelta) :-
+    is_directive_activation_predicted_as(Directive, State, planned),
+     \+ plan_for_goal(Directive, State, _),
+    plan_found_for_goal(Directive, CA, State, Plan, WellbeingDelta).
 
-% The CA acts by creating a missing intent to advance (we only need to check goal states for evidence of an existing and possibly progressing intent)
-% A later work unit would find a plan for it whenever the intent becomes the most urgent goal to advance.
-acted(CA, State, GoalStates, _, [intent=Intent, goal_states=[IntentGoalState]], WellbeingDelta) :-
-    \+ intent_in_progress(GoalStates, _),
+%% INTENT CREATION
+
+%! intent_created(++CA, ++State, --StateDeltas, --WellbeingDelta)
+intent_created(CA, State, StateDeltas, WellbeingDelta) :-
+    get_state(State, intent, Intent),
+    Intent \= none,
+    new_intent(CA, State, Intent, StateDeltas),
     % TODO - No wellbeing deltas for now
-    intent_created(CA, State, Intent, IntentGoalState),
-    wellbeing_delta([], WellbeingDelta).
-
-% Select the most urgent goal that can be advanced and advance it
-acted(CA, State, GoalStates, Plans, [goal_states = AdvancedGoalStates, plans = NewPlans], WellbeingDelta) :-
-    intent_in_progress(GoalStates, _),
-    % choice point
-    urgent_goal_state(GoalStates, GoalState),
-    log(info, act, "The urgent goal state is ~p", [GoalState]),
-    % can fail if the goal state is not advanced
-    goal_state_advanced_from(GoalState.status, GoalState, CA, State, GoalStates, Plans, AdvancedGoalStates, NewPlans),
-    log(info, act, "Advanced goal state ~p to ~p with new plans ~p", [GoalState, AdvancedGoalStates, NewPlans]),
-    !,
-    wellbeing_delta(NewPlans, WellbeingDelta).
-
-acted(_, _, _, _, [], WellbeingDelta) :-
-    log(info, act, "Nothing to act on"),
-    sleep(0.1),
     wellbeing:empty_wellbeing(WellbeingDelta).
-
-% goal_state{goal: Goal, status: Status, messages: [GoalMessage, ...]}
-% goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id: IntentId, intent_level: Level}
-% The CA has a progressing intent if there's a goal state where the goal id is the intent id,
-% and its status indicates progress.
-intent_in_progress(GoalStates, Goal) :-
-    member(GoalState, GoalStates),
-    Goal = GoalState.goal,
-    % An intent is a goal that is its own intent (it is not subjugated to an ancestor CA's intent)
-    Goal.intent_id = Goal.id,
-    goal_state_is_advancing(GoalState),
-    !.
 
 % An intent is created by wanting to impact the most felt experience that can be impacted and planned for
 % An intent is the only goal a CA creates on its own; its other goals are given to it as directives by its parent CAs.
-intent_created(CA, State, Intent, IntentGoalState) :-
+% When creating an intent, don't repeat the previous intent; it was abandoned for a reason.
+%! new_intent(++CA, ++State, --Intent, --StateDeltas)
+new_intent(CA, State, Intent, [intent=Intent, experiences=[IntentActivationExperience]]) :-
     dynamic_ca:level_from_name(CA, Level),
-    experience_to_impact(State, Experience),
-    goal_from_experience(Experience, Level, Goal),
-    % An intent is a goal whose intent_id and id are the same - the goal is self-serving
-    Intent = Goal.put(intent_id, Goal.id),
-    % The intent is created with goal state status of `planning`, meaning the next step is to find a plan for the intent
-    IntentGoalState = goal_state{goal: Intent, status: planning, messages: []},
+    experience_to_impact(CA, State, Experience),
+    get_state(State, age, Age),
+    goal_from_experience(Experience, Level, Age, Intent),
+    \+ is_intent_repeating(Intent, State),
+    % The intent activation is immediately experienced as an activation with status `relevant` (just a marker, no operational significance).
+    % In the next timeframe, a plan for it will be found because the intent has no plan yet.
+    activation_experience(Intent, relevant, CA, IntentActivationExperience),
     !,
-    log(info, act, "Intent created ~p with goal state ~p", [Intent, IntentGoalState]).
+    log(info, act, "(~w) Intent ~p created", [CA, Intent]).
 
 % Find the experience starting with the most intensely felt (absolute feeling scaled by confidence).
 % When there is a tie, choose one randomly.
 % Non-deterministic
-experience_to_impact(State, Experience) :-
+experience_to_impact(CA, State, Experience) :-
     findall(Exp, (member(Exp, State.experiences), is_experience_impactable(Exp)), ImpactableExperiences),
     experiences_sorted_by_intensity(ImpactableExperiences, SortedExperiences),
     % Choose an experience starting from the most intense
     member(Experience, SortedExperiences),
-    log(info, act, "Experience to impact is ~p", [Experience]).
+    log(info, act, "(~w) Experience to impact is ~p", [CA, Experience]).
 
 % Create a goal from an experience to impact
 % Determine what kind of impact based on whether the experience is good vs bad
-goal_from_experience(Experience, IntentLevel, Goal) :-
+goal_from_experience(Experience, IntentLevel, Age, Goal) :-
     experience{origin:Object, kind:Kind, value:Value} :< Experience,
-    % The target of a goal is the experienced property/relation that was synthesized fomr observations (of umwelt experiences)
+    % The target of a goal is the experienced property/relation that was synthesized from observations (of umwelt experiences)
     Target = target{origin:Object, kind:Kind, value:Value},
     desired_impact(Experience, Impact),
     % The goal's priority is the intensity of the felt experience
     experience_intensity(Experience, Priority),
     % Create a goal without intent id
-    GoalWithoutId = goal{target: Target, impact: Impact, priority: Priority, intent_level: IntentLevel},
-    goal_with_id(GoalWithoutId, Goal),
+    Goal = goal{target: Target, impact: Impact, priority: Priority, intent_level: IntentLevel, timeframe_index: Age}, % TODO
     log(info, act, "The goal from ~p is ~p", [Experience, Goal]).
 
 % Persist a good or neutral experience, and terminate a bad one.
@@ -152,119 +134,100 @@ desired_impact(Experience, Impact) :-
         ;
         Impact = persist.
 
-% Progress the goal state, which may lead to a new plan.
-% Fails if the goal state cannot be advanced.
-
-% A received directive is to be done.
-% The goal state is advanced by the CA determining if it can seek or not to achieve it.
-goal_state_advanced_from(todo, GoalState, _, State, _, _, [UpdatedGoalState], []) :-
-    can_seek_goal(GoalState.goal, State) ->
-        published(can_seek, [directive=GoalState.goal]),
-        UpdatedGoalState = GoalState.put(status, can_seek)
-        ;
-        published(cannot_seek, [directive=GoalState.goal]),
-        UpdatedGoalState = GoalState.put(status, cannot_seek).
-
-% A goal state is moved to planning because the CA is asked by a parent CA to find a plan to achieve the goal, 
-% or the goal state is planning from the start because the goal is the intent of the CA.
-% A goal stays in planning while a plan for it is being searched.
-% If there is already a possible plan for the goal and,
-%   if all the plan's directives can_execute (infered from messages received by the CA from its umwelt), then advance the goal state to can_execute and publish this
-%   if any of the plan's directives cannot_execute (inferred from messages), mark the plan as cannot_execute (keep it to avoid duplication of effort, don't publish since there might be an alternate plan)
-%   if executability is still TBD, fail since the goal can not be advanced at the moment (it is in limbo)
-% If there is an executed plan, move the goal state to executed (should already be there anyway), 
-%   advance the goal state to executed and publish it for the planned-for directive 
-% If there is no executed or potentially executable plan yet for the directive/intent, find one
-%       if no plan can be found, 
-%           advance the goal state to cannot_execute and publish this for the planned-for directive
-% Finding a plan
-%   Find a sequence of directives targeting observations (of experiences in the umwelt) that, if executed, might achieve the goal.
-%   The plan can be an affordance (a plan executed in a prior timeframe) or be newly created (with status unknown).
-%   When found, send a todo to the umwelt with all the directives in the plan.
-
-% The plan is somehow already executed. Advance the goal state status to executed and let parents know if they didn't already.
-goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], []) :-
-    known_plan_for_goal_state(Plans, GoalState, Plan),
-    Plan.status == executed,
+is_intent_repeating(Intent, State) :-
+    get_state(State, timeframes, Timeframes),
+    % iterate over timeframes from latest until an intent is found
+    member(Timeframe, Timeframes),
+    is_goal(Timeframe.intent),
     !,
-    UpdatedGoalState = GoalState.put(status, executed),
-    known_goal(Plan.goal_id, GoalStates, PlanGoal),
-    published(executed, [directive(PlanGoal)]).
+    % Are they the same?
+    same_goals(Intent, Timeframe.intent).
 
-% The plan is ready to execute
-goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], [UpdatedPlan]) :-
-    known_plan_for_goal_state(Plans, GoalState, Plan),
-    Plan.status == possible,
-    all_plan_directives_can_execute(Plan, GoalStates),
-    !,
-    UpdatedPlan = Plan.put(status, can_execute),
-    UpdatedGoalState = GoalState.put(status, can_execute),
-    known_goal(Plan.goal_id, GoalStates, PlanGoal),
-    published(can_execute, [directive(PlanGoal)]).
+%% PLAN EXECUTION
 
-% A plan thought possible can not be executed in this timeframe
-goal_state_advanced_from(planning, GoalState, _, _, GoalStates, Plans, [UpdatedGoalState], [UpdatedPlan]) :-
-    known_plan_for_goal_state(Plans, GoalState, Plan),
-    Plan.status == possible,
-    member(Directive, Plan.directives),
-    directive_has_any_status(Directive, GoalStates, [cannot_execute]),
-    !,
-    UpdatedPlan = Plan.put(status, cannot_execute),
-    UpdatedGoalState = GoalState.put(status, cannot_execute).
+% TODO
+% If the intent has a plan and the intent activation is experienced as `planned`, execute it.
+% If a directive is predicted as executed and is experienced as `planned`, execute it.
+plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
+    intent_plan_executed(CA, State, StateDeltas, WellbeingDelta).
 
-% The plan for this goal state has status unknown or possible and can't be advanced. It will remain so until it is executing. Advancing the goal state thus fails.
-goal_state_advanced_from(planning, GoalState, _, _, _, Plans, [], []) :-
-    known_plan_for_goal_state(Plans, GoalState, Plan),
-    memberchk(Plan.status, [unknown, possible]),
-    !,
-    fail.
+plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
+    directive_plan_executed(CA, State, StateDeltas, WellbeingDelta).
 
-% An executed plan is found from a prior timeframe (an affordance) for the stated goal, 
-% or a new plan is found.
-% Broadcast the plan's directives to the umwelt.
-goal_state_advanced_from(planning, GoalState, _, State, _, Plans, [], [Plan]) :-
-    (affordance(GoalState, State, Plan) ->
-        true
-        ;
-        new_plan(GoalState, State, Plans, Plan)
-    ),
-    !,
-    published(todo, [directives(Plan.directives)]).
+intent_plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
+    get_state(State, intent, Intent),
+    is_goal(Intent),
+    has_goal_activation_status(Intent, State, planned),
+    plan_for_goal(Intent, State, Plan),
+    plan_execution(Plan, Intent, CA, State, StateDeltas, WellbeingDelta).
+
+has_goal_activation_status(Goal, State, Status) :-
+    goal_id(Goal, GoalId),
+    get_state(State, experiences, Experiences),
+    member(Experience, Experiences),
+    experience{origin:Object, kind:activation, value:Status} :< Experience,
+    object{type:goal, id:GoalId} :< Object.
+
+plan_for_goal(Goal, State, Plan) :-
+    get_state(State, plans, Plans),
+    member(Plan, Plans),
+    same_goals(Goal, Plan.goal).
+
+% Find a prediction received that a directive's activation status is `executed`.
+% Find the plan for the directive
+% Verify that the directive's activation is experienced as `planned`
+% Find a (sub)directive in the plan that is observed as `planned` and predict it as `executed`
+directive_plan_executed(CA, State, [predictions_out=[Prediction]], WellbeingDelta) :-
+    is_directive_activation_predicted_as(Directive, State, executed),
+    plan_for_goal(Directive, State, Plan),
+    has_goal_activation_status(Directive, State, planned),
+    member(SubDirective, Plan.directives),
+    is_directive_observed_as(SubDirective, State, planned),
+    directive_predicted_as(SubDirective, CA, State, executed, Prediction),
+    % TODO - decrease fullness
+    wellbeing:empty_wellbeing(WellbeingDelta).
+
+%! is_directive_activation_predicted_as(?Directive, ++State, ?Status)
+is_directive_activation_predicted_as(Directive, State, Status) :-
+    get_state(State, predictions_in, Predictions),
+    member(Prediction, Predictions),
+    prediction{origin:Object, kind:activation, value:Status} :< Prediction,
+    object{type:goal, evidence:[Directive]} :< Object.
+
+%! is_directive_observed_as(++Directive, ++State, ?Status)
+is_directive_observed_as(Directive, State, Status) :-
+    goal_id(Directive, GoalId),
+    get_state(State, observations, Observations),
+    member(Observation, Observations),
+    observation{origin:Object, kind:activation, value:Status} :< Observation,
+    object{type:goal, id:GoalId} :< Object.
+
+%! directive_predicted_as(++Directive, ++State, ++Status, --Prediction)
+% An activation prediction about a directive is sent to the CA's umwelt
+directive_predicted_as(Directive, CA, State, Status, Prediction) :-
+    get_state(State, umwel, Umwelt),
+    prediction_of_activation(Directive, CA, Status, Prediction),
+    predictions_sent_to_umwelt(CA, Umwelt, [Prediction]).
 
 % If level == 1
 % Progress is made by executing at once all commands in the goal's plan, if found
 % Publish `executed` for the plan's goal
-goal_state_advanced_from(executing, GoalState, CA, _, _, Plans, [UpdatedGoalState], []) :-
+plan_execution(Plan, Goal, CA, _, [experiences=[ActivationExperience]], WellbeingDelta) :-
     dynamic_ca : level_from_name(CA, Level),
     Level == 1,
     !,
-    known_plan_for_goal_state(Plans, GoalState, Plan),
     forall(Command, (member(Command, Plan.directives), command_actuation_readied(Command))),
-    actuations_executed(),
+    actuations_executed_by_body(),
     forall(Command, (member(Command, Plan.directives), command_actuation_executed(Command))),
-    published(executed, [directive=GoalState.goal]),
-    UpdatedGoalState = GoalState.put(status, executed).
-
-% If level > 1
-% Progress is made in progressing the execution of the goal's plan by requesting that the first unexecuted directive be executed
-% Find the plan for the goal with goal state
-% Find the first directive that is can_execute and publish `execute` for the directive.
-% Fail otherwise.
-goal_state_advanced_from(executing, GoalState, CA, _, GoalStates, Plans, [UpdatedGoalState], []) :-
-    known_plan_for_goal_state(Plans, GoalState, Plan),
-    plan_directive_with_goal_state_status(Plan, GoalStates, can_execute, GS, Directive), 
-    published(execute, [directive(Directive)]),
-    UpdatedGoalState = GS.put(messages, [message{about:execute, source:CA} | GS.messages]).
+    activation_experience(Goal, executed, CA, ActivationExperience),
+    % TODO - decrease fullness
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % Get the body host from the agency supervisor
 % Tell the body to execute all pending actions
-actuations_executed() :-
+actuations_executed_by_body() :-
 	query_answered(agency, option(body_host), Host),
   	body : actions_executed(Host).
-    
-known_plan_for_goal_state(Plans, GoalState, Plan) :-
-    member(Plan, Plans),
-    Plan.goal_id == GoalState.goal.id.
 
 % Tell an effector CA to ready execution of its action
 command_actuation_readied(Command) :-
@@ -274,202 +237,147 @@ command_actuation_readied(Command) :-
 command_actuation_executed(Command) :-
     message_sent(Command.effector_ca, execute_actuation(Command)).
 
-plan_directive_with_goal_state_status(Plan, GoalStates, Status, GS, Directive) :-
-    member(Directive, Plan.directives),
-    member(GS, GoalStates),
-    GS.goal.id == Directive.id,
-    GS.status == Status.
+%%% FINDING A PLAN
 
-% Whether there is an experience (irrespective of the experienced property/relation's value) that matches the target of the goal
-can_seek_goal(Goal, State) :-
-    target{origin:Object, kind:Kind} :< Goal.target,
-    member(Experience, State.experiences),
-    experience{origin:Object, kind:Kind} :< Experience.
-
-% All plan directives can execute or have already been executed
-all_plan_directives_can_execute(Plan, GoalStates) :-
-    forall(member(Directive, Plan.directives), directive_has_any_status(Directive, GoalStates, [can_execute, executed])).
-
-directive_has_any_status(Directive, GoalStates, Statuses) :-
-    member(GoalState, GoalStates),
-    GoalState.goal.id == Directive.id,
-    memberchk(GoalState.status, Statuses).
-
-% An affordance is a plan from a prior timeframe for the current goal in this timeframe.
-% The higher the score, the more likely the affordance will be reused.
-% If the same plan is scored in multiple timeframes, the latest score is used.
-% Going back in time(frames), accumulate the plans for the given goal, ignoring older duplicates
-% For each matching plan, starting with the most recent, roll the dice on whether to reuse it or not
-%   The higher its score, the more likely it will be picked
-% Stop after one is picked or fail if none are.
-affordance(GoalState, State, Plan) :-
-    scored_plans_for_goal(State.timeframes, GoalState.goal, ScoredPlans),
-    !,
-    reused_scored_plan(ScoredPlans, Plan),
-    log(info, act, "Reusing affordance ~p from ~p", [Plan, ScoredPlans]).
-
-scored_plans_for_goal(Timeframes, Goal, ScoredPlans) :-
-    matching_scored_plans(Timeframes, Goal, [], Plans),
-    map_list_to_pairs(plan_score, Plans, Pairs),
-    keysort(Pairs, ScoredPlans1),
-    % Highest score first
-    reverse(ScoredPlans1, ScoredPlans).
-
-matching_scored_plans([], _, Plans, Plans).
-matching_scored_plans([Timeframe | Rest], Goal, Acc, Plans) :-
-    matching_scored_plan(Timeframe.plans, Goal, Plan),
-    \+ (member(AccPlan, Acc), same_directives(Plan.directives, AccPlan.directives)),
-    !,
-    matching_scored_plans(Rest, Goal, [Plan | Acc], Plans).
-
-matching_scored_plans([_ | Rest], Goal, Acc, Plans) :-
-    matching_scored_plans(Rest, Goal, Acc, Plans).
-
-matching_scored_plan(Timeframe, Goal, Plan) :-
-    member(Plan, Timeframe.plans),
-    Plan.score \= 0,
-    % Two goals with the same id are semantically the same goal
-    Plan.goal.id == Goal.id.
-
-% Same directives irrespective of intent in the same order?
-same_directives([], []).
-
-same_directives([Goal1 | Rest1], [Goal2 | Rest2]) :-
-    Goal1.id == Goal2.id,
-    same_directives(Rest1, Rest2).
-
-% A plan score is between 0.0 and 1.0
-% Roll a loaded dice (between 0.0 and 1.2) so that 20% of the time, even a perfect plan is not the one picked
-reused_scored_plan([Score-Plan | _], Plan) :-
-    random(R),
-    (R * 1.2) < Score,
+% One plan to find, either an affordance or a new plan
+% The affordance must be scored high enough to be chosen over buidling a new plan.
+%! plan_found_for_goal(++Directive, ++CA, ++State, ?Plan) is semidet
+plan_found_for_goal(Goal, CA, State, Plan, WellbeingDelta) :-
+    (affordance_plan(Goal, CA, State, Plan),
+    % Reusing an affordance is free
+    wellbeing:empty_wellbeing(WellbeingDelta)
+    ;
+    new_plan(Goal, CA, State, Plan),
+    % Building a plan costs fullness but increases engagement
+    wellbeing_delta_from_building_plan(Plan, WellbeingDelta) 
+    ),
     !.
 
-reused_scored_plan([_ | Rest], Plan) :-
-    reused_scored_plan(Rest, Plan).
+affordance_plan(Goal, CA, State, Plan) :-
+    candidate_affordances_for(Goal, State, Affordances),
+    selected_affordance_plan(Affordances, Plan),
+    log(info, act, "(~w) Affordance plan ~p selected for goal ~p", [CA, Plan, Goal]).
 
-% Look for a new plan that could achieve the give goal referenced in its state.
-% To be new, a must not repeat any plan in the timeframe.
-% A new plan starts with status `unknown`. The CA's umwelt will tell the CA if it is `possible` or `cannot_execute`.
-% goal_state{goal: Goal, status: Status, received:Boolean messages: [GoalMessage, ...]}
-% goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id:IntentId, intent_level: Level}
-% target{origin: Origin, kind: Kind, value: Value}
-% Impact = terminate | persist | create
-% create - requires causal theory
-new_plan(GoalState, State, Plans, NewPlan) :-
-    log(info, act, "Making new plan for ~p", [GoalState]),
-    goal{target:Target, impact:Impact} :< GoalState.goal,
-    plan_for_goal(Target.kind, Impact, GoalState.goal, State, NewPlan),
-    \+ (member(CurrentPlan, Plans), same_plans(CurrentPlan, NewPlan)),
-    log(info, act, "New plan ~p for goal state ~p", [NewPlan, GoalState]).
+candidate_affordances_for(Goal, State, CandidateAffordances) :-
+    get_state(State, affordances, Affordances),
+    findall(Affordance, (member(Affordance, Affordances), is_candidate_affordance(Affordance, Goal)), CandidateAffordances).
 
-% The CA needs a plan for the goal to persist an `unchanged` experience it has (represented by the Target property or relation).
-% The goal is either a parent's directive or the CA's own intent.
-% The plan's sole directive will be to persist the evidence for that experience of the CA (the evidence is an umwelt experience that was observed as unchanging),
-% so that the CA's `unchanged` experience still exists in the next timeframe (albeit with its value incremented by one timeframe count).
-plan_for_goal(unchanged, persist, Goal, State, NewPlan) :-
-    % What umwelt experience was observed not to change
-    [ObservationId] = Goal.target.origin.evidence,
-    observation_from_id(ObservationId, State, Observation),
-    % The CA wants the observed umwelt experience to persist, with the same priority and intent context as the goal the directive is meant to achieve
-    directives_from_observation(Observation, persist, Goal, State, Directive),
-    plan(Goal.id, [Directive], NewPlan).
+% An affordance for a goal is a candidate if it has a score
+is_candidate_affordance(Affordance, Goal) :-
+    Score = Affordance.score,
+    Score \= none,
+    same_goals(Goal, Affordance.plan.goal).
 
-% The CA needs a plan to terminate an 'unchanged` experience it has.
-% This can be done by terminating the evidence for that experience (an umwelt experience observed not to change) in a number of ways:
-% The observed experience terminates if any experience of the same kind with the same origin has a different value
-% or if no such experience is found (irrespective of value).
-plan_for_goal(unchanged, terminate, Goal, State, NewPlan) :-
-    [ObservationId] = Goal.target.origin.evidence,
-    observation_from_id(ObservationId, State, Observation),
-    directives_from_observation(Observation, terminate, Goal, State, Directive),
-    plan(Goal.id, [Directive], NewPlan).
+plan_score(Affordance, Score) :-
+    Score = Affordance.score.
+
+% Use the highest scored plan as long as its score is > 0.5 (ties are randomized)
+% TODO - adjust minimal score based on settings and wellbeing
+selected_affordance_plan(Affordances, Plan) :-
+    map_list_to_pairs(plan_score, Affordances, ScoredAffordances),
+    % To randomize ties
+    random_permutation(ScoredAffordances, ScoredAffordances1),
+    keysort(ScoredAffordances1, SortedScoredAffordances),
+    % Highest score first
+    reverse(SortedScoredAffordances, [Score-Affordance | _]),
+    Score > 0.5,
+    Plan = Affordance.plan.
+
+% Find a plan that is not a scored affordance
+new_plan(Goal, CA, State, Plan) :-
+    log(info, act, "(~w) Making new plan for ~p", [CA, Goal]),
+    goal{target:Target, impact:Impact} :< Goal,
+    plan_for_goal(Target.kind, Impact, Goal, State, Plan),
+    \+ is_scored_affordance_plan(State, Plan),
+    log(info, act, "(~w) New plan ~p for goal ~p", [CA, Plan, Goal]).
+
+is_scored_affordance_plan(State, Plan) :-
+    get_state(State, affordances, Affordances),
+    member(Affordance, Affordances),
+    Affordance.score \= none,
+    same_plans(Affordance.plan, Plan).
 
 % The CA needs a plan for the goal to persist a `count` experience
 % This can be done by persisting the full evidence for that experience (kin umwelt experiences observed and counted)
-plan_for_goal(count, persist, Goal, State, NewPlan) :-
+plan_for_goal(count, persist, Goal, State, Plan) :-
     ObservationIds = Goal.target.origin.evidence,
     directives_to_impact_all_observations(ObservationIds, Goal, persist, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
 
 % The CA needs a plan for the goal to persist a `count` experience
 % This can be done by terminating any portion of the evidence for that experience (kin umwelt experiences observed and counted)
-plan_for_goal(count, terminate, Goal, State, NewPlan) :-
+plan_for_goal(count, terminate, Goal, State, Plan) :-
     ObservationIds = Goal.target.origin.evidence,
     members(SomeObservationIds, ObservationIds),
     directives_to_impact_all_observations(SomeObservationIds, Goal, terminate, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
 
 % The CA needs a plan for the goal to persist a `more` experience
 % A `more` experience is a relation where the origin's evidence outnumbers the value object's evidence.
-% Persisting can be done by persisting all origin evidence/observations and terminate 0 or more of value object evidence/observations
-plan_for_goal(more, persist, Goal, State, NewPlan) :-
+% Persisting can be done by persisting all origin evidence/observations and terminate 1 or more of value object evidence/observations
+plan_for_goal(more, persist, Goal, State, Plan) :-
     MoreObservationIds = Goal.target.origin.evidence,
     FewerObservationIds = Goal.target.value.evidence,
     directives_to_impact_all_observations(MoreObservationIds, Goal, persist, State, Directives1),
-    members_or_none(SomeObservationIds, FewerObservationIds),
-    directives_to_impact_all_observations(SomeObservationIds, Goal, terminate, State, Directives2),
+    random_subset(FewerObservationIds, EvenFewerObservationIds),
+    \+ length(EvenFewerObservationIds, 0),
+    directives_to_impact_all_observations(EvenFewerObservationIds, Goal, terminate, State, Directives2),
     append(Directives1, Directives2, AllDirectives),
     random_permutation(AllDirectives, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
     
 % The CA needs a plan for the goal to terminate a `more` experience
 % A `more` experience is a relation where the origin's evidence outnumbers the value object's evidence.
 % Terminating can be done by persisting all value evidence/observations and terminating enough origin object evidence/observations so there aren't more.
-plan_for_goal(more, terminate, Goal, State, NewPlan) :-
+plan_for_goal(more, terminate, Goal, State, Plan) :-
     MoreObservationIds = Goal.target.origin.evidence,
     FewerObservationIds = Goal.target.value.evidence,
     length(MoreObservationIds, MoreCount),
     length(FewerObservationIds, FewerCount),
     MinTerminate is MoreCount - FewerCount,
     random_between(MinTerminate, MoreCount, TerminateCount),
-    random_permutation(MoreObservationIds, PermutedMoreObservationIds),
-    take(TerminateCount, PermutedMoreObservationIds, SomeObservationIds),
+    random_take(TerminateCount, MoreObservationIds, SomeObservationIds),
     directives_to_impact_all_observations(SomeObservationIds, Goal, terminate, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
 
 % When the CA needs a plan to persist a `trend` experience.
 %   If the trend value is up, we want a next observation with a value greater than the latest Observation.
 %   If the trend value is down, we want a next observation with a value lesser than the latest Observation.
-%   If the trend value is ended, we want a next observation with the same value as that of the latest Observation.
+%   If the trend value is steady, we want a next observation with the same value as that of the latest Observation. <== TODO
 % When the CA needs a plan to terminate a `trend` experience.
 %   If the trend value is up, we want a next observation with a value lesser or equal to that of the latest Observation.
 %   If the trend value is down, we want a next observation with a value greater or equal to that of the latest Observation.
-%   If the trend value is ended, we want a next observation with a value different from that of the latest Observation.
-plan_for_goal(trend, Impact, Goal, State, NewPlan) :-
+%   If the trend value is steady, we want a next observation with a value different from that of the latest Observation. <== TODO
+plan_for_goal(trend, Impact, Goal, State, Plan) :-
     TrendValue = Goal.target.value,
     [_, LatestObservation] = Goal.target.origin.evidence,
-    plan_for_trend_goal(Impact, TrendValue, LatestObservation, Goal, State, NewPlan).
+    plan_for_trend_goal(Impact, TrendValue, LatestObservation, Goal, State, Plan).
     
 % We want a next observation with a value greater than that of the latest Observation
-plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, NewPlan) :-
-    member(Impact-Trend, [persist-up, terminate-down, terminate-ended]),
+plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, Plan) :-
+    member(Impact-Trend, [persist-up, terminate-down, terminate-steady]),
     Value = Goal.target.value,
     inc_simple_count(Value, IncValue),
     NextObservation = LatestObservation.put(value, IncValue),
     IncValue \= Value,
     directives_from_observation(NextObservation, create, Goal, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
 
 % We want a next observation with a value lesser than that of the latest Observation
-plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, NewPlan) :-
-    member(Impact-Trend, [persist-down, terminate-up, terminate-ended]),
+plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, Plan) :-
+    member(Impact-Trend, [persist-down, terminate-up, terminate-steady]),
     Value = Goal.target.value,
     dec_simple_count(Value, DecValue),
     DecValue \= Value,
     NextObservation = LatestObservation.put(value, DecValue),
     directives_from_observation(NextObservation, create, Goal, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
+    Plan = plan{goal:Goal, directives:Directives}.
 
 % We want a next observation with the same value as that of the latest Observation
 plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, NewPlan) :-
-    member(Impact-Trend, [persist-ended, terminate-up, terminate-down]),
+    member(Impact-Trend, [terminate-up, terminate-down, persist-steady]),
     directives_from_observation(LatestObservation, persist, Goal, State, Directives),
-    plan(Goal.id, Directives, NewPlan).
-
-observation_from_id(ObservationId, State, Observation) :-
-    member(Observation, State.observations),
-    ObservationId == Observation.id.
+    NewPlan = plan{goal:Goal, directives:Directives}.
 
 directives_to_impact_all_observations([], _, _, _, []).
 directives_to_impact_all_observations(ObservationIds, Goal, Impact, State, AllDirectives) :-
@@ -480,56 +388,51 @@ directives_to_impact_all_observations(ObservationIds, Goal, Impact, State, AllDi
     flatten(AllDirectives1, AllDirectives),
     log(info, act, "The directives are ~p", [AllDirectives]).
 
+observation_from_id(ObservationId, State, Observation) :-
+    get_state(State, observations, Observations),
+    member(Observation, Observations),
+    ObservationId == Observation.id.
+
 % Directives from a synthetic observation
 directives_from_observation(Observation, Impact, FromGoal, _, [Directive]) :-
     \+ is_sensory_observation(Observation),
     observation_target(Observation, Target),
-    GoalWithoutId = goal{target: Target, impact: Impact, priority: FromGoal.priority, intent_id: FromGoal.intent_id, intent_level: FromGoal.intent_level},
-    goal_with_id(GoalWithoutId, Directive).
+    Directive = goal{target: Target, impact: Impact, priority: FromGoal.priority, intent_level: FromGoal.intent_level}.
 
-% Comeup with directives/actions to impact a sensory observation, i.e. observation of a sensor CA experience
-% i.e. observation{id:Id, origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA}
-% Unless it uses an affordance (it does not since we are here), the CA does not know (yet) a sequence of effector actions
+% Commands to impact a sensory observation, i.e. observation of a sensor CA experience.
+% Without a scored affordance, the CA does not know (yet) a sequence of effector actions (a movement)
 % that will produce the desired impact on the observed sensory experience. So it has to guess.
-% From all actions supported by effector CAs in the CA's umwelt, generate a list of actions (0 or 1-3 of each) and randomly permute.
-% Doing nothing is not an option.
-directives_from_observation(Observation, _, _, State, Actions) :-
+directives_from_observation(Observation, _, _, State, Commands) :-
     is_sensory_observation(Observation),
-    action_groups(State.umwelt_actions, ActionGroups),
-    flatten(ActionGroups, Actions1),
-    Actions1 \= [],
-    random_permutation(Actions1, Actions).   
+    get_state(State, umwelt_commands, UmweltCommands),
+    movement(UmweltCommands, Movement),
+    random_permutation(Movement, Commands).      
 
-known_goal(GoalId, GoalStates, Goal) :-
-    member(GoalState, GoalStates),
-    Goal = GoalState.goal,
-    Goal.id == GoalId.
+% From all commands supported by the CA's umwelt, generate a list of commands (0 or 1-3 of each) and randomly permute.
+movement([], []).
 
-action_groups([], []).
+movement([Command | Rest], [Group | OtherGroups]) :-
+    command_group(Command, Group),
+    movement(Rest, OtherGroups).
 
-action_groups([Action | Rest], [Group | OtherGroups]) :-
-    action_group(Action, Group),
-    action_groups(Rest, OtherGroups).
-
-% 50% of the time, don't include the action
+% 50% of the time, don't include the command
 % Otherwise have it be repeated 1 to 3 times
-action_group(Action, ActionGroup) :-
+command_group(Command, CommandGroup) :-
     random_between(0, 1, R),
     (R == 0 ->
-        ActionGroup = []
+        CommandGroup = []
         ;
         random_between(1, 3, N),
-        replicate(Action, N, ActionGroup)
+        replicate(Command, N, CommandGroup)
     ).
 
-wellbeing_delta(NewPlans, WellbeingDelta) :-
+wellbeing_delta_from_building_plan(Plan, WellbeingDelta) :-
     wellbeing:empty_wellbeing(EmptyWellbeing),
-    length(NewPlans, N),
-    % TODO - Get the fullness cost of a new plan and moving a goal state from settings
-    Delta1 is N * 0.01,
+    length(Plan.directives, N),
+    % TODO - Get the fullness cost of a new plan from settings
+    Delta is N * 0.01,
     % Planning is engaging
-    WellbeingDelta1 = EmptyWellbeing.add_engagement(Delta1),
-    % Add the cost of moving forward a goal state
-    Delta is Delta1 + 0.01,
+    WellbeingDelta1 = EmptyWellbeing.add_engagement(Delta),
+    % Planning is exhausting
     WellbeingDelta = WellbeingDelta1.subtract_fullness(Delta).
 
