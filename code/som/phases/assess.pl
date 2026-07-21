@@ -1,29 +1,38 @@
 /*
 Abandon intent if 
-  * it is no longer relevant (the experience to impact is gone)
-  * it is stalled (not executing or executed for N timeframes)
+  * it is no longer relevant (the experience to be impacted is gone)
+  * it is stalled (not executing/executed for N timeframes)
   * then drop any plan for it and let umwelt know the intent is abandoned
 
 Abandon a directive if
-  * it is no longer relevant or is stalled
+  * it is no longer relevant or it is stalled
   * then drop any plan for it and let the parents know that the directive cannot be executed
 
 Abandon a plan if
   * it is stalled 
 
-Over all timeframes
-  * check if executed goal states have been achieved (experience impacts are now realized)
+Score plans
+  * over all timeframes, check if goal states went from executed to achieved (have targeted experience impacts been realized?)
   * if achieved, score associated executed plans
-    * the closer in time to goal achievement, the higher the score
+    * the closer in time to goal achievement, the higher the (correlation) score
 
 Evaluate causal theory
-  * If none and there's enough history (timeframe count > N), request one 
-  * If too many prediction errors from applying the current causal theory, request a new one
+  * If none and there's enough history (timeframe count > N), request one from the Apperception Engine
+* If too many prediction errors from applying the current causal theory, request a new one (hold on to the old ones)
 
-Decide what happens next to the dynamic CA
-  * apoptosis if too old (max trimeframes reached) or wellbeing is too low in any dimension and not trending up
-  * else ask SOM whether to replicate, divide or do neither
+Diffuse wellbeing
+  * broadcast wellbeing status (parents and umwelt are listeners)
+  * decide how much wellbeing to transfer to which parents and umwelt CAs
+    * from reviewing wellbeing status events received
+    * and own wellbeing reserves + depletion rates (they modulate generosity)
+  * send messages transfering wellbeing to needy parents and/or umwelt CAs
+    * clear received wellbeing status events
 
+Accept life event
+  * ask SOM what's the next life event: apoptosis, replication, division or none
+  * realize it, unless none
+    * apoptosis distributes fullness to parents and umwelt
+    * replication/division divides fullness equally, integrity is copied, engagement starts full for new CAs
 */
 
 :- module(assess, []).
