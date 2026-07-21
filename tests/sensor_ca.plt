@@ -68,7 +68,7 @@ test(empty_prediction) :-
 	get_matching_message(prediction_error{actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue == released).
 
-test(experience_acquired) :-
+test(percept_acquired) :-
 	SensorCA = 'sensor:light-in2:color',
 	SensorName = 'light-in2',
 	message_sent(SensorCA, adopted),
@@ -80,7 +80,7 @@ test(experience_acquired) :-
 	get_matching_message(prediction_error{prediction: Prediction, actual_value:ActualValue}, message(prediction_error(_), SensorCA)),
 	assertion(ActualValue \== red),
 	query_answered(SensorCA, state, State),
-	get_state(State, experiences, [Experience]),
-	assertion(experience{origin:object{type:sensor, id:SensorName}, kind:color} :< Experience).
+	get_state(State, percepts, [Percept]),
+	assertion(percept{origin:object{type:sensor, id:SensorName}, kind:color} :< Percept).
 
 :- end_tests(sensor_ca).

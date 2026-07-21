@@ -1,7 +1,7 @@
 /*
 A sensor CA is a static (a priori) cognition actor that communicates with a body sensor to obtain its sensed value.
 
-A sensor CA experiences its sensor's latest reading (a primitive observatio) which pairs a value with an error tolerance (ignored for now).
+A sensor CA perceives its sensor's latest reading (a primitive observatio) which pairs a value with an error tolerance (ignored for now).
 
 A sensor CA listens to prediction events about its latest reading.
 
@@ -25,35 +25,40 @@ Messages:
 
 * In from a parent
     * `prediction(Prediction) - a parent makes a prediction about a sense reading - Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, weight:Weight, confidence:Confidence, by: CA}
- 	* `wellbeing_transfer(Wellbeing)` - payload is wellbeing{fullness:N1, integrity:N2, engagement:N3}
+	* `fullness_transfer(Fullness)` - Fullness is received and is added to current wellbeing 
 
 Events:
 	
 * Out
     * topic: ca_started, payload: [level = Level]
+    * topic: wellbeing, payload: [current=Wellbeing] - The sensor CA publishes its wellbeing whenever it changes
 
 Queries:
 
 * In
     * level - 0
     * type - sensor_ca
-    * latency - unknown - an effector CA has no set latency
-    * wellbeing -> wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement}
+    * parents - parent CAs
 
 State:
 	* parents - parent CAs
     * sensor - the body sensor the CA is responsible for
-	* experiences - experiences from last reading - [experience{origin:object{type:sensor, id:SensorName}, kind:Sense, value:Value, confidence:1.0}] - ignore tolerance
+	* percepts - percepts from last reading - [percept{origin:object{type:sensor, id:SensorName}, kind:Sense, value:Value, confidence:1.0}] - ignore tolerance
 	* wellbeing - wellbeing metrics - initially wellbeing{fullness:1.0, integrity:1.0, engagement:0.5}
 
 Lifecycle:
   * Created once for a body sensor
   * Repeatedly
     * Adopted by a CA as part of its umwelt (new parent) - subscribes to umwelt events from parent
-    * Queried for its experience domain (only experiences its latest reading)
+    * Queried for its sensory domain (only perceives its latest reading)
     * Handles prediction events by making readings and then maybe emitting prediction errors
       if the readings differ from the predictions more than the error tolerance of the sensor
+    * publishes its wellbeing whenever it changes
   * Parent CA terminated - unsubscribes from umwelt events originating from the parent
+
+A sensor CA has no set latency and is purely reactive
+
+TODO - Transfer out of acquired fullness on demand, repair of lost integrity when needed
 */
 
 :- module(sensor_ca, []).
@@ -75,14 +80,6 @@ name_from_sensor(Sensor, Name) :-
 % the level of the CA given its name
 level_from_name(_, 0).
 
-%! latency(-Latency) is det
-% the latency of a sensor CA is unknown
-latency(unknown).
-
-%! recruit(+Name, -Eagerness) :- is det
-% a sensor CA always volunteer for recruitment with maximum eagerness, i.e. 1.0
-recruit(_, 1.0).
-
 %%% Actor logic
 
 init(Options, State) :-
@@ -90,7 +87,7 @@ init(Options, State) :-
     empty_state(EmptyState),
     option(sensor(Sensor), Options),
     initial_wellbeing(InitialWellbeing),
-    put_state(EmptyState, [parents-[], sensor-Sensor, experiences-[], wellbeing-InitialWellbeing], State),
+    put_state(EmptyState, [parents-[], sensor-Sensor, percepts-[], wellbeing-InitialWellbeing], State),
 	subscribed_to_events(),
     published(ca_started, [level(0)]).
 
@@ -107,16 +104,21 @@ handled(query(type), _, sensor_ca).
 
 handled(query(level), _, 0).
 
-handled(query(latency), _, unknown).
-
+% FOR DEBUGGING
 handled(query(reading), State, Reading) :-
     sense_read(State, Reading).
 
+% FOR DEBUGGING
 handled(query(wellbeing), State, Wellbeing) :-
     get_state(State, wellbeing, Wellbeing).
 
-handled(query(Query), State, Answer) :-
-    ca_support : handled(query(Query), State, Answer).
+% FOR DEBUGGING
+handled(query(parents), State, Parents) :-
+    get_state(State, parents, Parents).
+
+% FOR DEBUGGING
+handled(query(state), State, State).
+
 
 % The sensor CA is adopted (fail if already adopted by this parent)
 handled(message(adopted, Parent), State, NewState) :-
@@ -127,9 +129,9 @@ handled(message(adopted, Parent), State, NewState) :-
 % Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:Confidence, by:CA}
 handled(message(prediction(Prediction), Parent), State, NewState) :-
     log(info, sensor_ca, "~@ received prediction ~p from ~w in ~p", [self, Prediction, Parent, State]),
-    % A prediction causes a sensor read which updates experiences
-    experiences_updated(Prediction, State, State1),
- 	prediction_handled(Prediction, State1, NewState).
+    % A prediction causes a sensor read which updates percepts
+    percepts_updated(Prediction, State, State1),
+    prediction_handled(Prediction, State1, NewState).
 
 handled(message(Message, Source), State, NewState) :-
    ca_support: handled(message(Message, Source), State, NewState).
@@ -142,9 +144,6 @@ handled(event(ca_terminated, _, Parent), State, NewState) :-
 
 handled(event(Topic, Payload, Source), State, NewState) :-
     ca_support : handled(event(Topic, Payload, Source), State, NewState).
-
-handled(message(wellbeing_transfer(WellbeingTransfer), _), State, NewState) :-
-	wellbeing_transfered(State, WellbeingTransfer, NewState).
 
 handled(message(Message, Source), State, NewState) :-
 	ca_support: handled(message(Message, Source), State, NewState).
@@ -168,9 +167,9 @@ sensor_name(State, SensorName) :-
 sense_url(State, SenseURL) :-
     SenseURL = State.sensor.url.
 
-% Read the sensor value, update wellbeing, update experience in latest reading.
-experiences_updated(Prediction, State, NewState) :-
-    log(info, sensor_ca, "~@ is updating experiences from prediction ~p", [self, Prediction]),
+% Read the sensor value, update wellbeing, update percept in latest reading.
+percepts_updated(Prediction, State, NewState) :-
+    log(info, sensor_ca, "~@ is updating percepts from prediction ~p", [self, Prediction]),
     prediction_is_meaningful(Prediction, State),
     log(info, sensor_ca, "~@ - Prediction ~p is meaningful", [self, Prediction]),
     sense_name(State, SenseName),
@@ -178,14 +177,15 @@ experiences_updated(Prediction, State, NewState) :-
     % Ignore tolerance and timestamp in reading for now
     sense_read(State, reading(Value, _, _)),
     !,
-    % A sensor is 100% confident in what it experiences
+    % A sensor is 100% confident in what it percepts
     self(SensorCA),
-    Experience = experience{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:1.0, by:SensorCA},
-    log(info, sensor_ca, "~@ experiences ~p", [self, Experience]),
-    put_state(State, experiences, [Experience],  State1),
+    Percept = percept{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, confidence:1.0, by:SensorCA},
+    log(info, sensor_ca, "~@ updated percepts to [~p]", [self, Percept]),
+    put_state(State, percepts, [Percept],  State1),
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
     put_state(State1, wellbeing, UpdatedWellbeing, NewState),
-    log(info, sensor_ca, "~@ updated experiences in ~p", [self, NewState]).
+    published(wellbeing, [current=UpdatedWellbeing]),
+    log(info, sensor_ca, "~@ updated percepts in ~p", [self, NewState]).
 
 prediction_is_meaningful(Prediction, _) :-
     is_empty_prediction(Prediction).
@@ -201,7 +201,7 @@ sense_read(State, reading(Value, Tolerance, Timestamp)) :-
     get_time(Timestamp),
     log(debug, sensor_ca, "Sensor ~w read ~w => ~p - ~p", [State.sensor.id, State.sensor.capabilities.sense, Value, Tolerance]).
 
-% Update wellbeing from reading.
+% Update wellbeing from reading .
 wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
     log(info, sensor_ca, "Changing wellbeing from sense ~w having value ~w", [SenseName, Value]),
     delta_fullness(SenseName, Value, DeltaFullness),
