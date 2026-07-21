@@ -3,7 +3,7 @@ Utilities for goal states
 
 goal_state{goal: Goal, status: Status, received:Boolean messages: [GoalMessage, ...]}
 message{about:About, from:Source}
-goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id:IntentId, intent_level: Level}
+goal{id: ID, target: Target, impact: Impact, priority: Priority, intent_id:IntentId, intent_level: Level, timeframe_index: Index}
 target{origin: Origin, kind: Kind, value: Value}
 
 Received is true in a goal state if this is a goal the CA is expected to realize. It is false if the goal is one the CA exepcts its umwelt to realize.
@@ -23,7 +23,7 @@ Goal satus:
 
 */
 
-:- module(goal_states, [goal_progress/2, is_deadend_status/1, is_goal_step/1, goal_state_is_meaningful/1, goal_state_is_advancing/1, urgent_goal_state/2, goal_state_message_added/3]).
+:- module(goal_states, [goal_progress/2, is_deadend_status/1, is_goal_step/1, goal_state_is_meaningful/1, goal_state_is_advancing/1, urgent_goal_state/2, goal_state_message_added/3, goal_state_of/3]).
 
 :- use_module(utils(logger)).
 
@@ -96,3 +96,8 @@ goal_state_message_added(GoalState, Message, UpdatedGoalState) :-
         UpdatedGoalState = GoalState
         ;
         UpdatedGoalState = GoalState.put(messages, [Message | GoalState.messages]).
+
+goal_state_of(Goal, State, GoalState) :-
+	member(GoalState, State.goal_states),
+	GoalState.goal.id == Goal.id.
+

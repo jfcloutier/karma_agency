@@ -1,63 +1,24 @@
 /*
 The dynamic cognition actor tracks changes in prior experiences and uncovers new ones by integrating current and past observations.
 
-Experiences, `activation` (repetitions), `count` (how many), `more` (of what), unchanged (for how long) and `trend` (what kind), are added to the current timeframe by:
+Experiences -`activation` (goal status), `count` (how many), `more` (of what), and `trend` (up, down or steady)- are added to the current timeframe by:
 
-* Converting all activation observations accumulated in the current timeframe into activation experiences
-* updating prior synthetic experiences (count, more, unchanged and trend) if they are still extant
+* converting all current observations of plan directive activations into activation experiences of the CA's planned goals
+* updating prior synthetic experiences (count, more and trend) if they still exist
 * detecting as many novel synthetic experiences as time allows
-
-An experience, like an observation, is a property or relation to which a confidence and other meta-data is associated.
-A property or relation applies to one object (its origin) and it has one value.
-The value of a relation is another object.
-The value of a property is a number or a label (e.g. true, false, red, green, up, down, 2, etc.)
-The kind of property/relation determines the domain of permissible values.
-
-Value domains of experiences: 
-
-* activation: 1, 2, 3, `many` - a count of repeated actions/directives recently executed
-* count: 1, 2, 3, `many` 
-* unchanged: 2, 3, `many` (a value of 1 is nonsensical)
-* trend: `up`, `down`, `ended`
-* more: an object
-* unchanged: 1 ,2 ,3 , `many`
 
 Before work:
 
-* Convert recent activation observations into experiences
+* Convert recent directive activation observations into goal activation experiences
 * Update prior synthetic experiences
     * A prior experience may persist or may no longer exist
     * A prior count may now take a different value, including 1
-    * A prior trend with value up or down may now take value `ended`
-    * A prior unchanged may now take a different value, including 1
+    * A prior trend might take a different value (up to steady, down to up etc.)
 
-In each unit of work:
+With each unit of work:
 
-    * find a novel synthetic experience
-
-Finding a novel synthetic experience (non-deterministic):
-
-* Choose a kind of experience from [count, more, trend, unchanged]
-* Find a non-empty, maximal (can not be grown further) set of observations to which the kind applies
-
-Detecting and updating a synthetic experience:
-
-* `count`: Observations form a group with cardinality > 1 to be first detected, or a `count` may be reduced to 1 when updated.
-  * Groups:
-    * Relations or properties with same kind and value (number of objects with the same description)
-    * Relations with same origin and kind (number of relations of a kind for a given object)
-* `more`: A count of observations is greater than another count, where both counts must be > 1 to be first detected, or a count can be 1 when a `more` experience is updated
-* `unchanged` : A count (> 1 to be detected or updated) of the latest, consecutive timeframes where an observation is the same as in the current timeframe (the count includes the current timeframe)
-* `trend`: An object's property changed up or down over the last timeframes when first detected, or stopped changing when updated
-    * Trending are number-valued properties with the same origin and kind 
-        * A trend's value can be `up` or `down`
-        * Otherwise, the trend value can be `ended` when a trend from the prior timeframe is neither reversed nor found
-
-Assigning confidence to an experience:
-
-* Take the average confidence in the observed set(s) composing the synthetic object(s) of the experience
-* If a `trend` experience, confidence is boosted when the trend's value is maintained across timeframes (an up trend over 5 timeframes is more confident than one over only 2)
-* If an `unchanged` experience, confidence is boosted by the number of timeframes where the observation stays the same
+    * find a novel synthetic experience, most relevant first
+    * until time's up or no more can be found
 */
 
 :- module(experience, []).
@@ -67,21 +28,18 @@ Assigning confidence to an experience:
 :- use_module(agency(som/wellbeing)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/observations)).
+:- use_module(agency(som/objects)).
 
-% TODO - observe phase ought to drop stale activation observation, not the experience phase
-% TODO - have entering experience phase only consume experiences to replace them with updates from observations, and with novel experiences
-% When entering the experience phase, the CA drops all from its state after passing them to the experience phase
-% TODO - do this in observe phase - Drop stale activation observations
 % Convert all (necessarily recent) activation observations into experiences
-% and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences attended to)
+% and update prior, synthetic experiences that matter most (i.e. all integrated prior experiences still attended to)
 before_work(_, State, [experiences=Experiences], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta),
-    activation_experiences_from_observations(CA, State.observations, ActivationExperiences),
-    [Timeframe | _] = State.timeframes,
+    goal_activation_experiences(CA, State, ActivationExperiences),
+    [PriorTimeframe | _] = State.timeframes,
     !,
-    PriorExperiences = Timeframe.experiences,
-    updated_experiences(CA, State, PriorExperiences, [], UpdatedExperiences),
-    append(UpdatedExperiences, ActivationExperiences, Experiences).
+    PriorExperiences = PriorTimeframe.experiences,
+    updated_experiences(CA, State, PriorExperiences, [], SyntheticExperiences),
+    append(SyntheticExperiences, ActivationExperiences, Experiences).
 
 before_work(_, _, [], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
@@ -89,41 +47,47 @@ before_work(_, _, [], WellbeingDelta) :-
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 
-% Add one experience at a time, most relevant first.
+% Synthesize one experience at a time, most relevant first.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
     novel_experience(CA, State, Experience),
     StateDeltas = [experiences=[Experience]],
     wellbeing:empty_wellbeing(WellbeingDelta).
 
+% No new experiences can be sunthesized
 unit_of_work(_, _, done([], WellbeingDelta)) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
 
-activation_experiences_from_observations(CA, Observations, ActivationExperiences) :-
-    activation_experiences(CA, Observations, [], ActivationExperiences).
+% For each of the CA's goals, i.e. intent and received directives (received as `planned` or `executed` activation predictions), 
+% look up the goal's plan, if any, and
+% integrate the planned directives observed activation statuses into an experienced goal activation status:
+%   all directives executed -> goal is executed
+%   all directives failed or not_relevant -> goal is failed
+%   else all directives planned or executed -> goal is planned
+%   else all directives relevant, planned or executed -> goal is relevant
+% TODO - FIX THIS TO LATEST SPECS <=====================================================================
+goal_activation_experiences(CA, State, ActivationExperiences).
 
-activation_experiences(_, [], ActivationExperiences, ActivationExperiences).
+% activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
+%     is_activation_observation(Observation),
+%     !,
+%     findall(Other, (member(Other, Rest), equivalent_activation_observations(Observation, Other)), EquivalentActivationObservations),
+%     append(EquivalentActivationObservations, Remaining, Rest),
+%     activation_observations_to_experience(CA, EquivalentActivationObservations, ActivationExperience),
+%     activation_experiences(Remaining, [ActivationExperience | Acc], ActivationExperiences).
 
-activation_experiences(CA, [Observation | Rest], Acc, ActivationExperiences) :-
-    is_activation_observation(Observation),
-    !,
-    findall(Other, (member(Other, Rest), equivalent_activation_observations(Observation, Other)), EquivalentActivationObservations),
-    append(EquivalentActivationObservations, Remaining, Rest),
-    activation_observations_to_experience(CA, EquivalentActivationObservations, ActivationExperience),
-    activation_experiences(Remaining, [ActivationExperience | Acc], ActivationExperiences).
+% activation_experiences([_ | Rest], Acc, ActivationExperiences) :-
+%     activation_experiences(Rest, Acc, ActivationExperiences).
 
-activation_experiences([_ | Rest], Acc, ActivationExperiences) :-
-    activation_experiences(Rest, Acc, ActivationExperiences).
+% % Equivalent if same goal activation observed
+% equivalent_activation_observations(Observation, Other) :-
+%     observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Observation,
+%     observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Other.
 
-% Equivalent if same goal activation observed
-equivalent_activation_observations(Observation, Other) :-
-    observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Observation,
-    observation{kind:activation, value:ActionNameOrDirectiveId-_} :< Other.
-
-activation_observations_to_experience(CA, EquivalentActivationObservations, ActivationExperience) :-
-    length(EquivalentActivationObservations, Count),
-    sorted_ids(EquivalentActivationObservations, ObservationIds),
-    synthetic_object(ObservationIds, Object),
-    ActivationExperience = experience{origin:Object, kind:activation, value:Count, confidence:1.0, by:CA}.
+% activation_observations_to_experience(CA, EquivalentActivationObservations, ActivationExperience) :-
+%     length(EquivalentActivationObservations, Count),
+%     sorted_ids(EquivalentActivationObservations, ObservationIds),
+%     synthetic_object(ObservationIds, Object),
+%     ActivationExperience = experience{origin:Object, kind:activation, value:Count, confidence:1.0, by:CA}.
 
 % Get rid of repeated, updated experiences
 updated_experiences(_, _, [], Acc, UpdatedExperiences) :- sort(Acc, UpdatedExperiences).
@@ -343,12 +307,6 @@ adjust_trend_confidence(PriorTrendExperience, TrendExperience, CurrentConfidence
         ;
         Confidence == CurrentConfidence
      ).
-
-% object{type:synthetic, id:Id, evidence: [ObservationId, ...]} - evidence is the private set of Observations by the dCA from which the synthetic object was created by the dCA.
-% Note: Two objects of the same type about the same "thing" must have identical ids, irrespective of the CA that created the object.
-synthetic_object(ObservationIds, Object) :-
-    atomic_list_hash(ObservationIds, ObjectId),
-    Object = object{type:synthetic, id:ObjectId, evidence:ObservationIds}.
 
 sorted_ids(Items, Ids) :-
     all_ids(Items, [], AllIds),

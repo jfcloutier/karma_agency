@@ -1,7 +1,7 @@
 /*
 Utilities for experiences
 
-% experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, feeling:Feeling, by:CA}
+experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, feeling:Feeling, by:CA}
 */
 
 :- module(experiences, [experience_intensity/2, experiences_sorted_by_intensity/2, is_experience_impactable/1]).

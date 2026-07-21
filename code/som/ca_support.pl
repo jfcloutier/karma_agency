@@ -2,9 +2,10 @@
 Cognition Actor support library.
 */
 
-:- module(ca_support, [from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/5, 
+:- module(ca_support, [latency/2, from_parent/2, wellbeing_transfered/3, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/5, 
                        merge_wellbeing/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3, simple_count/2, inc_simple_count/2, dec_simple_count/2,
-					   is_effector/1, is_sensor/1]).
+					   is_effector/1, is_sensor/1,
+					   compare_activation_status/3, goal_id/2]).
 
 :- use_module(actors(actor_utils)).
 :- use_module(actors(pubsub)).
@@ -12,17 +13,11 @@ Cognition Actor support library.
 :- use_module(library(sha)).
 :- use_module(library(apply)).
 
-% Used to remove semantically identical state property values from a sorted list
-agency_state_sorter(=, GoalState1, GoalState2) :-
-	is_dict(GoalState1, goal_state),
-	is_dict(GoalState2, goal_state),
-	GoalState1.goal.id == GoalState2.goal.id, !.
-
-% Two goals are equal if they have the same id (i.e. same target) and serve the same intent
-agency_state_sorter(=, Goal1, Goal2) :-
-	is_dict(Goal1, goal),
-	is_dict(Goal2, goal),
-	same_goals(Goal1, Goal2), !.
+%! latency(+Level, -Latency) is det
+% The time in seconds allocated to a cognition actor to complete a time frame given its level in the SOM
+latency(Level, Latency) :-
+	% Latency is max(0.1, 2 ** (Level - 1) / 2).
+	Latency is max(0.2, 4 ** (Level - 1) / 2).
 
 % For a CA, two plans are the same if they have the same directives in whatever order
 agency_state_sorter(=, Plan1, Plan2) :-
@@ -38,16 +33,19 @@ agency_state_sorter(=, Observation1, Observation2) :-
 	is_dict(Observation2, observation),
 	Observation1.id == Observation2.id, !.
 
+agency_state_sorter(=, Prediction1, Prediction2) :-
+	is_dict(Prediction1, prediction),
+	is_dict(Prediction2, prediction),
+	prediction{origin:Origin, kind:Kind, value:Value} :< Prediction1,
+	prediction{origin:Origin, kind:Kind, value:Value} :< Prediction2,
+	!.
+
 agency_state_sorter(Delta, E1, E2) :-
 	compare(Delta, E1, E2).
-
-same_goals(Goal1, Goal2) :-
-	Goal1.id == Goal2.id,
-	Goal1.intent_id == Goal2.intent_id.
-
+	
 all_same_goals([], []).
 all_same_goals([Goal1 | Rest1], [Goal2 | Rest2]) :-
-	same_goals(Goal1, Goal2),
+	Goal1.id == Goal2.id,
 	all_same_goals(Rest1, Rest2).
 
 handled(message(Message, Source), State, State) :-
@@ -174,12 +172,6 @@ empty_prediction(CA, Prediction) :-
 is_empty_prediction(Prediction) :-
 	prediction{origin:unknown, kind:unknown, value:unknown} :< Prediction.
 
-prediction_about_experience(Prediction, State, Experience) :-
-    prediction{origin:Origin, kind:Kind} :< Prediction,
-    get_state(State, experiences, Experiences),
-    member(Experience, Experiences),
-    experience{origin:Origin, kind:Kind} :< Experience.
-
 % Prediction = prediction{origin:object{type:sensor, id:SensorName}, kind:SenseName, value:Value, weight:Weight, confidence:Confidence, by: CA} - Confidence is between 0.0 and 1.0
 % Experience = experience{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
@@ -198,23 +190,59 @@ prediction_handled(Prediction, State, State1) :-
 prediction_handled(Prediction, State, State1) :-
     log(info, ca_support, "~@ is handling prediction ~p", [self, Prediction]),
 	self(CA),
-	prediction_about_experience(Prediction, State, Experience),
+	prediction_about_experience(Prediction, State, Experience, ActualValue),
     log(info, ca_support, "Prediction ~p is about experience ~p of ~@", [Prediction, Experience, self]),
 	!,
 	(same_experience_value(Experience.value, Prediction.value) ->
 		true
 		;
-		PredictionError = prediction_error{prediction:Prediction, actual_value:Experience.value, confidence:Experience.confidence, by:CA},
+		PredictionError = prediction_error{prediction:Prediction, actual_value:ActualValue, confidence:Experience.confidence, by:CA},
 		update_wellbeing(sending_prediction_errors([PredictionError]), State, State1),
 		prediction_error_sent(PredictionError, Prediction.by)
 	).
 
+% An activation prediction that does not target a known experience causes a prediction error with not_relevant actual value and with full confidence.
+% This is need to possibly fail a parent CA plan.
 prediction_handled(Prediction, State, State) :-
+	Prediction.kind == activation,
+    self(CA),
+    PredictionError = prediction_error{prediction:Prediction, actual_value:not_relevant, confidence:1.0, by:CA},
+	% No change to wellbeing since zero-value engagement
+	prediction_error_sent(PredictionError, Prediction.by).
+
+% An other kind of prediction that is not understood causes a prediction error with unknown actual value and with zero confidence
+% This is needed so a CA can check if a prediction is meaningless to the entire umwelt (i.e. they all respond with an unknown actual value)
+prediction_handled(Prediction, State, State) :-
+	Prediction.kind \= activation,
     self(CA),
     % Can't confirm or invalidate a prediction. Confidence is 0.
     PredictionError = prediction_error{prediction:Prediction, actual_value:unknown, confidence:0.0, by:CA},
 	% No change to wellbeing since zero-value engagement
 	prediction_error_sent(PredictionError, Prediction.by).
+
+% An activation prediction received about a directive for which there is yet no plan IMPLIES an activation experience with value `relevant`
+% if the goal targets an existing experience.
+prediction_about_experience(Prediction, State, Experience, relevant) :-
+	prediction{origin:Origin, kind:activation} :< Prediction,
+	object{kind:goal, id:GoalId} :< Origin,
+	member(Experience, State.experiences),
+	is_experience_targeted_by_goal(Experience, GoalId).
+
+% A prediction is about an experience if they are of the same kind and about the same object
+prediction_about_experience(Prediction, State, Experience, ActualValue) :-
+    prediction{origin:Origin, kind:Kind} :< Prediction,
+	Kind \= activation,
+    get_state(State, experiences, Experiences),
+    member(Experience, Experiences),
+    experience{origin:Origin, kind:Kind} :< Experience,
+	ActualValue = Experience.value.
+
+is_experience_targeted_by_goal(Experience, GoalId) :-
+	experience{origin:Origin, kind:Kind, value:Value} :< Experience,
+	Target = target{origin:Origin, kind:Kind, value:Value},
+	member(Impact, [terminate, persist, create]),
+	PossibleGoal = goal{target: Target, impact: Impact},
+	goal_id(PossibleGoal, GoalId).
 
 same_experience_value(Value, Value) :-
     Value \== unknown.
@@ -243,6 +271,8 @@ prediction_error_sent(_, _).
 simple_count(N, Count) :-
     N > 0,
     (N > 3 -> Count = many ; Count = N).
+simple_count(N, 0) :-
+	N =< 0.
 
 inc_simple_count(many, many).
 inc_simple_count(SimpleCount, Count) :-
@@ -269,3 +299,26 @@ update_wellbeing(sending_prediction_errors(PredictionErrors), State, State1) :-
 	get_state(State, wellbeing, Wellbeing),
 	UpdatedWellbeing = Wellbeing.add_engagement(Delta),
 	put_state(State, wellbeing, UpdatedWellbeing, State1).
+
+% Compare a status to an other status.
+% e.g. relevant < planned, and executed > relevant
+compare_activation_status(Order, Status, OtherStatus) :-
+	Statuses = [relevant, planned, executed],
+	nth1(Index, Statuses, Status),
+	nth1(OtherIndex, Statuses, OtherStatus),
+	compare(Order, Index, OtherIndex).
+
+% Two goals from any CAs must have the same ids if they are semantically equivalent (same target and same impact)
+%  A goal's ID is fully determined by Target and Impact.
+goal_id(Goal, Id) :-
+    goal{target: Target, impact: Impact} :< Goal,
+    value_hash(Impact, ImpactHash),
+    target_hashes(Target, TargetHashes),
+    atomic_list_hash([ImpactHash | TargetHashes], Id).
+
+target_hashes(Target, [OriginHash, KindHash, ValueHash]) :-
+    target{origin: Origin, kind: Kind, value: Value} :< Target,
+    object_hash(Origin, OriginHash),
+    value_hash(Kind, KindHash),
+    value_hash(Value, ValueHash).
+
