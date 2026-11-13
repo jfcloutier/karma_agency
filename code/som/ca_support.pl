@@ -178,7 +178,7 @@ is_empty_prediction(Prediction) :-
 % Percept = percept{origin:Object, kind:Kind, value:Value, confidence:Confidence, by:CA}
 % PredictionError = prediction_error{prediction: Prediction, actual_value:Value, confidence:Confidence, by: CA}
 % No state change for the moment
-prediction_handled(Prediction, State, State1) :-
+prediction_handled(Prediction, State, NewState) :-
 	is_empty_prediction(Prediction),
     log(info, ca_support, "~@ is handling empty prediction", [self]),
 	!,
@@ -186,20 +186,20 @@ prediction_handled(Prediction, State, State1) :-
 	findall(PredictionError, 
 		    (member(Percept, Percepts), prediction_error_from_percept(Percept, Prediction, PredictionError)), 
 		    PredictionErrors),
-	update_wellbeing(sending_prediction_errors(PredictionErrors), State, State1),
+	update_wellbeing(sending_prediction_errors(PredictionErrors), State, NewState),
 	prediction_errors_sent(PredictionErrors, Prediction.by).
 
-prediction_handled(Prediction, State, State1) :-
+prediction_handled(Prediction, State, NewState) :-
     log(info, ca_support, "~@ is handling prediction ~p", [self, Prediction]),
 	self(CA),
 	prediction_about_percept(Prediction, State, Percept, ActualValue),
     log(info, ca_support, "Prediction ~p is about percept ~p of ~@", [Prediction, Percept, self]),
 	!,
 	(same_percept_value(Percept.value, Prediction.value) ->
-		true
+		NewState = State
 		;
 		PredictionError = prediction_error{prediction:Prediction, actual_value:ActualValue, confidence:Percept.confidence, by:CA},
-		update_wellbeing(sending_prediction_errors([PredictionError]), State, State1),
+		update_wellbeing(sending_prediction_errors([PredictionError]), State, NewState),
 		prediction_error_sent(PredictionError, Prediction.by)
 	).
 

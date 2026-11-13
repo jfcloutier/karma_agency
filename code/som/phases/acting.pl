@@ -68,18 +68,36 @@ unit_of_work(_, _, done([], WellbeingDelta)) :-
 
 % One plan is to be found if there is an intent and it has none, or a directive was predicted as `planned` by a parent CA.
 %! plan_found(++CA, ++State, --StateDeltas, --WellbeingDelta)
-plan_found(CA, State, [plans=[Plan]], WellbeingDelta) :-
+plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelta) :-
     get_state(State, intent, Intent),
     Intent \= none,
     \+ plan_for_goal(Intent, State, _),
     plan_found_for_goal(Intent, CA, State, Plan, WellbeingDelta),
-    log(info, acting, "~w found plan ~p for intent ~p", [CA, Plan, Intent]).
+    (planned_activation_percept(CA, State, Intent, ActivationPercept) ->
+        ActivationPercepts = [ActivationPercept]
+        ;
+        ActivationPercepts = []
+    ),
+    log(info, acting, "~w found plan ~p for intent ~p with activation percepts ~p", [CA, Plan, Intent, ActivationPercepts]).
 
-plan_found(CA, State, [plans=[Plan]], WellbeingDelta) :-
+plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelta) :-
     is_directive_activation_predicted_as(Directive, State, planned),
      \+ plan_for_goal(Directive, State, _),
     plan_found_for_goal(Directive, CA, State, Plan, WellbeingDelta),
+    (planned_activation_percept(CA, State, Directive, ActivationPercept) ->
+        ActivationPercepts = [ActivationPercept]
+        ;
+        ActivationPercepts = []
+    ),
     log(info, acting, "~w found plan ~p for directive ~p", [CA, Plan, Directive]).
+
+% A planned activation percept immediately for a new plan when the CA is at level 1
+planned_activation_percept(CA, State, Goal, ActivationPercept) :-
+    get_state(State, level, Level),
+    Level == 1,
+    goal_id(Goal, GoalId),
+    Origin = object{kind:goal, id:GoalId},
+    ActivationPercept = percept{origin:Origin, kind:activation, value:planned, confidence:1.0, by:CA}.
 
 %% INTENT CREATION
 
@@ -91,7 +109,8 @@ intent_created(CA, State, StateDeltas, WellbeingDelta) :-
     % TODO - No wellbeing deltas for now
     wellbeing:empty_wellbeing(WellbeingDelta),
     !,
-    log(info, acting, "(~w) Intent ~p created", [CA, Intent]).
+    option(intent(NewIntent), StateDeltas),
+    log(info, acting, "(~w) Intent ~p created", [CA, NewIntent]).
 
 % An intent is created by wanting to impact the most felt percept that can be impacted and planned for
 % An intent is the only goal a CA creates on its own; its other goals are given to it as directives by its parent CAs.
