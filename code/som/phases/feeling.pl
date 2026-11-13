@@ -49,7 +49,7 @@ before_work(_, _, [], WellbeingDelta) :-
 unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
     timeframe_feeling(CA, State, TimeframeFeeling),
     felt_percepts(CA, State, TimeframeFeeling, FeltPercepts),
-    log(info, feeling, "~w felt ~w applied to percepts ~p", [CA, TimeframeFeeling, FeltPercepts]),
+    log(info, feeling, "~w's feeling ~w applied to percepts ~p", [CA, TimeframeFeeling, FeltPercepts]),
     StateDeltas = [feeling=TimeframeFeeling, percepts=FeltPercepts],
     % Computing and assigning feelings does not alter the current wellbeing
     wellbeing:empty_wellbeing(WellbeingDelta).
@@ -60,7 +60,7 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
 timeframe_feeling(CA, State, Feeling) :-
     findall(WellbeingFeeling, (wellbeing:dimension(Dimension), wellbeing_dimension_feeling(CA, State, Dimension, WellbeingFeeling)), WellbeingFeelings),
     weighted_abs_max(WellbeingFeelings, Feeling),
-    log(info, feeling, "The timeframe feeling for ~w is ~w", [CA, Feeling]).
+    log(debug, feeling, "The timeframe feeling for ~w is ~w", [CA, Feeling]).
 
 % A negative value weighs more than its absolute value
 weighted_abs_max([Val | Rest], Max) :-
@@ -93,7 +93,7 @@ wellbeing_dimension_feeling(CA, State, Dimension, WellbeingDimensionFeeling) :-
       ;
       WellbeingDimensionFeeling = DynamicFeeling
     ),
-    log(info, feeling, "(~w) The feeling of dimension ~w is ~w", [CA, Dimension, WellbeingDimensionFeeling]).
+    log(debug, feeling, "(~w) The feeling of dimension ~w is ~w", [CA, Dimension, WellbeingDimensionFeeling]).
 
 % The feeling of a wellbeing value is an integer between -10 (worst) and 10 (best).
 % A wellbeing diension's value ranges from 0.0 to 1.0.
@@ -107,7 +107,7 @@ dynamic_wellbeing_dimension_feeling(CA, State, Dimension, StaticValue, StaticFee
     wellbeing_dimension_history(State, Dimension, StaticValue, ValueHistory),
     gradient(CA, ValueHistory, Gradient, Repeats),
     gradient_feeling(Gradient, Repeats, StaticFeeling, DynamicFeeling),
-    log(info, feeling, "(~w) The dynamic feeling of wellbeing dimension ~w given value history ~p is ~w", [CA, Dimension, ValueHistory, DynamicFeeling]).
+    log(debug, feeling, "(~w) The dynamic feeling of wellbeing dimension ~w given value history ~p is ~w", [CA, Dimension, ValueHistory, DynamicFeeling]).
 
 % History records for a wellbeing dimension, latest last
 wellbeing_dimension_history(State, Dimension, StaticValue, ValueHistory) :-
@@ -121,7 +121,7 @@ gradient(CA, ValueHistory, Gradient, Repeats) :-
     gradient_history(ValueHistory, [], GradientHistory),
     reverse(GradientHistory, ReversedGradientHistory),
     gradient_from_history(ReversedGradientHistory, Gradient, Repeats),
-    log(info, feeling, "(~w) The gradient is ~w * ~w given gradient history ~p", [CA, Gradient, Repeats, ReversedGradientHistory]).
+    log(debug, feeling, "(~w) The gradient is ~w * ~w given gradient history ~p", [CA, Gradient, Repeats, ReversedGradientHistory]).
 
 gradient_history([], GradientHistory, GradientHistory).
 
@@ -186,7 +186,7 @@ gradient_feeling(Gradient, Repeats, StaticFeeling, DynamicFeeling) :-
     duration_factor(Repeats, DurationFactor),
     static_feeling_factor(StaticFeeling, StaticFactor),
     DynamicFeeling is round(abs(StaticFeeling) * ((UpDownFactor * DurationFactor * 0.5) + (StaticFactor * 0.5))),
-    log(info, feeling, "The gradient feeling is ~w given static feeling ~w and factors up-down ~w, duration ~w and static ~w", [DynamicFeeling, StaticFeeling, UpDownFactor, DurationFactor, StaticFactor]).
+    log(debug, feeling, "The gradient feeling is ~w given static feeling ~w and factors up-down ~w, duration ~w and static ~w", [DynamicFeeling, StaticFeeling, UpDownFactor, DurationFactor, StaticFactor]).
 
 % An up/down gradient is felt twice as much, positively or negatively, as its interruption
 up_down_factor(up, 1.0).
@@ -223,7 +223,7 @@ perceived_feeling(CA, State, TimeframeFeeling, Percept, PerceivedFeeling) :-
     % Asymptotically approaches the timeframe feeling as percept duration increases
     asymptotic(TimeframeFeeling, Duration, Y),
     PerceivedFeeling is round(Y),
-    log(info, feeling, "(~w) Feeling of percept ~p with duration ~w is ~w given timeframe feeling ~w", [CA, Percept, Duration, PerceivedFeeling, TimeframeFeeling]).
+    log(debug, feeling, "(~w) Feeling of percept ~p with duration ~w is ~w given timeframe feeling ~w", [CA, Percept, Duration, PerceivedFeeling, TimeframeFeeling]).
 
 percept_duration([Timeframe | Rest], Percept, Duration) :-
     member(Percept1, Timeframe.percepts),

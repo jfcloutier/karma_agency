@@ -212,18 +212,20 @@ handled(message(adopted, Parent), State, NewState) :-
 
 handled(message(phase_progressed(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-
 	phase_consumes_produces(Phase, _, ProducedProperties),
-	log(info, dynamic_ca, "(~@) Phase ~w producing ~p PROGRESSED with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
+	get_state(State, age, Age),
+	log(info, dynamic_ca, "(~@) Phase ~w producing ~p PROGRESSED (~w)", [self, Phase, ProducedProperties, Age]),
 	merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, NewState).
 
 handled(message(phase_done(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-
 	phase_consumes_produces(Phase, _, ProducedProperties),
-	log(info, dynamic_ca, "(~@) Phase ~w producing ~p DONE with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
+	get_state(State, age, Age),
+	log(info, dynamic_ca, "(~@) Phase ~w producing ~p DONE (~w)", [self, Phase, ProducedProperties, Age]),
 	merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, State1),
     (timeframe_continues(State1) ->
 		phase_transition(State1, NewState)
 		; 
 		get_state(State, age, Age),
-		log(info, dynamic_ca, "~@ ended timeframe ~w", [self, Age]),
+		log(info, dynamic_ca, "~@ ended timeframe (~w)", [self, Age]),
 		level(Level),
 		published(end_of_timeframe, [level(Level), count(Age)]),
 		% The next timeframe starts after memorializing the terminated timeframe and with an initial phase

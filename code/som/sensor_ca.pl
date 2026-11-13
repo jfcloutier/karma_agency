@@ -169,7 +169,7 @@ sense_url(State, SenseURL) :-
 
 % Read the sensor value, update wellbeing, update percept in latest reading.
 percepts_updated(Prediction, State, NewState) :-
-    log(info, sensor_ca, "~@ is updating percepts from prediction ~p", [self, Prediction]),
+    log(debug, sensor_ca, "~@ is updating percepts from prediction ~p", [self, Prediction]),
     prediction_is_meaningful(Prediction, State),
     log(info, sensor_ca, "~@ - Prediction ~p is meaningful", [self, Prediction]),
     sense_name(State, SenseName),
@@ -184,8 +184,7 @@ percepts_updated(Prediction, State, NewState) :-
     put_state(State, percepts, [Percept],  State1),
     wellbeing_changed(State, SenseName, Value, UpdatedWellbeing),
     put_state(State1, wellbeing, UpdatedWellbeing, NewState),
-    published(wellbeing, [current=UpdatedWellbeing]),
-    log(info, sensor_ca, "~@ updated percepts in ~p", [self, NewState]).
+    published(wellbeing, [current=UpdatedWellbeing]).
 
 prediction_is_meaningful(Prediction, _) :-
     is_empty_prediction(Prediction).
@@ -203,13 +202,12 @@ sense_read(State, reading(Value, Tolerance, Timestamp)) :-
 
 % Update wellbeing from reading .
 wellbeing_changed(State, SenseName, Value, UpdatedWellbeing) :-
-    log(info, sensor_ca, "Changing wellbeing from sense ~w having value ~w", [SenseName, Value]),
     delta_fullness(SenseName, Value, DeltaFullness),
     delta_integrity(SenseName, Value, DeltaIntegrity),
     delta_engagement(SenseName, Value, DeltaEngagement),
     get_state(State, wellbeing, Wellbeing),
     DeltaWellbeing = wellbeing{fullness: DeltaFullness, integrity: DeltaIntegrity, engagement: DeltaEngagement},
-    log(info, sensor_ca, "Change in wellbeing is ~p", [DeltaWellbeing]),
+    log(info, sensor_ca, "Change in wellbeing from sense ~w having value ~w is ~p", [SenseName, Value, DeltaWellbeing]),
     UpdatedWellbeing = Wellbeing.add(DeltaWellbeing).
 
 % Changes in wellbeing specific to the sensor reading

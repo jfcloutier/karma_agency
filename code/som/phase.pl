@@ -110,7 +110,7 @@ transition_states(CA, State, PhaseState, NewCAState) :-
     phase_consumes_produces(Phase, Consumes, _),
     % The new CA state has the current phase set and the consumed properties emptied
     consume_state_properties(PhaseState, Consumes, NewCAState),
-    log(info, phase, "Phase transition of CA ~w from ~w to ~w with intial ~p (~w)", [CA, EndedPhase, Phase, PhaseState, Age]).
+    log(info, phase, "Phase transition of CA ~w from ~w to ~w (~w)", [CA, EndedPhase, Phase, Age]).
 
 % Note - This assumes that a consumed property is being reset to an empty list
 consume_state_properties(State, [], State).
@@ -146,7 +146,7 @@ work(CA, State, Phase) :-
     work_reported(CA, Phase, before, StateDeltas, WellbeingDelta),
     % Use the result of the before-work to update the state passed to the phase
     phase_consumes_produces(Phase, _, ProducedProperties),
-    log(info, phase, "(~@) Phase ~w producing ~p BEFORE WORK with state deltas ~p", [self, Phase, ProducedProperties, StateDeltas]),
+    log(info, phase, "(~@) Phase ~w producing ~p BEFORE WORK completed", [self, Phase, ProducedProperties]),
     merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, InitialPhaseState),
     Goal =.. [:, Phase, unit_of_work(CA, InitialPhaseState, WorkStatus)],
     log(debug, phase, "Creating engine for phase ~p on ~p", [Phase, Goal]),
