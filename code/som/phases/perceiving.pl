@@ -37,9 +37,10 @@ A CA has limited counting and magnitude comparing capabilities (this restricts t
 :- use_module(agency(som/objects)).
 :- use_module(agency(som/goals)).
 
-% Convert all (necessarily recent) activation observations into percepts
+% Convert all (necessarily recent) activation observations into percepts, 
+% preserve self-generated activation percepts (TODO)
 % and update prior, synthetic percepts that matter most (i.e. all integrated prior percepts still attended to)
-before_work(_, State, [percepts=Percepts], WellbeingDelta) :-
+before_work(CA, State, [percepts=Percepts], WellbeingDelta) :-
     wellbeing:empty_wellbeing(WellbeingDelta),
     goal_activation_percepts(CA, State, ActivationPercepts),
     [PriorTimeframe | _] = State.timeframes,
@@ -67,14 +68,15 @@ unit_of_work(_, _, done([], WellbeingDelta)) :-
 
 % For each of the CA's goals, i.e. intent and received directives (received as `planned` or `executed` activation predictions), 
 % look up the goal's plan, if any, and
-% integrate the planned directives observed activation statuses into a perceptd goal activation status:
+% integrate the planned directives observed activation statuses into a perceived goal activation status:
 %   * all directives are executed -> plan's goal is executed
 %   * all directives are failed or not_relevant -> plan's goal is failed
 %   * else all directives are commands or they are planned or executed goals -> plan's goal is (inherently or transitively) planned
-%   * else goal activation is necessarily relevant since there is a plan for it
+%   * else goal activation is necessarily relevant since there is a plan for it.
 %
-% Note that a CA *implicitly* percepts as `relevant` a predicted activation about a goal for which it has no plan (yet)
-% if the goal/directive targets a percept it currently has. This implied activation percept is expressed as a prediction error
+% Note that a CA *implicitly* perceives as `relevant` a predicted activation about a goal for which it has no plan (yet)
+% if the goal/directive targets a percept it currently has.
+% This implied activation percept is expressed as a prediction error
 % sent immediately, at any phase of the lifecycle, in response to activation prediction (see ../ca_support.pl).
 % This implied percept is not retained by the CA as part of its explicit percepts.
 goal_activation_percepts(CA, State, ActivationPercepts) :-
@@ -325,10 +327,11 @@ more_percept(CA, Observation1, Observation2, Percept) :-
     synthetic_object([Id1], Object1),
     synthetic_object([Id2], Object2),
     Confidence is (Confidence1 + Confidence2) / 2,
-    (grossly_more_than(Value1, Value2) ->
+    (is_grossly_more_than(Value1, Value2) ->
         Percept = percept{origin:Object1, kind:more, value:Object2, confidence:Confidence, by:CA}
         ;
-        Percept = percept{origin:Object2, kind:more, value:Object1, confidence:Confidence, by:CA}
+        is_grossly_more_than(Value2, Value1) ->
+            Percept = percept{origin:Object2, kind:more, value:Object1, confidence:Confidence, by:CA}
     ).
 
 % A trend goes up or down or else is steady
@@ -409,13 +412,3 @@ all_ids([], Acc, Acc).
 all_ids([Item | Rest], Acc, AllIds) :-
     Id = Item.id,
     all_ids(Rest, [Id | Acc], AllIds).
-
-% Is a count perceivable as greater than another?
-% Comparing rounded log2 for numbers greater than 3.
-grossly_more_than(Count, Count) :- fail, !.
-grossly_more_than(Count1, Count2) :-
-    Count1 < 4,
-    Count1 > Count2.
-grossly_more_than(Count1, Count2) :-
-    Count1 > 3,
-    round(Count1 ** 0.5) > round(Count2 ** 0.5).

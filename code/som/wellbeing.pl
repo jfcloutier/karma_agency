@@ -70,9 +70,9 @@ W.subtract_engagement(Amount) := wellbeing{fullness:Fullness, integrity:Integrit
 
 % Negate wellbeing 
 W.neg()  := wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
-    Fullness is W.fullness * -1,
-    Integrity is W.integrity * -1,
-    Engagement is W.engagement * -1.
+    Fullness is W.fullness * -1.0,
+    Integrity is W.integrity * -1.0,
+    Engagement is W.engagement * -1.0.
 
 W.max(N) :=  wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engagement} :-
     Fullness is max(W.fullness, N),
@@ -82,4 +82,4 @@ W.max(N) :=  wellbeing{fullness:Fullness, integrity:Integrity, engagement:Engage
 
     
 
-empty_wellbeing(wellbeing{fullness:0, integrity:0, engagement:0}).
+empty_wellbeing(wellbeing{fullness:0.0, integrity:0.0, engagement:0.0}).

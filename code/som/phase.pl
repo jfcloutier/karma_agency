@@ -193,7 +193,7 @@ work_status_handled(WorkStatus, _, _, _, _) :-
 % Last unit of work is done. Perhaps do some after-work, run the clock, and let the dynamic CA (and others) know.
 phase_done(CA, Phase, Age, StateDeltas, WellbeingDelta, WorkEngine) :-
     engine_destroy(WorkEngine),  
-    log(info, phase, "Phase ~w for CA ~p done with deltas ~p and ~p (~w)", [Phase, CA, StateDeltas, WellbeingDelta, Age]),
+    log(info, phase, "Phase ~w for CA ~p done (~w)", [Phase, CA, Age]),
     % Run out the clock if work ended before time expired - to allow receipt of messages caused by work done, before tranistioning to the next phase
     run_the_clock(Phase),
     % The engine sends the CA that started it a message that the phase is done

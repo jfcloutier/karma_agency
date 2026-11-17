@@ -213,7 +213,7 @@ handled(message(adopted, Parent), State, NewState) :-
 handled(message(phase_progressed(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-
 	phase_consumes_produces(Phase, _, ProducedProperties),
 	get_state(State, age, Age),
-	log(info, dynamic_ca, "(~@) Phase ~w producing ~p PROGRESSED (~w)", [self, Phase, ProducedProperties, Age]),
+	log(info, dynamic_ca, "(~@) Phase ~w producing ~p PROGRESSED with ~p and ~p (~w)", [self, Phase, ProducedProperties, StateDeltas, WellbeingDelta, Age]),
 	merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, NewState).
 
 handled(message(phase_done(Phase, StateDeltas, WellbeingDelta), _), State, NewState) :-

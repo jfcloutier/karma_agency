@@ -253,7 +253,7 @@ integrity_gain(CurrentWellbeing, IntegrityGain) :-
   IntegrityDeficit  is 1.0 - CurrentWellbeing.integrity,
   MaxHealing is min(IntegrityDeficit, MaximumHealing),
   MinimumFullnessBeforeHealing = 0.2, % TODO get from settings - the minimum fullness a CA must have before it allocates some to its own healing
-  FullnessAvailable is max(0, CurrentWellbeing.fullness - MinimumFullnessBeforeHealing),
+  FullnessAvailable is max(0.0, CurrentWellbeing.fullness - MinimumFullnessBeforeHealing),
   IntegrityGain is min(MaxHealing, FullnessAvailable).
 
 % Incremental (i.e. partial), outward wellbeing fullness diffusion with direct entourage (parents and umwelt)
@@ -278,15 +278,15 @@ fullness_demands(Fullness, State, FullnessDemands) :-
   findall(FullnessDemand,
     (member(WellbeingReport, WellbeingReports),
     WellbeingReport =.. [CA, CAWellbeing],   % A wellbeing report is an option CA(Wellbeing)
-    FullnessDiff is max(0, Fullness - CAWellbeing.fullness), % constrained to fullness diff >= 0 - how much more fullness does the CA have (0 if not)
-    FullnessDiff > 0,
+    FullnessDiff is max(0.0, Fullness - CAWellbeing.fullness), % constrained to fullness diff >= 0 - how much more fullness does the CA have (0 if not)
+    FullnessDiff > 0.0,
     FullnessDemand = CA-FullnessDiff
     ), % A demand is pair CA-FullnessDiff 
     FullnessDemands).
 
 total_demand(FullnessDemands, TotalDemand) :-
   pairs_values(FullnessDemands, FullnessDiffs),
-  foldl(plus, FullnessDiffs, 0, TotalDemand).
+  sum_list(FullnessDiffs, TotalDemand).
 
 % Apply the ratio ratio to each demand to produce the donations as CA-Fullness pairs.
 rationed_donations(FullnessDemands, TotalDemand, Fullness, FullnessDonations) :-
@@ -307,8 +307,8 @@ fullness_donated(FullnessDonations, AllSentFullness) :-
 
 % Update wellbeing from fullness donations
 wellbeing_delta_from_donations(AllSentFullness, WellbeingDelta, NewWellbeingDelta) :-
-  foldl(plus, AllSentFullness, 0, TotalSent),
-  NewWellbeingDelta = WellbeingDelta.sub(wellbeing{fullness:TotalSent, integrity:0, engagement:0}).
+  sum_list(AllSentFullness, TotalSent),
+  NewWellbeingDelta = WellbeingDelta.sub(wellbeing{fullness:TotalSent, integrity:0.0, engagement:0.0}).
 
 % Death by old age
 next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event = death | StateDeltas] , WellbeingDelta) :-

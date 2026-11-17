@@ -1,4 +1,5 @@
 :- [
+    'tests/ca_support.plt',
     'tests/sensor_ca.plt',
     'tests/effector_ca.plt',
     'tests/dynamic_ca.plt',

@@ -56,6 +56,7 @@ before_work(_, _, [], WellbeingDelta) :-
 % or create a missing intent,
 % or find a required plan.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
+    % log(info, acting, "~w doing work from state ~p", [CA, State]),
     plan_executed(CA,State, StateDeltas, WellbeingDelta)
     ;
     intent_created(CA,State, StateDeltas, WellbeingDelta)
@@ -66,65 +67,61 @@ unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
 unit_of_work(_, _, done([], WellbeingDelta)) :-
     wellbeing:empty_wellbeing(WellbeingDelta).
 
-% One plan is to be found if there is an intent and it has none, or a directive was predicted as `planned` by a parent CA.
+% One plan is to be found if there is an intent and has no plan yet, or a directive was predicted as `planned` by a parent CA.
 %! plan_found(++CA, ++State, --StateDeltas, --WellbeingDelta)
 plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelta) :-
     get_state(State, intent, Intent),
     Intent \= none,
     \+ plan_for_goal(Intent, State, _),
+    % The activation of an intent is always implicitly at least relevant
     plan_found_for_goal(Intent, CA, State, Plan, WellbeingDelta),
-    (planned_activation_percept(CA, State, Intent, ActivationPercept) ->
-        ActivationPercepts = [ActivationPercept]
-        ;
-        ActivationPercepts = []
-    ),
+    plan_found_activation_percepts(CA, State, Intent, ActivationPercepts),
     log(info, acting, "~w found plan ~p for intent ~p with activation percepts ~p", [CA, Plan, Intent, ActivationPercepts]).
 
+% One plan is found for a directive with activation predicted as planned
 plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelta) :-
     is_directive_activation_predicted_as(Directive, State, planned),
      \+ plan_for_goal(Directive, State, _),
     plan_found_for_goal(Directive, CA, State, Plan, WellbeingDelta),
-    (planned_activation_percept(CA, State, Directive, ActivationPercept) ->
-        ActivationPercepts = [ActivationPercept]
-        ;
-        ActivationPercepts = []
-    ),
+    plan_found_activation_percepts(CA, State, Directive, ActivationPercepts),
     log(info, acting, "~w found plan ~p for directive ~p", [CA, Plan, Directive]).
 
-% A planned activation percept immediately for a new plan when the CA is at level 1
-planned_activation_percept(CA, State, Goal, ActivationPercept) :-
+% A planned activation percept is created immediately for a new plan when the CA is at level 1, else no change
+plan_found_activation_percepts(CA, State, Goal, UpdatedActivationPerceptS) :-
     get_state(State, level, Level),
-    Level == 1,
-    goal_id(Goal, GoalId),
-    Origin = object{kind:goal, id:GoalId},
-    ActivationPercept = percept{origin:Origin, kind:activation, value:planned, confidence:1.0, by:CA}.
+    (Level == 1 ->
+        goal_id(Goal, GoalId),
+        Origin = object{kind:goal, id:GoalId},
+        UpdatedActivationPerceptS = [percept{origin:Origin, kind:activation, value:planned, confidence:1.0, by:CA}]
+        ;
+        UpdatedActivationPerceptS = []
+    ).
 
 %% INTENT CREATION
 
 %! intent_created(++CA, ++State, --StateDeltas, --WellbeingDelta)
-intent_created(CA, State, StateDeltas, WellbeingDelta) :-
+% The intent activation is is implcitly `relevant` when created.
+% In the next timeframe, a plan for it will be found because the intent has no plan yet.
+intent_created(CA, State, [intent=NewIntent], WellbeingDelta) :-
     get_state(State, intent, Intent),
     Intent == none,
-    new_intent(CA, State, StateDeltas),
-    % TODO - No wellbeing deltas for now
-    wellbeing:empty_wellbeing(WellbeingDelta),
+    new_intent(CA, State, NewIntent),
+    % Committed because only the assessing phase can nullify an intent once created
     !,
-    option(intent(NewIntent), StateDeltas),
-    log(info, acting, "(~w) Intent ~p created", [CA, NewIntent]).
+    log(info, acting, "(~w) Intent ~p created", [CA, NewIntent]),
+    % TODO - No wellbeing deltas for now
+    wellbeing:empty_wellbeing(WellbeingDelta).
 
 % An intent is created by wanting to impact the most felt percept that can be impacted and planned for
 % An intent is the only goal a CA creates on its own; its other goals are given to it as directives by its parent CAs.
 % When creating an intent, don't repeat the previous intent; it was abandoned for a reason.
 %! new_intent(++CA, ++State, --Intent, --StateDeltas)
-new_intent(CA, State, [intent=Intent, percepts=[IntentActivationPercept]]) :-
+new_intent(CA, State, Intent) :-
     dynamic_ca:level_from_name(CA, Level),
     percept_to_impact(CA, State, Percept),
     get_state(State, age, Age),
     goal_from_percept(Percept, Level, Age, Intent),
-    \+ is_intent_repeating(Intent, State),
-    % The intent activation is immediately perceived as an activation with status `relevant` (just a marker, no operational significance).
-    % In the next timeframe, a plan for it will be found because the intent has no plan yet.
-    activation_percept(Intent, relevant, CA, IntentActivationPercept).
+    \+ is_intent_repeating(Intent, State).
 
 % Find the percept starting with the most intensely felt (absolute feeling scaled by confidence).
 % When there is a tie, choose one randomly.
@@ -178,17 +175,19 @@ plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
 intent_plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
     get_state(State, intent, Intent),
     is_goal(Intent),
-    has_goal_activation_status(Intent, State, planned),
     plan_for_goal(Intent, State, Plan),
+    % Plan execution proceeds if the goal activation status is planned (it is implicitly so if level == 1))
     plan_execution(CA, State, Plan, Intent, StateDeltas, WellbeingDelta),
     log(info, acting, "~w executing plan ~p for intent ~p", [CA, Plan, Intent]).
 
-has_goal_activation_status(Goal, State, Status) :-
+is_goal_activation_planned(Goal, State) :-
+    log(info, acting, "Is ~w activation of goal ~p planned in state percepts ~p", [Status, Goal, State.percepts]),
     goal_id(Goal, GoalId),
     get_state(State, percepts, Percepts),
     member(Percept, Percepts),
-    percept{origin:Object, kind:activation, value:Status} :< Percept,
-    object{type:goal, id:GoalId} :< Object.
+    percept{origin:Object, kind:activation, value:planned} :< Percept,
+    object{type:goal, id:GoalId} :< Object,
+    log(info, acting, "~w activation of goal ~p is planned", [Status, Goal]).
 
 plan_for_goal(Goal, State, Plan) :-
     get_state(State, plans, Plans),
@@ -226,22 +225,22 @@ directive_predicted_as(Directive, CA, State, Status, Prediction) :-
     prediction_of_activation(Directive, CA, Status, Prediction),
     predictions_sent_to_umwelt(CA, Umwelt, [Prediction]).
 
-% If level == 1, progress is made by executing at once all commands in the goal's plan, if found
-plan_execution( CA, _, Plan, Goal,[percepts=[ActivationPercept]], WellbeingDelta) :-
-    dynamic_ca : level_from_name(CA, Level),
-    Level == 1,
-    forall(Command, (member(Command, Plan.directives), command_actuation_readied(Command))),
+% If level == 1, a goal is planned if there is a plan.
+% Progress is made by executing at once all commands in the goal's plan, if found
+plan_execution(CA, State, Plan, Goal, [percepts=[ActivationPercept]], WellbeingDelta) :-
+    get_state(State, level, 1),
+    forall(member(Command, Plan.directives), command_actuation_readied(Command)),
     actuations_executed_by_body(),
-    movement_executed(Plan.directives),
+     movement_executed(Plan.directives),
     activation_percept(Goal, executed, CA, ActivationPercept),
     % TODO - decrease fullness
     wellbeing:empty_wellbeing(WellbeingDelta).
 
 % If level > 1, progress is made one plan directive at a time.
 plan_execution(CA, State, Plan, Goal, [predictions_out=[Prediction]], WellbeingDelta) :-
-    dynamic_ca : level_from_name(CA, Level),
+    get_state(State, level, Level),
     Level > 1,
-    has_goal_activation_status(Goal, State, planned),
+    is_goal_activation_planned(Goal, State),
     member(Directive, Plan.directives),
     is_directive_observed_as(Directive, State, planned),
     directive_predicted_as(Directive, CA, State, executed, Prediction),

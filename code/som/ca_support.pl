@@ -4,7 +4,7 @@ Cognition Actor support library.
 
 :- module(ca_support, [latency/2, from_parent/2, well_enough/1, object_hash/2, value_hash/2, atomic_list_hash/2, average_confidence/2, merge_phase_deltas/5, 
                        merge_wellbeing/3, apply_wellbeing_delta/3, empty_prediction/2, is_empty_prediction/1, prediction_handled/3,
-					   simple_count/2, inc_simple_count/2, dec_simple_count/2, compare_simple_counts/3,
+					   simple_count/2, inc_simple_count/2, dec_simple_count/2, compare_simple_counts/3, is_grossly_more_than/2,
 					   is_effector/1, is_sensor/1, prior_timeframe/2,
 					   compare_activation_status/3, goal_id/2]).
 
@@ -58,7 +58,7 @@ all_same_goals([Goal1 | Rest1], [Goal2 | Rest2]) :-
 
 handled(message(fullness_transfer(Fullness, _)), State, NewState) :-
 	get_state(State, wellbeing, Wellbeing),
-	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness:Fullness, integrity:0, engagement:0}),
+	UpdatedWellbeing = Wellbeing.add(wellbeing{fullness:Fullness, integrity:0.0, engagement:0.0}),
 	put_state(State, wellbeing, UpdatedWellbeing, NewState).
 
 handled(message(Message, Source), State, State) :-
@@ -301,6 +301,20 @@ compare_simple_counts(N1, N2, (<)) :-
 	number(N1),
 	number(N2),
 	N1 < N2.
+
+% Is the difference between two magnitudes perceivable where the first one is greater than the second?
+% Comparing rounded log2 for numbers greater than 3.
+is_grossly_more_than(Value1, Value2) :-
+    Value1 > Value2,
+    ((Value1 < 4, Value2 < 4) ->
+        true
+        ;
+		AbsDiff is abs(Value1 - Value2),
+        AbsValue1 is abs(Value1),
+        AbsDelta is AbsValue1 + AbsDiff,
+        round(AbsDelta ** 0.5) > round(AbsValue1 ** 0.5)
+        ).
+
 
 is_effector(CA) :-
 	atomic_list_concat([effector | _], ':', CA).
