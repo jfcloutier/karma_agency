@@ -63,17 +63,20 @@ affordances_added(CA, State, StateDeltas, WellbeingDelta) :-
   ).
 
 executed_plans(CA, State, ExecutedPlans) :-
+  log(info, assessing, "~w looking for executed plans in ~p", [CA, State.plans]),
   get_state(State, plans, Plans),
   findall(Plan, (member(Plan, Plans), is_plan_executed(Plan, State)), ExecutedPlans),
   log(info, assessing, "~w considers plans ~p to be executed", [CA, ExecutedPlans]).
 
 % A plan is executed if the activation of its goal is perceived as executed
 is_plan_executed(Plan, State) :-
-  GoalId = goal_id(Plan.goal, GoalId),
+  goal_id(Plan.goal, GoalId),
+  log(info, assessing, "Is plan ~p executed given percepts ~p for goal id ~w", [Plan, State.percepts, GoalId]),
   get_state(State, percepts, Percepts),
   member(Percept, Percepts),
   percept{origin:Object, kind:activation, value:executed} :< Percept,
-  object{type:goal, id:GoalId} :< Object.
+  object{type:goal, id:GoalId} :< Object,
+  log(info, assessing, "Plan ~p is executed", [Plan]).
 
 intent_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, WellbeingDelta) :-
   get_state(State, intent, Intent),

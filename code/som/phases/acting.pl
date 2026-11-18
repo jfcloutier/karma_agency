@@ -56,7 +56,6 @@ before_work(_, _, [], WellbeingDelta) :-
 % or create a missing intent,
 % or find a required plan.
 unit_of_work(CA, State, more(StateDeltas, WellbeingDelta)) :-
-    % log(info, acting, "~w doing work from state ~p", [CA, State]),
     plan_executed(CA,State, StateDeltas, WellbeingDelta)
     ;
     intent_created(CA,State, StateDeltas, WellbeingDelta)
@@ -75,7 +74,7 @@ plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelt
     \+ plan_for_goal(Intent, State, _),
     % The activation of an intent is always implicitly at least relevant
     plan_found_for_goal(Intent, CA, State, Plan, WellbeingDelta),
-    plan_found_activation_percepts(CA, State, Intent, ActivationPercepts),
+    activation_percepts_from_plan(CA, State, Intent, planned, ActivationPercepts),
     log(info, acting, "~w found plan ~p for intent ~p with activation percepts ~p", [CA, Plan, Intent, ActivationPercepts]).
 
 % One plan is found for a directive with activation predicted as planned
@@ -83,16 +82,15 @@ plan_found(CA, State, [plans=[Plan], percepts=ActivationPercepts], WellbeingDelt
     is_directive_activation_predicted_as(Directive, State, planned),
      \+ plan_for_goal(Directive, State, _),
     plan_found_for_goal(Directive, CA, State, Plan, WellbeingDelta),
-    plan_found_activation_percepts(CA, State, Directive, ActivationPercepts),
+    activation_percepts_from_plan(CA, State, Directive, planned, ActivationPercepts),
     log(info, acting, "~w found plan ~p for directive ~p", [CA, Plan, Directive]).
 
-% A planned activation percept is created immediately for a new plan when the CA is at level 1, else no change
-plan_found_activation_percepts(CA, State, Goal, UpdatedActivationPerceptS) :-
+% An activation percept with status planned is created immediately for a new plan when the CA is at level 1, else no change
+activation_percepts_from_plan(CA, State, Goal, Status, UpdatedActivationPerceptS) :-
     get_state(State, level, Level),
     (Level == 1 ->
-        goal_id(Goal, GoalId),
-        Origin = object{kind:goal, id:GoalId},
-        UpdatedActivationPerceptS = [percept{origin:Origin, kind:activation, value:planned, confidence:1.0, by:CA}]
+        activation_percept(Goal, Status, CA, ActivationPercept),
+        UpdatedActivationPerceptS = [ActivationPercept]
         ;
         UpdatedActivationPerceptS = []
     ).
@@ -131,7 +129,7 @@ percept_to_impact(CA, State, Percept) :-
     percepts_sorted_by_intensity(ImpactablePercepts, SortedPercepts),
     % Choose a percept starting from the most intense
     member(Percept, SortedPercepts),
-    log(info, acting, "(~w) Percept to impact is ~p", [CA, Percept]).
+    log(debug, acting, "(~w) Percept to impact is ~p", [CA, Percept]).
 
 % Create a goal from a percept to impact
 % Determine what kind of impact based on whether the percept is good vs bad
@@ -143,8 +141,7 @@ goal_from_percept(Percept, IntentLevel, Age, Goal) :-
      % The goal's priority is the intensity of the felt percept
     percept_intensity(Percept, Priority),
    % Create a goal
-    Goal = goal{target: Target, impact: Impact, priority: Priority, intent_level: IntentLevel, timeframe_index: Age},
-    log(info, acting, "The goal from ~p is ~p", [Percept, Goal]).
+    Goal = goal{target: Target, impact: Impact, priority: Priority, intent_level: IntentLevel, timeframe_index: Age}.
 
 % Persist a good or neutral percept, and terminate a bad one.
 desired_impact(Percept, Impact) :-
@@ -180,14 +177,13 @@ intent_plan_executed(CA, State, StateDeltas, WellbeingDelta) :-
     plan_execution(CA, State, Plan, Intent, StateDeltas, WellbeingDelta),
     log(info, acting, "~w executing plan ~p for intent ~p", [CA, Plan, Intent]).
 
-is_goal_activation_planned(Goal, State) :-
-    log(info, acting, "Is ~w activation of goal ~p planned in state percepts ~p", [Status, Goal, State.percepts]),
+is_goal_activation_planned(Goal, CA, State) :-
     goal_id(Goal, GoalId),
     get_state(State, percepts, Percepts),
     member(Percept, Percepts),
     percept{origin:Object, kind:activation, value:planned} :< Percept,
     object{type:goal, id:GoalId} :< Object,
-    log(info, acting, "~w activation of goal ~p is planned", [Status, Goal]).
+    log(info, acting, "~w activation of goal ~p is planned", [CA, Goal]).
 
 plan_for_goal(Goal, State, Plan) :-
     get_state(State, plans, Plans),
@@ -231,7 +227,7 @@ plan_execution(CA, State, Plan, Goal, [percepts=[ActivationPercept]], WellbeingD
     get_state(State, level, 1),
     forall(member(Command, Plan.directives), command_actuation_readied(Command)),
     actuations_executed_by_body(),
-     movement_executed(Plan.directives),
+    movement_executed(Plan.directives),
     activation_percept(Goal, executed, CA, ActivationPercept),
     % TODO - decrease fullness
     wellbeing:empty_wellbeing(WellbeingDelta).
@@ -240,7 +236,7 @@ plan_execution(CA, State, Plan, Goal, [percepts=[ActivationPercept]], WellbeingD
 plan_execution(CA, State, Plan, Goal, [predictions_out=[Prediction]], WellbeingDelta) :-
     get_state(State, level, Level),
     Level > 1,
-    is_goal_activation_planned(Goal, State),
+    is_goal_activation_planned(Goal, CA, State),
     member(Directive, Plan.directives),
     is_directive_observed_as(Directive, State, planned),
     directive_predicted_as(Directive, CA, State, executed, Prediction),
@@ -251,6 +247,7 @@ plan_execution(CA, State, Plan, Goal, [predictions_out=[Prediction]], WellbeingD
 % Get the body host from the agency supervisor
 % Tell the body to execute all pending actions
 actuations_executed_by_body() :-
+    log(info, acting, "Body is executing readied actuations"),
 	query_answered(agency, option(body_host), Host),
   	body : actions_executed(Host).
 
@@ -311,7 +308,6 @@ selected_affordance_plan(Affordances, Plan) :-
 
 % Find a plan that is not a scored affordance
 new_plan(Goal, CA, State, Plan) :-
-    log(info, acting, "(~w) Making new plan for ~p", [CA, Goal]),
     goal{target:Target, impact:Impact} :< Goal,
     plan_for_goal(Target.kind, Impact, Goal, State, Plan),
     \+ is_scored_affordance_plan(State, Plan),
@@ -414,12 +410,12 @@ plan_for_trend_goal(Impact, Trend, LatestObservation, Goal, State, Plan) :-
 
 directives_to_impact_all_observations([], _, _, _, []).
 directives_to_impact_all_observations(ObservationIds, Goal, Impact, State, AllDirectives) :-
-    log(info, acting, "Finding directives to ~w observations ~p given goal ~p", [Impact, ObservationIds, Goal]),
+    log(debug, acting, "Finding directives to ~w observations ~p given goal ~p", [Impact, ObservationIds, Goal]),
     findall(Observation, (member(ObservationId, ObservationIds), observation_from_id(ObservationId, State, Observation)), Observations),
-    log(info, acting, "The observations to ~w are ~p", [Impact, Observations]),
+    log(debug, acting, "The observations to ~w are ~p", [Impact, Observations]),
     findall(Directives, (member(Observation, Observations), directives_from_observation(Observation, Impact, Goal, State, Directives)), AllDirectives1),
     flatten(AllDirectives1, AllDirectives),
-    log(info, acting, "The directives are ~p", [AllDirectives]).
+    log(info, acting, "The directives to ~w ~p are ~p", [Impact, Goal, AllDirectives]).
 
 % Directives from a synthetic observation
 directives_from_observation(Observation, Impact, FromGoal, _, [Directive]) :-
