@@ -136,7 +136,8 @@ average_confidence(DictsWithConfidence, AverageConfidence) :-
 % Publish updated wellbeing
 merge_phase_deltas(StateDeltas, WellbeingDelta, ProducedProperties, State, NewState) :-
 	merge_phase_state_properties(ProducedProperties, StateDeltas, State, State1),
-	merge_wellbeing(State1, WellbeingDelta, NewState),
+	remove_overridden_in_state_properties(ProducedProperties, State1, State2),
+	merge_wellbeing(State2, WellbeingDelta, NewState),
 	published(wellbeing, [current=NewState.wellbeing]).
 	
 merge_phase_state_properties([], _, State, State).
@@ -154,6 +155,36 @@ merge_phase_state_properties([Property | Rest], StateDeltas, State, NewState) :-
 		State1 = State),
 	merge_phase_state_properties(Rest, StateDeltas, State1, NewState).
 
+remove_overridden_in_state_properties([], State, State).
+remove_overridden_in_state_properties([Property | Rest], State, NewState) :-
+	get_state(State, Property, StateProperty),
+	(is_list(StateProperty) -> 
+		remove_overridden_property_items(Property, StateProperty, [], DominantItems),
+		put_state(State, Property, DominantItems, State1)
+		;
+		State1 = State),
+	remove_overridden_in_state_properties(Rest, State1, NewState).
+
+remove_overridden_property_items(_, [], Acc, Acc).
+remove_overridden_property_items(Property, Items, Acc, DominantItems) :-
+	selectchk(Item, Items, Rest),
+	(is_overridden_in(Item, Property, Rest) -> Acc1 = Acc ; Acc1 = [Item | Acc]),
+	remove_overridden_property_items(Property, Rest, Acc1, DominantItems).
+	
+% Equality overrides, whatever the property
+% Should not happen since merge_phase_state_properties/4 removes duplicates
+is_overridden_in(Item, _, Items) :-
+	member(Item, Items).
+
+% Activation percept status override
+is_overridden_in(Item, percepts, Items) :-
+	percept{kind:activation, value:Status} :< Item,
+	member(Other, Items),
+	percept{kind:activation, value:OtherStatus} :< Other,
+	Statuses = [relevant, planned, executed, failed, not_relevant],
+	nth1(Index, Statuses, Status),
+	nth1(OtherIndex, Statuses, OtherStatus),
+	Index < OtherIndex.
 
 merge_wellbeing(State, WellbeingDelta, NewState) :-
 	log(debug, dynamic_ca, "Merge wellbeing deltas ~p into state", [WellbeingDelta]),
