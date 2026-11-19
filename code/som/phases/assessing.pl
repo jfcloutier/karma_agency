@@ -26,6 +26,7 @@ In the `assessing` phase, a CA
 :- use_module(agency(som/phase)).
 :- use_module(agency(som/ca_support)).
 :- use_module(agency(som/observations)).
+:- use_module(agency(som/goals)).
 :- use_module(agency(som/affordances)).
 
 % No work done before units of work
@@ -36,8 +37,8 @@ before_work(_, _, [], WellbeingDelta) :-
 % unit_of_work(CA, State, WorkStatus) can be undeterministic, resolving WorkStatus 
 % to more(StateDeltas, WellbeingDelta) or done(StateDeltas, WellbeingDelta) as last solution. 
 unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
-  affordances_added(CA, State, StateDeltas0, WellbeingDelta0),
-  intent_assessed(CA, State, StateDeltas0, WellbeingDelta0, StateDeltas1, WellbeingDelta1),
+  affordances_added(CA, State, ExecutedPlans, StateDeltas0, WellbeingDelta0),
+  intent_assessed(CA, State, ExecutedPlans, StateDeltas0, WellbeingDelta0, StateDeltas1, WellbeingDelta1),
   plans_assessed(CA, State, StateDeltas1, WellbeingDelta1, StateDeltas2, WellbeingDelta2),
   affordances_assessed(CA, State, StateDeltas2, WellbeingDelta2, StateDeltas3, WellbeingDelta3),
   causal_theory_assessed(CA, State, StateDeltas3, WellbeingDelta3, StateDeltas4, WellbeingDelta4),
@@ -47,7 +48,7 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
 
 % First step.
 % Add each executed plan as an unscored affordance (no duplicate) and forget it from plans
-affordances_added(CA, State, StateDeltas, WellbeingDelta) :-
+affordances_added(CA, State, ExecutedPlans, StateDeltas, WellbeingDelta) :-
   wellbeing:empty_wellbeing(WellbeingDelta),
   executed_plans(CA, State, ExecutedPlans),
   (length(ExecutedPlans, 0) ->
@@ -63,24 +64,23 @@ affordances_added(CA, State, StateDeltas, WellbeingDelta) :-
   ).
 
 executed_plans(CA, State, ExecutedPlans) :-
-  log(info, assessing, "~w looking for executed plans in ~p", [CA, State.plans]),
   get_state(State, plans, Plans),
   findall(Plan, (member(Plan, Plans), is_plan_executed(Plan, State)), ExecutedPlans),
-  log(info, assessing, "~w considers plans ~p to be executed", [CA, ExecutedPlans]).
+  log(info, assessing, "~w considers these plans executed: ~p", [CA, ExecutedPlans]).
 
 % A plan is executed if the activation of its goal is perceived as executed
 is_plan_executed(Plan, State) :-
   goal_id(Plan.goal, GoalId),
-  log(info, assessing, "Is plan ~p executed given percepts ~p for goal id ~w", [Plan, State.percepts, GoalId]),
+  log(debug, assessing, "Is plan ~p executed given percepts ~p for goal id ~w", [Plan, State.percepts, GoalId]),
   get_state(State, percepts, Percepts),
   member(Percept, Percepts),
   percept{origin:Object, kind:activation, value:executed} :< Percept,
   object{type:goal, id:GoalId} :< Object,
-  log(info, assessing, "Plan ~p is executed", [Plan]).
+  log(debug, assessing, "Plan ~p is executed", [Plan]).
 
-intent_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, WellbeingDelta) :-
+intent_assessed(CA, State, ExecutedPlans, StateDeltas, WellbeingDelta, NewStateDeltas, WellbeingDelta) :-
   get_state(State, intent, Intent),
-  (is_intent_retained(Intent, State) ->
+  (is_intent_retained(Intent, ExecutedPlans, CA, State) ->
     NewStateDeltas = StateDeltas,
     log(info, assessing, "~w is retaining intent ~p", [CA, Intent])
     ;
@@ -88,21 +88,37 @@ intent_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, Wellbein
     log(info, assessing, "~w is dropping intent ~p", [CA, Intent])
   ).
 
-is_intent_retained(none, _).
+is_intent_retained(none, _, _).
 
-% Retain an intent to persist or terminate a percept if the percept still exists
-is_intent_retained(Intent, State) :-
+% Retain an intent to persist or terminate a percept if a plan for it has not been executed
+% and the percept still exists that makes the intent relevant.
+is_intent_retained(Intent, ExecutedPlans, CA, State) :-
+  is_goal(Intent),
+  \+ is_plan_executed_for_goal(Intent, ExecutedPlans, CA),
+  is_intent_relevant(Intent, CA, State).
+
+% Is one of the executed plans was for a goal the same as the intent?
+is_plan_executed_for_goal(Intent, ExecutedPlans, CA) :-
+  member(Plan, ExecutedPlans),
+  goal_id(Plan.goal, GoalId),
+  goal_id(Intent, GoalId),
+  log(info, assessing, "~w's intent was executed: ~p", [CA, Intent]).
+
+% An intent to create a percept is relevant if the percept does not yet exist
+is_intent_relevant(Intent, CA, State) :-
+  goal{impact:create} :< Intent,
+  get_state(State, percepts, Percepts),
+  \+ (member(Percept, Percepts), percept_matches_goal(Percept, Intent)),
+  log(info, assessing, "~w's intent ~p is still relevant", [CA, Intent]).
+
+% An intent to persist or terminate a percept is relevant if the percept still exists
+is_intent_relevant(Intent, CA, State) :-
   goal{impact:Impact} :< Intent,
   memberchk(Impact, [persist, terminate]),
   get_state(State, percepts, Percepts),
   member(Percept, Percepts),
-  percept_matches_goal(Percept, Intent).
-
-% Retain an intent to create a percept if it does not yet exist
-is_intent_retained(Intent, State) :-
-  goal{impact:create} :< Intent,
-  get_state(State, percepts, Percepts),
-  \+ (member(Percept, Percepts), percept_matches_goal(Percept, Intent)).
+  percept_matches_goal(Percept, Intent),
+  log(info, assessing, "~w's intent ~p is still relevant", [CA, Intent]).
 
 percept_matches_goal(Percept, Goal) :-
   percept{origin:Origin, kind:Kind, value:Value} :< Percept,
@@ -172,8 +188,7 @@ plans_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, Wellbeing
     delete(RemainingPlans, IntentPlan, SurvivingPlans),
     log(info, assessing, "~w is dropping intent plan ~p", [CA, IntentPlan])
     ;
-    SurvivingPlans = RemainingPlans,
-    log(info, assessing, "~w is not dropping its intent's plan", [CA])
+    SurvivingPlans = RemainingPlans
   ),
   % Merge old StateDeltas into new one (new overrides old)
   merge_options([plans = SurvivingPlans], StateDeltas, NewStateDeltas).
@@ -187,10 +202,10 @@ is_plan_stalled(Plan, State) :-
 
 dropped_intent_plan(State, StateDeltas, Plan) :-
   is_intent_dropped(State, StateDeltas),
-  get_state(State, intent, Intent),
-  get_state(State, plans, Plans),
+  option(plans(Plans), StateDeltas),
+  get_state(State, intent, PriorIntent),
   member(Plan, Plans),
-  Plan.goal == Intent.
+  Plan.goal == PriorIntent.
 
 is_intent_dropped(State, StateDeltas) :-
   option(intent(none), StateDeltas),
@@ -204,7 +219,7 @@ affordances_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, Wel
   get_state(State, affordances, Affordances),
   findall(Affordance1, (member(Affordance, Affordances), maybe_scored_affordance(CA, Affordance, State, Affordance1)), NewAffordances),
   % Merge old StateDeltas into new one (new overrides old)
-  merge_options([affordances - NewAffordances], StateDeltas, NewStateDeltas).
+  merge_options([affordances = NewAffordances], StateDeltas, NewStateDeltas).
 
 maybe_scored_affordance(CA, Affordance, State, Affordance1) :-
   is_affordance_scored(Affordance) ->
@@ -314,7 +329,7 @@ wellbeing_delta_from_donations(AllSentFullness, WellbeingDelta, NewWellbeingDelt
   NewWellbeingDelta = WellbeingDelta.sub(wellbeing{fullness:TotalSent, integrity:0.0, engagement:0.0}).
 
 % Death by old age
-next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event = death | StateDeltas] , WellbeingDelta) :-
+next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event(death) | StateDeltas] , WellbeingDelta) :-
   get_state(State, settings, Settings),
   option(max_age(MaxAge), Settings),
   get_state(State, age, Age),
@@ -323,14 +338,14 @@ next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event = death | St
   log(info, assessing, "~w is dead of old age at ~w", [CA, Age]).
 
 % Death by exhaustion
-next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event = death | StateDeltas] , WellbeingDelta) :-
+next_life_event(CA, State, StateDeltas, WellbeingDelta, [life_event(death) | StateDeltas] , WellbeingDelta) :-
   get_state(State, wellbeing, Wellbeing),
   apply_wellbeing_delta(Wellbeing, WellbeingDelta, CurrentWellbeing),
   (CurrentWellbeing.integrity =< 0 ; CurrentWellbeing.fullness =< 0),
   log(info, assessing, "~w is dead of exhausted wellbeing ~p", [CA, CurrentWellbeing]).
 
 % TODO - decide between none, replication and division
-next_life_event(CA, _, StateDeltas, WellbeingDelta, [life_event = none | StateDeltas] , WellbeingDelta) :-
+next_life_event(CA, _, StateDeltas, WellbeingDelta, [life_event(none) | StateDeltas] , WellbeingDelta) :-
   log(info, assessing, "~w lives on", [CA]).
 
 
