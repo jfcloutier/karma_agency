@@ -109,7 +109,7 @@ object_hash(Object, _) :-
     throw("BAD HASH").
 
 value_hash(Value, Hash) :-
-    is_dict(value, object) ->
+    is_dict(Value, object) ->
         object_hash(Value, Hash)
         ;
         number(Value) ->

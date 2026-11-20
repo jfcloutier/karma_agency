@@ -11,12 +11,10 @@ init_som :-
 terminate_som :-
 	supervisor : stopped(agency, 60).
 
-succeeds_at(What, Count, Term) :-
-    atomic_list_concat([What, Count], ' at ', Tag),
+succeeds_at(What, Index, Term) :-
+    atomic_list_concat([What, Index], ' at timeframe ', Tag),
     ((ground(Tag), call(Term)) ->
-        format("~w (~w)~n", [What, Count])
-        ;
-    fail).
+        format("~w ~n", [Tag])).
 
 get_message(Term) :-
     get_message(Term, 5).

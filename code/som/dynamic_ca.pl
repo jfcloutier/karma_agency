@@ -23,9 +23,9 @@ Messages:
 	* `ca_started([level = Level])` - a CA started at a given level
 	* `ca_terminated([level = Level])` - a CA terminated at a given level
     * `wellbeing([current=Wellbeing])` - a CA communicated its current wellbeing
-	* `end_of_phase([phase=Phase, state_deltas=State, wellbeing_delta=WellbeingDelta])`
-	* `end_of_timeframe([level=Level, count=Count])`
-	* `end_of_life([level=Level])`
+	* `end_of_phase([phase=Phase, state_deltas=State, wellbeing_delta=WellbeingDelta])` -- for debugging
+	* `end_of_timeframe([level=Level, count=Count, state=State])` -- for debugging
+	* `end_of_life([level=Level])` -- for debugging
     
 	For testing only:
 	* `phase_before_work([phase=Phase, state_deltas=StateDeltas, wellbeing_delta=WellbeingDelta)`
@@ -227,7 +227,7 @@ handled(message(phase_done(Phase, StateDeltas, WellbeingDelta), _), State, NewSt
 		get_state(State, age, Age),
 		log(info, dynamic_ca, "~@ ended timeframe (~w)", [self, Age]),
 		level(Level),
-		published(end_of_timeframe, [level(Level), count(Age)]),
+		published(end_of_timeframe, [level(Level), count(Age), state(State1)]),
 		% The next timeframe starts after memorializing the terminated timeframe and with an initial phase
 		maybe_new_timeframe(State1, NewState)
 	).

@@ -24,7 +24,7 @@ run_tests(dynamic_ca).
 % The SOM is initialized and starts growing.
 % Succeed once a dynamic CA was created and has completed a few timeframes and all of their phases.
 test(timeframes) :-
-	MaxAge = 3, 
+	MaxAge = 4, 
 	all_subscribed([phase_before_work, phase_progressed, end_of_phase, end_of_timeframe, end_of_life, ca_started]),
 	som : growing([max_age=MaxAge]),
 	get_message(event(ca_started, [level(1)], _)),
@@ -39,11 +39,11 @@ test(timeframes) :-
 	test_in_timeframe(CA, 1),
 	% Timeframe 1 ended
 	% get_message(event(end_of_timeframe, _, _)),
-	get_matching_message(option(count, 1), event(end_of_timeframe, _, CA), 5),
+	% get_matching_message(option(count, 1), event(end_of_timeframe, _, CA), 5),
 	test_in_timeframe(CA, 2),
 	% Timeframe 2 ended
 	% get_message(event(end_of_timeframe, _, _)),
-	get_matching_message(option(count, 2), event(end_of_timeframe, _, CA), 5),
+	% get_matching_message(option(count, 2), event(end_of_timeframe, _, CA), 5),
 	test_in_timeframe(CA, 3),
 	% Wait for CA to die
 	get_message(event(end_of_life, _, _)).

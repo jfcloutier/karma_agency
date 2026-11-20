@@ -51,15 +51,14 @@ unit_of_work(CA, State, done(StateDeltas, WellbeingDelta)) :-
 affordances_added(CA, State, ExecutedPlans, StateDeltas, WellbeingDelta) :-
   wellbeing:empty_wellbeing(WellbeingDelta),
   executed_plans(CA, State, ExecutedPlans),
-  (length(ExecutedPlans, 0) ->
   get_state(State, plans, Plans),
-    StateDeltas = [plans = Plans],
+  (length(ExecutedPlans, 0) ->
+    StateDeltas = [plans(Plans)],
     log(info, assessing, "~w added no affordances", [CA])
     ;
-    get_state(State, plans, Plans),
     findall(Affordance, (member(Plan, ExecutedPlans), affordance(Plan, none, Affordance)), Affordances),
     subtract(Plans, ExecutedPlans, RemainingPlans),
-    StateDeltas = [affordances = Affordances, plans = RemainingPlans],
+    StateDeltas = [affordances(Affordances), plans(RemainingPlans)],
     log(info, assessing, "~w added unscored affordances ~p ", [CA, Affordances])
   ).
 
@@ -84,7 +83,7 @@ intent_assessed(CA, State, ExecutedPlans, StateDeltas, WellbeingDelta, NewStateD
     NewStateDeltas = StateDeltas,
     log(info, assessing, "~w is retaining intent ~p", [CA, Intent])
     ;
-    merge_options(StateDeltas, [intent = none], NewStateDeltas),
+    merge_options(StateDeltas, [intent(none)], NewStateDeltas),
     log(info, assessing, "~w is dropping intent ~p", [CA, Intent])
   ).
 
@@ -180,18 +179,18 @@ matching_observed_objects(Kind, Object, Object, _) :-
   \+ memberchk(Kind, [more, trend]).
 
 plans_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, WellbeingDelta) :-
-  option(plans(Plans), StateDeltas),
+  option(plans(Plans), StateDeltas, []),
   findall(StalledPlan, (member(StalledPlan, Plans), is_plan_stalled(StalledPlan, State)), StalledPlans),
   log(info, assessing, "~w is dropping stalled plans ~p", [CA, StalledPlans]),
   subtract(Plans, StalledPlans, RemainingPlans),
   (dropped_intent_plan(State, StateDeltas, IntentPlan) ->
     delete(RemainingPlans, IntentPlan, SurvivingPlans),
-    log(info, assessing, "~w is dropping intent plan ~p", [CA, IntentPlan])
+    log(info, assessing, "~w is dropping intent and its plan ~p", [CA, IntentPlan])
     ;
     SurvivingPlans = RemainingPlans
   ),
   % Merge old StateDeltas into new one (new overrides old)
-  merge_options([plans = SurvivingPlans], StateDeltas, NewStateDeltas).
+  merge_options([plans(SurvivingPlans)], StateDeltas, NewStateDeltas).
 
 % A plan is stalled if it has been waiting execution for too long.
 is_plan_stalled(Plan, State) :-
@@ -202,7 +201,7 @@ is_plan_stalled(Plan, State) :-
 
 dropped_intent_plan(State, StateDeltas, Plan) :-
   is_intent_dropped(State, StateDeltas),
-  option(plans(Plans), StateDeltas),
+  option(plans(Plans), StateDeltas, []),
   get_state(State, intent, PriorIntent),
   member(Plan, Plans),
   Plan.goal == PriorIntent.
@@ -216,10 +215,10 @@ is_intent_dropped(State, StateDeltas) :-
 % For each unscored affordance, determine if its plan's goal is currently achieved,
 % then give it a score proportional to the time elapsed between execution and goal achievement.
 affordances_assessed(CA, State, StateDeltas, WellbeingDelta, NewStateDeltas, WellbeingDelta) :-
-  get_state(State, affordances, Affordances),
+  option(affordances(Affordances), StateDeltas, []),
   findall(Affordance1, (member(Affordance, Affordances), maybe_scored_affordance(CA, Affordance, State, Affordance1)), NewAffordances),
   % Merge old StateDeltas into new one (new overrides old)
-  merge_options([affordances = NewAffordances], StateDeltas, NewStateDeltas).
+  merge_options([affordances(NewAffordances)], StateDeltas, NewStateDeltas).
 
 maybe_scored_affordance(CA, Affordance, State, Affordance1) :-
   is_affordance_scored(Affordance) ->

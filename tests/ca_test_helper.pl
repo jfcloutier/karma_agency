@@ -39,15 +39,15 @@ test_in_timeframe(CA, Index) :-
 	get_matching_message(option(phase, acting), event(end_of_phase, ActPayload, CA), 10),
 	option(state_deltas(Deltas), ActPayload),
 	% act phase ends on an empty delta
-	assertion(succeeds_at('Act is done with no more to do', Index, Deltas == [])),
-	sleep(1),
-	% TODO - querying state does not work!
-	% query_answered(CA, state, State2),
-	% % act phase ends after work units updating/adding an intent and goal states
-	% assertion(succeeds_at('An intent was produced from act', Index, State2.intent \= none)),
-	% % A plan is forgotten when it becomes an affordance
-    % assertion(succeeds_at('Act completed with plans produced', Index, (State2.plans == [] -> State2.affordances \= []; true))),
-	get_matching_message(option(phase, assessing), event(end_of_phase,_, CA), 10).
+	assertion(succeeds_at('Acting is done with no more to do', Index, Deltas == [])),
+	% End of phase assessing
+	get_matching_message(option(phase, assessing), event(end_of_phase, AssessPayload, CA), 10),
+	option(state_deltas(Deltas1), AssessPayload),
+ 	assertion(succeeds_at('Assessing is done', Index, Deltas1 \= [])),
+   % End of timeframe
+    get_matching_message(option(state, State), event(end_of_timeframe, _, CA), 10),
+	assertion(Index == 1 -> succeeds_at('Intent created', Index, State.intent \= none) ; true),
+	assertion(Index == 3 -> succeeds_at('Affordance found', Index, State.affordances \= []) ; true).
 
 all_felt_percepts(Percepts) :-
 	Percepts \== [],
